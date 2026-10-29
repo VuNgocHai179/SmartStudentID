@@ -20,9 +20,15 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    buildFeatures {
+        viewBinding = true
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Enable R8 code obfuscation and resource shrinking (SEC-06 & OPT-08)
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -40,6 +46,16 @@ dependencies {
     implementation(libs.appcompat)
     implementation(libs.constraintlayout)
     implementation(libs.material)
+    implementation(libs.viewpager2)
+    implementation(libs.recyclerview)
+
+    // Mobile Security (MASVS-STORAGE): EncryptedSharedPreferences + MasterKey AES-256-GCM
+    implementation(libs.security.crypto)
+
+    // Mobile Optimization & Dynamic 30s QR: ZXing Core + lightweight Gson
+    implementation(libs.zxing.core)
+    implementation(libs.gson)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.ext.junit)

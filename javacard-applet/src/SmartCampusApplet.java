@@ -1,0 +1,566 @@
+package smartstudent;
+
+import javacard.framework.APDU;
+import javacard.framework.Applet;
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
+import javacard.framework.OwnerPIN;
+import javacard.framework.Util;
+import javacard.security.AESKey;
+import javacard.security.KeyBuilder;
+import javacard.security.KeyPair;
+import javacard.security.RSAPrivateKey;
+import javacard.security.RSAPublicKey;
+import javacard.security.Signature;
+import javacardx.crypto.Cipher;
+
+/**
+ * ============================================================================
+ * SMART CAMPUS APPLET - MULTI-PURPOSE SMART STUDENT ID SYSTEM
+ * Author: Vu Ngoc Hai - Class CT7C
+ * AID: A0 00 00 00 62 03 01 0C 06 01 | CLA: 0x80
+ * ============================================================================
+ * Implements all 14 APDU instructions specified in SC-02 through SC-06:
+ *  - INS 0x10: VERIFY PIN (OwnerPIN with 3 max tries, returns 63CX / 6983)
+ *  - INS 0x11: CHANGE PIN (Updates PIN inside an atomic transaction)
+ *  - INS 0x12: UNBLOCK CARD BY PUK (Admin 8-digit PUK resets and unblocks PIN)
+ *  - INS 0x13: GET / GENERATE RSA-1024 PUBLIC KEY (Modulus N, Exponent E)
+ *  - INS 0x14: SIGN CHALLENGE / CHECK-IN (RSA-1024 SHA1-PKCS#1 signature)
+ *  - INS 0x20: SET STUDENT INFO (AES-128 CBC encryption stored in EEPROM)
+ *  - INS 0x21: GET STUDENT INFO (P1=00: Decrypted plaintext | P1=01: Raw AES ciphertext)
+ *  - INS 0x22: UPLOAD AVATAR CHUNK (Receives WebP image chunks by P1-P2 offset)
+ *  - INS 0x23: DOWNLOAD AVATAR CHUNK (Sends WebP image chunks by P1-P2 offset)
+ *  - INS 0x30: GET ACADEMIC & LIBRARY STATUS (Training score, attendance, books)
+ *  - INS 0x31: BORROW BOOK / ATTENDANCE (Atomic transaction + RSA signature)
+ *  - INS 0x32: RETURN BOOK / LAB ACCESS (Atomic transaction + RSA signature)
+ *  - INS 0x33: GET ON-CARD ACTIVITY LOG (Circular buffer of the 10 latest events)
+ */
+public class SmartCampusApplet extends Applet {
+
+    // Standard CLA and INS constants
+    private static final byte CLA_SMART_STUDENT = (byte) 0x80;
+
+    private static final byte INS_VERIFY_PIN = (byte) 0x10;
+    private static final byte INS_CHANGE_PIN = (byte) 0x11;
+    private static final byte INS_UNBLOCK_CARD_PUK = (byte) 0x12;
+    private static final byte INS_GET_PUBLIC_KEY = (byte) 0x13;
+    private static final byte INS_SIGN_CHALLENGE = (byte) 0x14;
+
+    private static final byte INS_SET_STUDENT_INFO = (byte) 0x20;
+    private static final byte INS_GET_STUDENT_INFO = (byte) 0x21;
+    private static final byte INS_UPLOAD_AVATAR_CHUNK = (byte) 0x22;
+    private static final byte INS_DOWNLOAD_AVATAR_CHUNK = (byte) 0x23;
+
+    private static final byte INS_GET_ACADEMIC_LIBRARY_STATUS = (byte) 0x30;
+    private static final byte INS_BORROW_OR_ATTENDANCE = (byte) 0x31;
+    private static final byte INS_RETURN_OR_LAB_ACCESS = (byte) 0x32;
+    private static final byte INS_GET_ACTIVITY_LOG = (byte) 0x33;
+
+    // PIN and PUK configuration
+    private static final byte PIN_TRY_LIMIT = (byte) 3;
+    private static final byte MAX_PIN_SIZE = (byte) 8;
+    private static final byte PUK_SIZE = (byte) 8;
+
+    // EEPROM allocation sizes
+    private static final short MAX_INFO_SIZE = (short) 256; // Multiple of 16 bytes for AES-128 block size
+    private static final short MAX_AVATAR_SIZE = (short) 8192; // Holds compressed 150x150 WebP avatar (~3.5KB)
+    private static final byte MAX_BORROWED_BOOKS = (byte) 5;
+    private static final byte MAX_LOG_ENTRIES = (byte) 10;
+    private static final byte LOG_ENTRY_SIZE = (byte) 7; // 1B Type + 2B Code + 4B Timestamp
+
+    // Custom status word prefix
+    private static final short SW_PIN_TRIES_PREFIX = (short) 0x63C0;
+
+    // ================== PERSISTENT MEMORY (EEPROM) ==================
+    private final OwnerPIN pin;
+    private final byte[] adminPuk;
+    private final byte[] defaultPin;
+
+    // On-card cryptographic objects (AES-128 & RSA-1024)
+    private final AESKey aesKey;
+    private final Cipher aesCipher;
+    private KeyPair rsaKeyPair;
+    private RSAPrivateKey rsaPrivateKey;
+    private RSAPublicKey rsaPublicKey;
+    private final Signature rsaSigner;
+
+    // Student profile buffer (stored as AES-128 ciphertext in EEPROM)
+    private final byte[] encryptedStudentInfo;
+    private short encryptedInfoLength;
+    private short plainInfoLength;
+
+    // WebP avatar storage buffer
+    private final byte[] avatarBuffer;
+    private short avatarLength;
+
+    // Academic, attendance, library, and lab access state
+    private short trainingScore;
+    private short attendanceCount;
+    private byte labAccessPermission; // 1 = Lab access granted, 0 = Revoked
+    private final short[] borrowedBooks; // Up to 5 borrowed book IDs
+    private byte borrowedBookCount;
+
+    // Circular buffer storing the 10 most recent on-card activities
+    private final byte[] activityLogBuffer;
+    private byte logHeadIndex;
+    private byte logCount;
+
+    // ================== TRANSIENT MEMORY (RAM) ==================
+    private final byte[] transientBuffer;
+
+    /**
+     * Initializes the Applet and pre-allocates all EEPROM and transient RAM buffers
+     * during installation in accordance with Java Card memory best practices.
+     */
+    protected SmartCampusApplet() {
+        // 1. Initialize default PIN ("123456") and Admin PUK ("88888888")
+        defaultPin = new byte[]{'1', '2', '3', '4', '5', '6'};
+        adminPuk = new byte[]{'8', '8', '8', '8', '8', '8', '8', '8'};
+        pin = new OwnerPIN(PIN_TRY_LIMIT, MAX_PIN_SIZE);
+        pin.update(defaultPin, (short) 0, (byte) defaultPin.length);
+
+        // 2. Initialize internal AES-128 key and CBC cipher
+        aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
+        byte[] initialAesSecret = new byte[]{
+                (byte) 0x53, (byte) 0x4D, (byte) 0x41, (byte) 0x52,
+                (byte) 0x54, (byte) 0x5F, (byte) 0x53, (byte) 0x54,
+                (byte) 0x55, (byte) 0x44, (byte) 0x45, (byte) 0x4E,
+                (byte) 0x54, (byte) 0x5F, (byte) 0x49, (byte) 0x44
+        };
+        aesKey.setKey(initialAesSecret, (short) 0);
+        aesCipher = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, false);
+
+        // 3. Initialize RSA-1024 key pair and SHA-1 with RSA PKCS#1 signature engine
+        rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_1024);
+        rsaKeyPair.genKeyPair();
+        rsaPrivateKey = (RSAPrivateKey) rsaKeyPair.getPrivate();
+        rsaPublicKey = (RSAPublicKey) rsaKeyPair.getPublic();
+        rsaSigner = Signature.getInstance(Signature.ALG_RSA_SHA_PKCS1, false);
+
+        // 4. Allocate EEPROM buffers for student profile and WebP avatar
+        encryptedStudentInfo = new byte[MAX_INFO_SIZE];
+        encryptedInfoLength = 0;
+        plainInfoLength = 0;
+
+        avatarBuffer = new byte[MAX_AVATAR_SIZE];
+        avatarLength = 0;
+
+        // 5. Initialize default academic and library state
+        trainingScore = (short) 85;
+        attendanceCount = (short) 0;
+        labAccessPermission = (byte) 1;
+        borrowedBooks = new short[MAX_BORROWED_BOOKS];
+        borrowedBookCount = (byte) 0;
+
+        // 6. Allocate circular buffer for the 10 latest activities
+        activityLogBuffer = new byte[(short) (MAX_LOG_ENTRIES * LOG_ENTRY_SIZE)];
+        logHeadIndex = (byte) 0;
+        logCount = (byte) 0;
+
+        // 7. Allocate transient RAM working buffer (cleared on applet deselection)
+        transientBuffer = JCSystem.makeTransientByteArray((short) 256, JCSystem.CLEAR_ON_DESELECT);
+
+        register();
+    }
+
+    public static void install(byte[] bArray, short bOffset, byte bLength) {
+        new SmartCampusApplet();
+    }
+
+    public boolean select() {
+        return true;
+    }
+
+    public void deselect() {
+        pin.reset();
+    }
+
+    public void process(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+
+        if (selectingApplet()) {
+            // Return card status upon SELECT AID: [0]=Remaining PIN tries, [1]=Initialized flag
+            buffer[0] = pin.getTriesRemaining();
+            buffer[1] = (plainInfoLength > 0) ? (byte) 1 : (byte) 0;
+            apdu.setOutgoingAndSend((short) 0, (short) 2);
+            return;
+        }
+
+        if (buffer[ISO7816.OFFSET_CLA] != CLA_SMART_STUDENT) {
+            ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
+        }
+
+        byte ins = buffer[ISO7816.OFFSET_INS];
+        switch (ins) {
+            case INS_VERIFY_PIN:
+                handleVerifyPin(apdu);
+                break;
+            case INS_CHANGE_PIN:
+                handleChangePin(apdu);
+                break;
+            case INS_UNBLOCK_CARD_PUK:
+                handleUnblockByPuk(apdu);
+                break;
+            case INS_GET_PUBLIC_KEY:
+                handleGetOrGenPublicKey(apdu);
+                break;
+            case INS_SIGN_CHALLENGE:
+                handleSignChallenge(apdu);
+                break;
+            case INS_SET_STUDENT_INFO:
+                handleSetStudentInfo(apdu);
+                break;
+            case INS_GET_STUDENT_INFO:
+                handleGetStudentInfo(apdu);
+                break;
+            case INS_UPLOAD_AVATAR_CHUNK:
+                handleUploadAvatarChunk(apdu);
+                break;
+            case INS_DOWNLOAD_AVATAR_CHUNK:
+                handleDownloadAvatarChunk(apdu);
+                break;
+            case INS_GET_ACADEMIC_LIBRARY_STATUS:
+                handleGetAcademicAndLibraryStatus(apdu);
+                break;
+            case INS_BORROW_OR_ATTENDANCE:
+                handleBorrowOrAttendance(apdu);
+                break;
+            case INS_RETURN_OR_LAB_ACCESS:
+                handleReturnOrLabAccess(apdu);
+                break;
+            case INS_GET_ACTIVITY_LOG:
+                handleGetActivityLog(apdu);
+                break;
+            default:
+                ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
+        }
+    }
+
+    // =========================================================================
+    // GROUP 1: PIN & PUK AUTHENTICATION (SC-03)
+    // =========================================================================
+
+    private void handleVerifyPin(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+        byte len = (byte) apdu.setIncomingAndReceive();
+
+        if (pin.getTriesRemaining() == 0) {
+            ISOException.throwIt(ISO7816.SW_FILE_INVALID); // 0x6983: Card is locked
+        }
+
+        if (!pin.check(buffer, ISO7816.OFFSET_CDATA, len)) {
+            byte triesLeft = pin.getTriesRemaining();
+            if (triesLeft == 0) {
+                ISOException.throwIt((short) 0x6983);
+            }
+            ISOException.throwIt((short) (SW_PIN_TRIES_PREFIX | triesLeft));
+        }
+    }
+
+    private void handleChangePin(APDU apdu) {
+        requirePinValidated();
+        byte[] buffer = apdu.getBuffer();
+        apdu.setIncomingAndReceive();
+
+        short offset = ISO7816.OFFSET_CDATA;
+        byte oldPinLen = buffer[offset++];
+        if (!pin.check(buffer, offset, oldPinLen)) {
+            byte triesLeft = pin.getTriesRemaining();
+            ISOException.throwIt((short) (SW_PIN_TRIES_PREFIX | triesLeft));
+        }
+        offset += oldPinLen;
+
+        byte newPinLen = buffer[offset++];
+        if (newPinLen < 4 || newPinLen > MAX_PIN_SIZE) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+
+        JCSystem.beginTransaction();
+        pin.update(buffer, offset, newPinLen);
+        JCSystem.commitTransaction();
+
+        pin.check(buffer, offset, newPinLen);
+    }
+
+    private void handleUnblockByPuk(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+        short len = apdu.setIncomingAndReceive();
+        if (len != PUK_SIZE) {
+            ISOException.throwIt((short) 0x6300);
+        }
+
+        if (Util.arrayCompare(buffer, ISO7816.OFFSET_CDATA, adminPuk, (short) 0, PUK_SIZE) != 0) {
+            ISOException.throwIt((short) 0x6300);
+        }
+
+        JCSystem.beginTransaction();
+        pin.resetAndUnblock();
+        pin.update(defaultPin, (short) 0, (byte) defaultPin.length);
+        JCSystem.commitTransaction();
+    }
+
+    // =========================================================================
+    // GROUP 2: RSA-1024 ASYMMETRIC CRYPTOGRAPHY (SC-04 & SEC-03)
+    // =========================================================================
+
+    private void handleGetOrGenPublicKey(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+        byte p1 = buffer[ISO7816.OFFSET_P1];
+
+        if (p1 == (byte) 0x00) {
+            // Generate a fresh RSA-1024 key pair during card issuance
+            rsaKeyPair.genKeyPair();
+            rsaPrivateKey = (RSAPrivateKey) rsaKeyPair.getPrivate();
+            rsaPublicKey = (RSAPublicKey) rsaKeyPair.getPublic();
+            short modLen = rsaPublicKey.getModulus(buffer, (short) 0);
+            apdu.setOutgoingAndSend((short) 0, modLen);
+        } else if (p1 == (byte) 0x01) {
+            short modLen = rsaPublicKey.getModulus(buffer, (short) 0);
+            apdu.setOutgoingAndSend((short) 0, modLen);
+        } else if (p1 == (byte) 0x02) {
+            short expLen = rsaPublicKey.getExponent(buffer, (short) 0);
+            apdu.setOutgoingAndSend((short) 0, expLen);
+        } else {
+            ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+        }
+    }
+
+    private void handleSignChallenge(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+        short dataLen = apdu.setIncomingAndReceive();
+
+        rsaSigner.init(rsaPrivateKey, Signature.MODE_SIGN);
+        short sigLen = rsaSigner.sign(buffer, ISO7816.OFFSET_CDATA, dataLen, buffer, (short) 0);
+        apdu.setOutgoingAndSend((short) 0, sigLen);
+    }
+
+    // =========================================================================
+    // GROUP 3: AES-128 CBC ENCRYPTED STUDENT PROFILE (SC-04 & SEC-01)
+    // =========================================================================
+
+    private void handleSetStudentInfo(APDU apdu) {
+        requirePinValidated();
+        byte[] buffer = apdu.getBuffer();
+        short len = apdu.setIncomingAndReceive();
+        if (len <= 0 || len > (short) (MAX_INFO_SIZE - 16)) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+
+        // Apply PKCS#7 padding to align with 16-byte AES blocks
+        short paddedLen = (short) (((short) (len + 16) / 16) * 16);
+        byte padValue = (byte) (paddedLen - len);
+
+        Util.arrayCopyNonAtomic(buffer, ISO7816.OFFSET_CDATA, transientBuffer, (short) 0, len);
+        Util.arrayFillNonAtomic(transientBuffer, len, padValue, padValue);
+
+        aesCipher.init(aesKey, Cipher.MODE_ENCRYPT);
+        JCSystem.beginTransaction();
+        aesCipher.doFinal(transientBuffer, (short) 0, paddedLen, encryptedStudentInfo, (short) 0);
+        encryptedInfoLength = paddedLen;
+        plainInfoLength = len;
+        JCSystem.commitTransaction();
+    }
+
+    private void handleGetStudentInfo(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+        byte p1 = buffer[ISO7816.OFFSET_P1];
+
+        if (encryptedInfoLength == 0) {
+            ISOException.throwIt(ISO7816.SW_RECORD_NOT_FOUND);
+        }
+
+        if (p1 == (byte) 0x01) {
+            // Return raw AES-128 ciphertext stored in EEPROM for Security Lab inspection
+            Util.arrayCopyNonAtomic(encryptedStudentInfo, (short) 0, buffer, (short) 0, encryptedInfoLength);
+            apdu.setOutgoingAndSend((short) 0, encryptedInfoLength);
+            return;
+        }
+
+        requirePinValidated();
+        aesCipher.init(aesKey, Cipher.MODE_DECRYPT);
+        aesCipher.doFinal(encryptedStudentInfo, (short) 0, encryptedInfoLength, buffer, (short) 0);
+        apdu.setOutgoingAndSend((short) 0, plainInfoLength);
+    }
+
+    // =========================================================================
+    // GROUP 4: WEBP AVATAR CHUNK TRANSFER (SC-05 & OPT-02)
+    // =========================================================================
+
+    private void handleUploadAvatarChunk(APDU apdu) {
+        requirePinValidated();
+        byte[] buffer = apdu.getBuffer();
+        short chunkLen = apdu.setIncomingAndReceive();
+        short offset = Util.getShort(buffer, ISO7816.OFFSET_P1);
+
+        if ((short) (offset + chunkLen) > MAX_AVATAR_SIZE) {
+            ISOException.throwIt(ISO7816.SW_FILE_FULL);
+        }
+
+        Util.arrayCopyNonAtomic(buffer, ISO7816.OFFSET_CDATA, avatarBuffer, offset, chunkLen);
+        short newEnd = (short) (offset + chunkLen);
+        if (newEnd > avatarLength || offset == 0) {
+            avatarLength = newEnd;
+        }
+    }
+
+    private void handleDownloadAvatarChunk(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+        short offset = Util.getShort(buffer, ISO7816.OFFSET_P1);
+        if (offset >= avatarLength) {
+            apdu.setOutgoingAndSend((short) 0, (short) 0);
+            return;
+        }
+
+        short remaining = (short) (avatarLength - offset);
+        short maxChunk = (short) 240;
+        short toSend = (remaining < maxChunk) ? remaining : maxChunk;
+
+        apdu.setOutgoing();
+        apdu.setOutgoingLength(toSend);
+        apdu.sendBytesLong(avatarBuffer, offset, toSend);
+    }
+
+    // =========================================================================
+    // GROUP 5: ATTENDANCE, LIBRARY (ATOMIC) & CIRCULAR LOG (SC-06)
+    // =========================================================================
+
+    private void handleGetAcademicAndLibraryStatus(APDU apdu) {
+        requirePinValidated();
+        byte[] buffer = apdu.getBuffer();
+        short pos = 0;
+
+        Util.setShort(buffer, pos, trainingScore);
+        pos += 2;
+        Util.setShort(buffer, pos, attendanceCount);
+        pos += 2;
+        buffer[pos++] = labAccessPermission;
+        buffer[pos++] = borrowedBookCount;
+
+        for (byte i = 0; i < borrowedBookCount; i++) {
+            Util.setShort(buffer, pos, borrowedBooks[i]);
+            pos += 2;
+        }
+
+        apdu.setOutgoingAndSend((short) 0, pos);
+    }
+
+    private void handleBorrowOrAttendance(APDU apdu) {
+        requirePinValidated();
+        byte[] buffer = apdu.getBuffer();
+        short dataLen = apdu.setIncomingAndReceive();
+        if (dataLen < 6) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+
+        byte actionType = buffer[ISO7816.OFFSET_P1];
+        short itemCode = Util.getShort(buffer, ISO7816.OFFSET_CDATA);
+
+        JCSystem.beginTransaction();
+        if (actionType == (byte) 0x01) {
+            // Class attendance check-in
+            attendanceCount++;
+            if (trainingScore < 100) {
+                trainingScore++;
+            }
+        } else if (actionType == (byte) 0x02) {
+            // Borrow library book
+            if (borrowedBookCount >= MAX_BORROWED_BOOKS) {
+                JCSystem.abortTransaction();
+                ISOException.throwIt(ISO7816.SW_FILE_FULL);
+            }
+            borrowedBooks[borrowedBookCount++] = itemCode;
+        } else {
+            JCSystem.abortTransaction();
+            ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+        }
+
+        appendActivityLog(actionType, buffer, ISO7816.OFFSET_CDATA);
+        JCSystem.commitTransaction();
+
+        // Sign the transaction payload with RSA-1024 for server-side non-repudiation
+        rsaSigner.init(rsaPrivateKey, Signature.MODE_SIGN);
+        short sigLen = rsaSigner.sign(buffer, ISO7816.OFFSET_CDATA, dataLen, buffer, (short) 0);
+        apdu.setOutgoingAndSend((short) 0, sigLen);
+    }
+
+    private void handleReturnOrLabAccess(APDU apdu) {
+        requirePinValidated();
+        byte[] buffer = apdu.getBuffer();
+        short dataLen = apdu.setIncomingAndReceive();
+        if (dataLen < 6) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+
+        byte p1 = buffer[ISO7816.OFFSET_P1];
+        short itemCode = Util.getShort(buffer, ISO7816.OFFSET_CDATA);
+
+        JCSystem.beginTransaction();
+        if (p1 == (byte) 0x01) {
+            // Return borrowed book
+            byte foundIndex = -1;
+            for (byte i = 0; i < borrowedBookCount; i++) {
+                if (borrowedBooks[i] == itemCode) {
+                    foundIndex = i;
+                    break;
+                }
+            }
+            if (foundIndex >= 0) {
+                for (byte i = foundIndex; i < (byte) (borrowedBookCount - 1); i++) {
+                    borrowedBooks[i] = borrowedBooks[(byte) (i + 1)];
+                }
+                borrowedBookCount--;
+            }
+            appendActivityLog((byte) 0x03, buffer, ISO7816.OFFSET_CDATA);
+        } else if (p1 == (byte) 0x02) {
+            // Verify Lab room access permission
+            if (labAccessPermission == 0) {
+                JCSystem.abortTransaction();
+                ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+            }
+            appendActivityLog((byte) 0x04, buffer, ISO7816.OFFSET_CDATA);
+        } else {
+            JCSystem.abortTransaction();
+            ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+        }
+        JCSystem.commitTransaction();
+
+        rsaSigner.init(rsaPrivateKey, Signature.MODE_SIGN);
+        short sigLen = rsaSigner.sign(buffer, ISO7816.OFFSET_CDATA, dataLen, buffer, (short) 0);
+        apdu.setOutgoingAndSend((short) 0, sigLen);
+    }
+
+    private void handleGetActivityLog(APDU apdu) {
+        requirePinValidated();
+        byte[] buffer = apdu.getBuffer();
+        short outOffset = 0;
+        buffer[outOffset++] = logCount;
+
+        // Read from newest entry to oldest entry in the circular buffer
+        for (byte i = 0; i < logCount; i++) {
+            short idx = (short) ((logHeadIndex - 1 - i + MAX_LOG_ENTRIES) % MAX_LOG_ENTRIES);
+            short srcPos = (short) (idx * LOG_ENTRY_SIZE);
+            Util.arrayCopyNonAtomic(activityLogBuffer, srcPos, buffer, outOffset, LOG_ENTRY_SIZE);
+            outOffset += LOG_ENTRY_SIZE;
+        }
+
+        apdu.setOutgoingAndSend((short) 0, outOffset);
+    }
+
+    private void appendActivityLog(byte actionType, byte[] dataBuf, short dataOffset) {
+        short destPos = (short) (logHeadIndex * LOG_ENTRY_SIZE);
+        activityLogBuffer[destPos] = actionType;
+        Util.arrayCopyNonAtomic(dataBuf, dataOffset, activityLogBuffer, (short) (destPos + 1), (short) 6);
+
+        logHeadIndex = (byte) ((logHeadIndex + 1) % MAX_LOG_ENTRIES);
+        if (logCount < MAX_LOG_ENTRIES) {
+            logCount++;
+        }
+    }
+
+    private void requirePinValidated() {
+        if (!pin.isValidated()) {
+            ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+        }
+    }
+}

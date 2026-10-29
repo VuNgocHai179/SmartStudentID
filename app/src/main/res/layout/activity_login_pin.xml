@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Layout for Login & Smart PIN Session Management (CN 2.1, 2.2, 2.3 & SEC-02, SEC-03) -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F172A"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- App Title & System Badge -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="#1E293B"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="5dp"
+            android:text="💳 SMART STUDENT ID • JAVA CARD + OWASP MASVS"
+            android:textColor="#38BDF8"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Hệ Thống Thẻ Sinh Viên Thông Minh"
+            android:textColor="#F8FAFC"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvSessionSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Xác thực 2 yếu tố: Chữ ký số RSA-1024 trên chip thẻ &amp; Mã PIN bảo mật"
+            android:textColor="#94A3B8"
+            android:textSize="13sp" />
+
+        <!-- Bridge Server Connection Bar -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardBackgroundColor="#1E293B"
+            app:cardCornerRadius="12dp"
+            app:strokeColor="#334155"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🌐 Kết nối PC Bridge &amp; JCIDE Simulator"
+                    android:textColor="#38BDF8"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/etBridgeUrl"
+                        android:layout_width="0dp"
+                        android:layout_height="42dp"
+                        android:layout_weight="1"
+                        android:background="#0B1120"
+                        android:hint="http://10.0.2.2:8080"
+                        android:inputType="textUri"
+                        android:paddingHorizontal="12dp"
+                        android:text="http://10.0.2.2:8080"
+                        android:textColor="#F8FAFC"
+                        android:textColorHint="#64748B"
+                        android:textSize="13sp" />
+
+                    <Button
+                        android:id="@+id/btnApplyBridgeUrl"
+                        android:layout_width="wrap_content"
+                        android:layout_height="42dp"
+                        android:layout_marginStart="8dp"
+                        android:backgroundTint="#334155"
+                        android:text="Lưu URL"
+                        android:textAllCaps="false"
+                        android:textColor="#F8FAFC"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- CARD 1: FIRST-TIME CARD SCAN & RSA CHALLENGE-RESPONSE (Shown when no session exists) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardFirstTimeScan"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            app:cardBackgroundColor="#1E293B"
+            app:cardCornerRadius="12dp"
+            app:strokeColor="#4F46E5"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Bước 1: Quét Thẻ &amp; Xác Thực Chống Giả Mạo RSA-1024"
+                    android:textColor="#A5B4FC"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Gửi Nonce 16 bytes ngẫu nhiên xuống thẻ JCIDE (INS 0x14) yêu cầu ký bằng Private Key RSA-1024 để chống thẻ giả (Clone Card)."
+                    android:textColor="#94A3B8"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btnScanAndVerifyRsa"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="12dp"
+                    android:backgroundTint="#4F46E5"
+                    android:text="🔍 Quét Thẻ JCIDE &amp; Kiểm Tra Chữ Ký RSA-1024"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvRsaChallengeStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="#0B1120"
+                    android:fontFamily="monospace"
+                    android:padding="10dp"
+                    android:text="Trạng thái thẻ: Chưa quét thẻ. Hãy bấm nút Quét Thẻ phía trên."
+                    android:textColor="#34D399"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- CARD 2: PIN ENTRY & FAST SESSION UNLOCK (CN 2.1, 2.2, 2.3) -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            app:cardBackgroundColor="#1E293B"
+            app:cardCornerRadius="12dp"
+            app:strokeColor="#10B981"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/tvPinCardTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Bước 2: Nhập Mã PIN Thẻ Sinh Viên (6 số)"
+                    android:textColor="#34D399"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvPinLockWarning"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="PIN mặc định: 123456. Nhập sai quá 3 lần sẽ khóa thẻ (SW=6983) và tự động xóa sạch Session trên máy (Auto-Wipe)."
+                    android:textColor="#CBD5E1"
+                    android:textSize="12sp" />
+
+                <EditText
+                    android:id="@+id/etStudentPin"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:layout_marginTop="12dp"
+                    android:background="#0B1120"
+                    android:gravity="center"
+                    android:hint="••••••"
+                    android:inputType="numberPassword"
+                    android:letterSpacing="0.3"
+                    android:maxLength="8"
+                    android:text="123456"
+                    android:textColor="#F8FAFC"
+                    android:textColorHint="#64748B"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnUnlockWithPin"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:layout_marginTop="12dp"
+                    android:backgroundTint="#10B981"
+                    android:text="🔓 Mở Khóa Bằng Mã PIN (Verify PIN)"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnSwitchStudentCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="8dp"
+                    android:backgroundTint="#334155"
+                    android:text="🔄 Đổi Thẻ Sinh Viên Khác (Xóa Session Hiện Tại)"
+                    android:textAllCaps="false"
+                    android:textColor="#F8FAFC"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tvLoginFeedback"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Sẵn sàng xác thực."
+                    android:textColor="#FBBF24"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ADMIN ROLE SWITCHER CARD (Phòng Đào Tạo) -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            app:cardBackgroundColor="#1E1B4B"
+            app:cardCornerRadius="12dp"
+            app:strokeColor="#6366F1"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="👨‍💼 Phân Hệ Quản Trị Thẻ — Phòng Đào Tạo (Role Admin)"
+                    android:textColor="#C7D2FE"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Phát hành thẻ SV mới (AES-128 + RSA-1024), chuyển đổi thẻ ảo đang gắn vào JCIDE và mở khóa thẻ bị khóa bằng mã PUK 8 số."
+                    android:textColor="#94A3B8"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btnOpenAdminDashboard"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="10dp"
+                    android:backgroundTint="#6366F1"
+                    android:text="⚙️ Mở Bảng Điều Khiển Admin (Phòng Đào Tạo)"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+</ScrollView>
