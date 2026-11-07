@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ============================================================
+         Typography
+         ============================================================ -->
+    <style name="TextAppearance.SmartID" parent="@android:style/TextAppearance" />
+
+    <style name="TextAppearance.SmartID.ScreenTitle">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/slate_900</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">-0.02</item>
+    </style>
+
+    <style name="TextAppearance.SmartID.Title">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/slate_900</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">-0.01</item>
+    </style>
+
+    <style name="TextAppearance.SmartID.SectionTitle">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/slate_900</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TextAppearance.SmartID.Body">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/slate_600</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:lineSpacingExtra">2dp</item>
+    </style>
+
+    <style name="TextAppearance.SmartID.Caption">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/slate_500</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:lineSpacingExtra">2dp</item>
+    </style>
+
+    <style name="TextAppearance.SmartID.Micro">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/slate_500</item>
+        <item name="android:textSize">11sp</item>
+    </style>
+
+    <style name="TextAppearance.SmartID.Label">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/slate_500</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.08</item>
+    </style>
+
+    <style name="TextAppearance.SmartID.Pill">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/brand_600</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TextAppearance.SmartID.MetricValue">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/slate_900</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- ============================================================
+         Surfaces
+         ============================================================ -->
+    <style name="Widget.SmartID.Card" parent="Widget.MaterialComponents.CardView">
+        <item name="cardBackgroundColor">@color/white</item>
+        <item name="cardCornerRadius">@dimen/radius_lg</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/slate_200</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="Widget.SmartID.Card.Tinted" parent="Widget.SmartID.Card">
+        <item name="cardBackgroundColor">@color/slate_50</item>
+        <item name="strokeColor">@color/transparent</item>
+        <item name="strokeWidth">0dp</item>
+    </style>
+
+    <!-- ============================================================
+         Buttons
+         ============================================================ -->
+    <style name="Widget.SmartID.Button.Primary" parent="Widget.MaterialComponents.Button">
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="backgroundTint">@color/brand_600</item>
+        <item name="cornerRadius">14dp</item>
+        <item name="elevation">0dp</item>
+        <item name="iconPadding">8dp</item>
+        <item name="iconTint">@color/white</item>
+        <item name="rippleColor">@color/glass_white</item>
+    </style>
+
+    <style name="Widget.SmartID.Button.Soft" parent="Widget.MaterialComponents.Button">
+        <item name="android:minHeight">46dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/brand_600</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="backgroundTint">@color/brand_50</item>
+        <item name="cornerRadius">14dp</item>
+        <item name="elevation">0dp</item>
+        <item name="iconPadding">8dp</item>
+        <item name="iconTint">@color/brand_600</item>
+        <item name="rippleColor">@color/brand_100</item>
+    </style>
+
+    <style name="Widget.SmartID.Button.Outline" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="android:minHeight">46dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/brand_600</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="cornerRadius">14dp</item>
+        <item name="elevation">0dp</item>
+        <item name="iconPadding">8dp</item>
+        <item name="iconTint">@color/brand_600</item>
+        <item name="rippleColor">@color/brand_100</item>
+        <item name="strokeColor">@color/brand_100</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="Widget.SmartID.Button.Pill" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:minHeight">38dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/brand_600</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="backgroundTint">@color/brand_50</item>
+        <item name="cornerRadius">999dp</item>
+        <item name="elevation">0dp</item>
+        <item name="iconPadding">6dp</item>
+        <item name="iconTint">@color/brand_600</item>
+        <item name="rippleColor">@color/brand_100</item>
+    </style>
+
+    <style name="Widget.SmartID.Button.Key" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:insetLeft">0dp</item>
+        <item name="android:insetRight">0dp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/slate_900</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="backgroundTint">@color/white</item>
+        <item name="cornerRadius">30dp</item>
+        <item name="elevation">0dp</item>
+        <item name="rippleColor">@color/brand_100</item>
+        <item name="strokeColor">@color/slate_200</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="Widget.SmartID.Button.KeyIcon" parent="Widget.SmartID.Button.Key">
+        <item name="iconGravity">textStart</item>
+        <item name="iconPadding">0dp</item>
+        <item name="iconTint">@color/slate_600</item>
+        <item name="android:textColor">@color/slate_600</item>
+        <item name="strokeColor">@color/slate_200</item>
+        <item name="backgroundTint">@color/white</item>
+    </style>
+
+    <!-- ============================================================
+         Inputs
+         ============================================================ -->
+    <style name="Widget.SmartID.TextInputLayout" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="boxCornerRadiusTopStart">14dp</item>
+        <item name="boxCornerRadiusTopEnd">14dp</item>
+        <item name="boxCornerRadiusBottomStart">14dp</item>
+        <item name="boxCornerRadiusBottomEnd">14dp</item>
+        <item name="boxStrokeColor">@color/brand_600</item>
+        <item name="boxStrokeWidth">1dp</item>
+        <item name="boxStrokeWidthFocused">2dp</item>
+        <item name="boxBackgroundColor">@color/white</item>
+        <item name="hintTextColor">@color/brand_600</item>
+        <item name="android:textColorHint">@color/slate_500</item>
+    </style>
+
+</resources>

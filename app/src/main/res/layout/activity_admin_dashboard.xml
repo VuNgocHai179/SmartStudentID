@@ -1,19 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Layout for Admin Role Dashboard: Issue Card, PUK Unblock & Virtual Card Switcher (CN 1.1, 1.2, 1.3) -->
+<!-- Clean, spacious Light Mode layout for Admin Dashboard (CN 1.1, 1.2, 1.3) -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/adminRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0F172A"
-    android:fillViewport="true">
+    android:background="@color/slate_50"
+    android:fillViewport="true"
+    android:overScrollMode="never"
+    android:scrollbars="none">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingStart="20dp"
+        android:paddingTop="20dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="28dp">
 
-        <!-- Top Bar -->
+        <!-- Header -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -21,240 +27,401 @@
             android:orientation="horizontal">
 
             <LinearLayout
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_icon_tile_blue"
+                android:gravity="center">
+
+                <ImageView
+                    android:layout_width="23dp"
+                    android:layout_height="23dp"
+                    android:contentDescription="Quản trị thẻ"
+                    android:src="@drawable/ic_school"
+                    app:tint="@color/brand_600" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="👨‍💼 CHẾ ĐỘ ADMIN • PHÒNG ĐÀO TẠO"
-                    android:textColor="#38BDF8"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
+                    android:text="QUẢN TRỊ THẺ"
+                    android:textAppearance="@style/TextAppearance.SmartID.Label"
+                    android:textColor="@color/brand_600" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Quản Lý &amp; Phát Hành Thẻ SV"
-                    android:textColor="#F8FAFC"
-                    android:textSize="20sp"
+                    android:text="Phòng Đào tạo"
+                    android:textColor="@color/slate_900"
+                    android:textSize="22sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnBackToLogin"
+                style="@style/Widget.SmartID.Button.Pill"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:backgroundTint="#334155"
-                android:text="← Đăng nhập SV"
-                android:textAllCaps="false"
-                android:textColor="#F8FAFC"
-                android:textSize="12sp" />
+                android:layout_height="38dp"
+                android:text="Đóng"
+                app:icon="@drawable/ic_close" />
         </LinearLayout>
 
-        <!-- SECTION 1: ISSUE NEW STUDENT CARD (CN 1.1) -->
+        <!-- ISSUED CARDS -->
         <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.SmartID.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="12dp"
-            app:strokeColor="#38BDF8"
-            app:strokeWidth="1dp">
+            android:layout_marginTop="18dp"
+            app:cardCornerRadius="22dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="15dp">
+                android:padding="16dp">
 
-                <TextView
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="1. Phát Hành Thẻ Sinh Viên Mới (Issue New Card — INS 0x20 &amp; 0x13)"
-                    android:textColor="#38BDF8"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
-                <TextView
+                    <LinearLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_icon_tile_blue"
+                        android:gravity="center">
+
+                        <ImageView
+                            android:layout_width="19dp"
+                            android:layout_height="19dp"
+                            android:contentDescription="Danh sách thẻ"
+                            android:src="@drawable/ic_nav_card"
+                            app:tint="@color/brand_600" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Danh sách thẻ đã phát hành"
+                            android:textColor="@color/slate_900"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvIssuedCardsCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_pill_blue"
+                        android:paddingStart="10dp"
+                        android:paddingTop="4dp"
+                        android:paddingEnd="10dp"
+                        android:paddingBottom="4dp"
+                        android:text="0 thẻ"
+                        android:textColor="@color/brand_600"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvIssuedCards"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:text="Ghi hồ sơ mã hóa AES-128 xuống EEPROM, nén ảnh thẻ WebP (150x150 ~3.5KB) và yêu cầu thẻ sinh cặp khóa RSA-1024 mới."
-                    android:textColor="#94A3B8"
-                    android:textSize="12sp" />
+                    android:layout_marginTop="12dp"
+                    android:nestedScrollingEnabled="false"
+                    android:overScrollMode="never" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ISSUE NEW CARD -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.SmartID.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            app:cardCornerRadius="22dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_icon_tile_green"
+                        android:gravity="center">
+
+                        <ImageView
+                            android:layout_width="19dp"
+                            android:layout_height="19dp"
+                            android:contentDescription="Phát hành thẻ"
+                            android:src="@drawable/ic_add"
+                            app:tint="@color/emerald_600" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Phát hành thẻ sinh viên mới"
+                            android:textColor="@color/slate_900"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:baselineAligned="false"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.SmartID.TextInputLayout"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Mã SV">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etIssueStudentId"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:importantForAutofill="no"
+                            android:inputType="text"
+                            android:maxLines="1"
+                            android:text="CT070350"
+                            android:textColor="@color/slate_900"
+                            android:textSize="14sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.SmartID.TextInputLayout"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
+                        android:hint="Lớp">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etIssueClassName"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:importantForAutofill="no"
+                            android:inputType="text"
+                            android:maxLines="1"
+                            android:text="CT7C"
+                            android:textColor="@color/slate_900"
+                            android:textSize="14sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.SmartID.TextInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:hint="Họ và tên sinh viên">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etIssueFullName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:importantForAutofill="no"
+                        android:inputType="textPersonName"
+                        android:maxLines="1"
+                        android:text="Lê Hoàng Nam"
+                        android:textColor="@color/slate_900"
+                        android:textSize="14sp" />
+                </com.google.android.material.textfield.TextInputLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
+                    android:baselineAligned="false"
                     android:orientation="horizontal">
 
-                    <EditText
-                        android:id="@+id/etIssueStudentId"
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.SmartID.TextInputLayout"
                         android:layout_width="0dp"
-                        android:layout_height="44dp"
+                        android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:background="#0B1120"
-                        android:hint="MSSV (VD: CT070350)"
-                        android:paddingHorizontal="10dp"
-                        android:text="CT070350"
-                        android:textColor="#F8FAFC"
-                        android:textColorHint="#64748B"
-                        android:textSize="13sp" />
+                        android:hint="Ngày sinh">
 
-                    <EditText
-                        android:id="@+id/etIssueClassName"
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etIssueDob"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:importantForAutofill="no"
+                            android:inputType="text"
+                            android:maxLines="1"
+                            android:text="12/10/2003"
+                            android:textColor="@color/slate_900"
+                            android:textSize="14sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.SmartID.TextInputLayout"
                         android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_marginStart="8dp"
-                        android:layout_weight="1"
-                        android:background="#0B1120"
-                        android:hint="Lớp (VD: CT7C)"
-                        android:paddingHorizontal="10dp"
-                        android:text="CT7C"
-                        android:textColor="#F8FAFC"
-                        android:textColorHint="#64748B"
-                        android:textSize="13sp" />
-                </LinearLayout>
-
-                <EditText
-                    android:id="@+id/etIssueFullName"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:layout_marginTop="8dp"
-                    android:background="#0B1120"
-                    android:hint="Họ và tên sinh viên"
-                    android:paddingHorizontal="10dp"
-                    android:text="Lê Hoàng Nam"
-                    android:textColor="#F8FAFC"
-                    android:textColorHint="#64748B"
-                    android:textSize="13sp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <EditText
-                        android:id="@+id/etIssueDob"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:background="#0B1120"
-                        android:hint="Ngày sinh"
-                        android:paddingHorizontal="10dp"
-                        android:text="12/10/2003"
-                        android:textColor="#F8FAFC"
-                        android:textColorHint="#64748B"
-                        android:textSize="13sp" />
-
-                    <EditText
-                        android:id="@+id/etIssueDepartment"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_marginStart="8dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
                         android:layout_weight="1.3"
-                        android:background="#0B1120"
-                        android:hint="Khoa"
-                        android:paddingHorizontal="10dp"
-                        android:text="An toàn Thông tin"
-                        android:textColor="#F8FAFC"
-                        android:textColorHint="#64748B"
-                        android:textSize="13sp" />
+                        android:hint="Khoa">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etIssueDepartment"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:importantForAutofill="no"
+                            android:inputType="text"
+                            android:maxLines="1"
+                            android:text="An toàn Thông tin"
+                            android:textColor="@color/slate_900"
+                            android:textSize="14sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnIssueNewCard"
+                    style="@style/Widget.SmartID.Button.Primary"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="12dp"
-                    android:backgroundTint="#0284C7"
-                    android:text="✨ Phát Hành Thẻ Xuống JCIDE (AES-128 + RSA-1024 + WebP)"
-                    android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold" />
+                    android:layout_height="50dp"
+                    android:layout_marginTop="14dp"
+                    android:text="Phát hành thẻ mới"
+                    app:icon="@drawable/ic_add" />
 
                 <TextView
                     android:id="@+id/tvIssueCardLog"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:background="#0B1120"
-                    android:fontFamily="monospace"
-                    android:padding="10dp"
-                    android:text="Sẵn sàng phát hành thẻ mới."
-                    android:textColor="#34D399"
-                    android:textSize="11sp" />
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_soft_panel"
+                    android:lineSpacingExtra="2dp"
+                    android:padding="12dp"
+                    android:text="Sẵn sàng phát hành thẻ."
+                    android:textAppearance="@style/TextAppearance.SmartID.Micro"
+                    android:textColor="@color/emerald_600" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- SECTION 2: UNBLOCK CARD BY ADMIN PUK (CN 1.3 - INS 0x12) -->
+        <!-- PUK + ACADEMIC SUMMARY -->
         <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.SmartID.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="12dp"
-            app:strokeColor="#F59E0B"
-            app:strokeWidth="1dp">
+            app:cardCornerRadius="22dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="15dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="2. Mở Khóa Thẻ Bị Khóa PIN Bằng Mã PUK (UNBLOCK CARD — INS 0x12)"
-                    android:textColor="#FBBF24"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:text="Khi sinh viên nhập sai PIN 3 lần (SW=6983), Admin nhập mã PUK 8 số (mặc định: 88888888) để gọi OwnerPIN.resetAndUnblock() và đưa PIN về 123456."
-                    android:textColor="#94A3B8"
-                    android:textSize="12sp" />
+                android:padding="16dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <EditText
-                        android:id="@+id/etAdminPuk"
-                        android:layout_width="0dp"
-                        android:layout_height="46dp"
-                        android:layout_weight="1"
-                        android:background="#0B1120"
-                        android:gravity="center"
-                        android:hint="Mã PUK 8 số"
-                        android:inputType="numberPassword"
-                        android:maxLength="8"
-                        android:text="88888888"
-                        android:textColor="#F8FAFC"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
+                    <LinearLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_icon_tile_amber"
+                        android:gravity="center">
 
-                    <Button
+                        <ImageView
+                            android:layout_width="19dp"
+                            android:layout_height="19dp"
+                            android:contentDescription="Mở khóa thẻ"
+                            android:src="@drawable/ic_lock"
+                            app:tint="@color/amber_600" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Mở khóa thẻ bằng PUK"
+                            android:textColor="@color/slate_900"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.SmartID.TextInputLayout"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Mã PUK (8 chữ số)"
+                        app:endIconMode="password_toggle">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etAdminPuk"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="numberPassword"
+                            android:maxLength="8"
+                            android:maxLines="1"
+                            android:text="88888888"
+                            android:textColor="@color/slate_900"
+                            android:textSize="14sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnUnblockByPuk"
+                        style="@style/Widget.SmartID.Button.Primary"
                         android:layout_width="wrap_content"
-                        android:layout_height="46dp"
+                        android:layout_height="50dp"
                         android:layout_marginStart="10dp"
-                        android:backgroundTint="#D97706"
-                        android:text="🔓 Mở Khóa PUK"
-                        android:textAllCaps="false"
-                        android:textColor="#FFFFFF"
-                        android:textStyle="bold" />
+                        android:backgroundTint="@color/emerald_600"
+                        android:minWidth="96dp"
+                        android:text="Mở khóa"
+                        app:icon="@drawable/ic_lock" />
                 </LinearLayout>
 
                 <TextView
@@ -262,91 +429,35 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="Trạng thái mở khóa PUK: Chờ lệnh Admin."
-                    android:textColor="#FCD34D"
-                    android:textSize="12sp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+                    android:lineSpacingExtra="2dp"
+                    android:text="PIN mặc định: 123456"
+                    android:textAppearance="@style/TextAppearance.SmartID.Micro" />
 
-        <!-- SECTION 3: VIRTUAL CARD SWITCHER & ISSUED CARDS LIST (CN 1.2) -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="12dp"
-            app:strokeColor="#10B981"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="15dp">
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="14dp"
+                    android:layout_marginBottom="14dp"
+                    android:background="@color/slate_100" />
 
                 <TextView
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="3. Danh Sách Thẻ SV &amp; Chuyển Đổi Thẻ Ảo Trên JCIDE (Virtual Card Switcher)"
-                    android:textColor="#34D399"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:text="Bấm 'Gắn Thẻ Vào JCIDE' để nạp hồ sơ của sinh viên bất kỳ vào đầu đọc thẻ trong &lt; 50ms phục vụ kiểm thử nhiều thẻ."
-                    android:textColor="#94A3B8"
-                    android:textSize="12sp" />
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rvIssuedCards"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:nestedScrollingEnabled="false" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- SECTION 4: ACADEMIC & LIBRARY SUMMARY FOR ADMIN (CN 1.3) -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:layout_marginBottom="20dp"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="12dp"
-            app:strokeColor="#334155"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="15dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="4. Tổng Hợp Học Vụ: Lịch Sử Điểm Danh RSA &amp; Sách Thư Viện Đang Mượn"
-                    android:textColor="#A5B4FC"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
+                    android:text="THỐNG KÊ HỌC VỤ"
+                    android:textAppearance="@style/TextAppearance.SmartID.Label" />
 
                 <TextView
                     android:id="@+id/tvAdminAcademicSummary"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:background="#0B1120"
-                    android:fontFamily="monospace"
-                    android:padding="10dp"
-                    android:text="Đang tải dữ liệu học vụ..."
-                    android:textColor="#E2E8F0"
-                    android:textSize="11sp" />
+                    android:background="@drawable/bg_soft_panel"
+                    android:lineSpacingExtra="3dp"
+                    android:padding="12dp"
+                    android:text="Đang tải thống kê học vụ..."
+                    android:textAppearance="@style/TextAppearance.SmartID.Micro"
+                    android:textColor="@color/slate_600" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
-
     </LinearLayout>
 </ScrollView>

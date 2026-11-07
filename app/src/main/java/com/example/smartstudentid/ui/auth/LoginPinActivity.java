@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -44,6 +45,10 @@ public class LoginPinActivity extends BaseSecureActivity {
     private EditText etBridgeUrl;
     private EditText etStudentPin;
     private Button btnSwitchStudentCard;
+    private LinearLayout pinDotsContainer;
+
+    private static final int MIN_VISIBLE_PIN_DOTS = 6;
+    private static final int MAX_PIN_LENGTH = 8;
 
     private PinSessionManager pinSessionManager;
     private LocalCacheManager localCacheManager;
@@ -54,6 +59,8 @@ public class LoginPinActivity extends BaseSecureActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login_pin);
+        applySafeAreaPadding(findViewById(R.id.loginRoot), true, true);
+        findViewById(R.id.loginRoot).setVerticalScrollBarEnabled(false);
 
         pinSessionManager = new PinSessionManager(this);
         localCacheManager = new LocalCacheManager(this);
@@ -78,7 +85,11 @@ public class LoginPinActivity extends BaseSecureActivity {
         tvLoginFeedback = findViewById(R.id.tvLoginFeedback);
         etBridgeUrl = findViewById(R.id.etBridgeUrl);
         etStudentPin = findViewById(R.id.etStudentPin);
+        pinDotsContainer = findViewById(R.id.pinDotsContainer);
         btnSwitchStudentCard = findViewById(R.id.btnSwitchStudentCard);
+
+        setupPinKeypad();
+        renderPinDots(etStudentPin.getText().length());
 
         Button btnApplyBridgeUrl = findViewById(R.id.btnApplyBridgeUrl);
         Button btnScanAndVerifyRsa = findViewById(R.id.btnScanAndVerifyRsa);
@@ -97,6 +108,8 @@ public class LoginPinActivity extends BaseSecureActivity {
         btnSwitchStudentCard.setOnClickListener(v -> {
             pinSessionManager.clearSession();
             rsaChallengePassed = false;
+            etStudentPin.setText("");
+            renderPinDots(0);
             refreshSessionUiState();
             tvLoginFeedback.setText("Đã xóa Session cũ. Vui lòng quét thẻ sinh viên mới.");
         });
@@ -104,6 +117,72 @@ public class LoginPinActivity extends BaseSecureActivity {
         btnOpenAdminDashboard.setOnClickListener(v -> {
             startActivity(new Intent(this, AdminDashboardActivity.class));
         });
+    }
+
+    /**
+     * Wires the custom numeric keypad to the (hidden) PIN EditText so the existing
+     * PIN verification logic stays untouched while the UI gets a modern, large target pad.
+     */
+    private void setupPinKeypad() {
+        int[] digitButtonIds = {
+                R.id.btnPin0, R.id.btnPin1, R.id.btnPin2, R.id.btnPin3, R.id.btnPin4,
+                R.id.btnPin5, R.id.btnPin6, R.id.btnPin7, R.id.btnPin8, R.id.btnPin9
+        };
+        for (int i = 0; i < digitButtonIds.length; i++) {
+            final String digit = String.valueOf(i);
+            Button key = findViewById(digitButtonIds[i]);
+            key.setOnClickListener(v -> appendPinDigit(digit));
+        }
+
+        Button backspace = findViewById(R.id.btnPinBackspace);
+        backspace.setOnClickListener(v -> deleteLastPinDigit());
+    }
+
+    private void appendPinDigit(String digit) {
+        String current = etStudentPin.getText().toString();
+        if (current.length() >= MAX_PIN_LENGTH) {
+            return;
+        }
+        etStudentPin.setText(current + digit);
+        etStudentPin.setSelection(etStudentPin.getText().length());
+        renderPinDots(etStudentPin.getText().length());
+        if (tvLoginFeedback != null) {
+            tvLoginFeedback.setText("");
+        }
+    }
+
+    private void deleteLastPinDigit() {
+        String current = etStudentPin.getText().toString();
+        if (current.isEmpty()) {
+            return;
+        }
+        etStudentPin.setText(current.substring(0, current.length() - 1));
+        etStudentPin.setSelection(etStudentPin.getText().length());
+        renderPinDots(etStudentPin.getText().length());
+    }
+
+    /**
+     * Renders 6 dots for the standard PIN and grows to 8 dots automatically for longer PINs.
+     */
+    private void renderPinDots(int enteredLength) {
+        if (pinDotsContainer == null) {
+            return;
+        }
+        int totalDots = Math.max(MIN_VISIBLE_PIN_DOTS, Math.min(MAX_PIN_LENGTH, enteredLength));
+        int dotSize = Math.round(10 * getResources().getDisplayMetrics().density);
+        int dotMargin = Math.round(6 * getResources().getDisplayMetrics().density);
+
+        pinDotsContainer.removeAllViews();
+        for (int i = 0; i < totalDots; i++) {
+            View dot = new View(this);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dotSize, dotSize);
+            params.setMargins(dotMargin, 0, dotMargin, 0);
+            dot.setLayoutParams(params);
+            dot.setBackgroundResource(i < enteredLength
+                    ? R.drawable.bg_pin_dot_filled
+                    : R.drawable.bg_pin_dot_empty);
+            pinDotsContainer.addView(dot);
+        }
     }
 
     /**
@@ -116,15 +195,15 @@ public class LoginPinActivity extends BaseSecureActivity {
             String name = pinSessionManager.getActiveStudentName();
             String id = pinSessionManager.getActiveStudentId();
             tvSessionSubtitle.setText("Phiên thẻ đang lưu: " + name + " (" + id + ")");
-            tvPinCardTitle.setText("👋 Xin chào " + name + " — Nhập Mã PIN Để Mở Khóa");
-            tvPinLockWarning.setText("Mở khóa siêu tốc (~15ms) từ Encrypted Cache bằng PBKDF2 + AndroidKeyStore. Còn "
-                    + pinSessionManager.getRemainingUnlockAttempts() + " lần thử trước khi Auto-Wipe.");
+            tvPinCardTitle.setText("Nhập mã PIN để mở khóa");
+            tvPinLockWarning.setText("Còn " + pinSessionManager.getRemainingUnlockAttempts()
+                    + " lần thử trước khi xóa phiên.");
         } else {
             cardFirstTimeScan.setVisibility(View.VISIBLE);
             btnSwitchStudentCard.setVisibility(View.GONE);
-            tvSessionSubtitle.setText("Đăng nhập lần đầu: Cần Quét thẻ JCIDE + Xác thực RSA-1024 + Nhập Mã PIN");
-            tvPinCardTitle.setText("Bước 2: Nhập Mã PIN Thẻ Sinh Viên (6 số)");
-            tvPinLockWarning.setText("PIN mặc định: 123456. Nhập sai 3 lần trên thẻ sẽ khóa thẻ (SW=6983).");
+            tvSessionSubtitle.setText("Quét thẻ JCIDE và nhập mã PIN.");
+            tvPinCardTitle.setText("Bước 2 • Nhập mã PIN (6 số)");
+            tvPinLockWarning.setText("PIN mặc định: 123456");
         }
     }
 
@@ -132,7 +211,7 @@ public class LoginPinActivity extends BaseSecureActivity {
      * Executes Step 1 of First-Time Login: SELECT AID + 16-byte Nonce RSA-1024 Challenge-Response (CN 2.1 & SEC-03).
      */
     private void handleScanAndVerifyRsa() {
-        tvRsaChallengeStatus.setText("Đang kết nối JCIDE & gửi Nonce 16 bytes kiểm tra chữ ký RSA-1024...");
+        tvRsaChallengeStatus.setText("Đang xác thực thẻ...");
         ApduThreadPool.getInstance().execute(() -> {
             ApduClient.getInstance().sendApdu(
                     ApduCommands.CLA_ISO,
@@ -145,21 +224,10 @@ public class LoginPinActivity extends BaseSecureActivity {
         }, (result, mainBlockedMs, totalMs) -> {
             rsaChallengePassed = result.isVerified();
             if (result.isVerified()) {
-                String modPreview = result.getModulusHex().length() > 36
-                        ? result.getModulusHex().substring(0, 36) + "..."
-                        : result.getModulusHex();
-                String sigPreview = result.getSignatureHex().length() > 36
-                        ? result.getSignatureHex().substring(0, 36) + "..."
-                        : result.getSignatureHex();
-                tvRsaChallengeStatus.setText(
-                        "✅ XÁC THỰC RSA-1024 THÀNH CÔNG (" + totalMs + " ms)\n"
-                                + "• Public Key N: " + modPreview + "\n"
-                                + "• RSA Signature: " + sigPreview + "\n"
-                                + "→ Thẻ chính hãng! Hãy nhập Mã PIN ở Bước 2."
-                );
-                tvLoginFeedback.setText("Thẻ hợp lệ. Mời nhập mã PIN để mở thẻ.");
+                tvRsaChallengeStatus.setText("✓ Xác thực RSA-1024 thành công (" + totalMs + " ms)");
+                tvLoginFeedback.setText("Thẻ hợp lệ. Nhập mã PIN.");
             } else {
-                tvRsaChallengeStatus.setText("❌ CẢNH BÁO THẺ GIẢ: " + result.getMessage());
+                tvRsaChallengeStatus.setText("❌ Xác thực thẻ thất bại.");
             }
         });
     }
@@ -198,11 +266,15 @@ public class LoginPinActivity extends BaseSecureActivity {
                 if (!pinSessionManager.hasActiveSession()) {
                     // Auto-Wipe triggered after 3 failed attempts
                     rsaChallengePassed = false;
+                    etStudentPin.setText("");
+                    renderPinDots(0);
                     refreshSessionUiState();
-                    tvLoginFeedback.setText("🚨 AUTO-WIPE: Bạn đã nhập sai PIN 3 lần! Toàn bộ Session & Cache đã bị xóa sạch. Phải quét thẻ lại từ đầu.");
+                    tvLoginFeedback.setText("Đã nhập sai PIN 3 lần. Phiên đã bị xóa.");
                 } else {
                     int remaining = pinSessionManager.getRemainingUnlockAttempts();
-                    tvLoginFeedback.setText("⚠️ Sai mã PIN! Còn " + remaining + " lần thử trước khi tự động xóa sạch Session (Auto-Wipe).");
+                    etStudentPin.setText("");
+                    renderPinDots(0);
+                    tvLoginFeedback.setText("Sai mã PIN. Còn " + remaining + " lần thử.");
                     refreshSessionUiState();
                 }
             }
@@ -210,7 +282,7 @@ public class LoginPinActivity extends BaseSecureActivity {
         }
 
         // Mode A: First-Time Card Login (requires RSA challenge first, or auto-runs it)
-        tvLoginFeedback.setText("Đang gửi lệnh VERIFY PIN (INS 0x10) xuống thẻ JCIDE...");
+        tvLoginFeedback.setText("Đang xác thực PIN...");
         ApduThreadPool.getInstance().execute(() -> {
             if (!rsaChallengePassed) {
                 RsaCardVerifier.VerificationResult vr = rsaCardVerifier.performChallengeResponse();
@@ -236,12 +308,13 @@ public class LoginPinActivity extends BaseSecureActivity {
                 openStudentMainScreen(totalMs, false);
             } else {
                 CardResponse resp = outcome.pinResponse;
+                etStudentPin.setText("");
+                renderPinDots(0);
                 if (resp.isCardLocked()) {
-                    tvLoginFeedback.setText("🔒 THẺ ĐÃ BỊ KHÓA (SW = 6983) do nhập sai PIN 3 lần! Hãy mở Chế độ Admin dùng mã PUK (88888888) để mở khóa.");
+                    tvLoginFeedback.setText("Thẻ đã bị khóa. Dùng PUK trong Chế độ Quản trị để mở khóa.");
                 } else {
                     int tries = resp.getRemainingPinTries();
-                    tvLoginFeedback.setText("❌ Sai mã PIN trên thẻ (SW = " + resp.getSwHex()
-                            + ")! Số lần thử còn lại trên chip thẻ: " + tries);
+                    tvLoginFeedback.setText("Sai mã PIN. Còn " + tries + " lần thử.");
                 }
             }
         });

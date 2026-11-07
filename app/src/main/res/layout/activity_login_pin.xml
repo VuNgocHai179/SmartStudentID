@@ -1,71 +1,444 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Layout for Login & Smart PIN Session Management (CN 2.1, 2.2, 2.3 & SEC-02, SEC-03) -->
+<!-- Clean, spacious Light Mode layout for Login & Smart PIN Session (CN 2.1, 2.2, 2.3) -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/loginRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0F172A"
-    android:fillViewport="true">
+    android:background="@color/slate_50"
+    android:fillViewport="true"
+    android:overScrollMode="never"
+    android:scrollbars="none">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:paddingStart="24dp"
+        android:paddingTop="30dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="28dp">
 
-        <!-- App Title & System Badge -->
+        <!-- Brand mark -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="66dp"
+            android:layout_height="66dp"
+            app:cardBackgroundColor="@color/transparent"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="8dp"
+            app:strokeWidth="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_gradient_blue"
+                android:gravity="center">
+
+                <ImageView
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:contentDescription="@string/app_name"
+                    android:src="@drawable/ic_school"
+                    app:tint="@color/white" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:background="#1E293B"
-            android:paddingHorizontal="12dp"
-            android:paddingVertical="5dp"
-            android:text="💳 SMART STUDENT ID • JAVA CARD + OWASP MASVS"
-            android:textColor="#38BDF8"
-            android:textSize="11sp"
+            android:layout_marginTop="16dp"
+            android:letterSpacing="0.16"
+            android:text="SMART STUDENT ID"
+            android:textColor="@color/brand_600"
+            android:textSize="10sp"
             android:textStyle="bold" />
 
         <TextView
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="Hệ Thống Thẻ Sinh Viên Thông Minh"
-            android:textColor="#F8FAFC"
-            android:textSize="22sp"
-            android:textStyle="bold" />
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:text="Thẻ Sinh Viên Thông Minh"
+            android:textAppearance="@style/TextAppearance.SmartID.ScreenTitle" />
 
         <TextView
             android:id="@+id/tvSessionSubtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Xác thực 2 yếu tố: Chữ ký số RSA-1024 trên chip thẻ &amp; Mã PIN bảo mật"
-            android:textColor="#94A3B8"
-            android:textSize="13sp" />
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:lineSpacingExtra="2dp"
+            android:text="Đăng nhập an toàn bằng mã PIN"
+            android:textAppearance="@style/TextAppearance.SmartID.Caption" />
 
-        <!-- Bridge Server Connection Bar -->
+        <!-- Main authentication card -->
         <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.SmartID.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="12dp"
-            app:strokeColor="#334155"
-            app:strokeWidth="1dp">
+            android:layout_marginTop="22dp"
+            app:cardCornerRadius="24dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="14dp">
+                android:padding="20dp">
 
-                <TextView
+                <!-- First-time RSA scan section -->
+                <LinearLayout
+                    android:id="@+id/cardFirstTimeScan"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="🌐 Kết nối PC Bridge &amp; JCIDE Simulator"
-                    android:textColor="#38BDF8"
-                    android:textSize="13sp"
+                    android:background="@drawable/bg_soft_panel"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="@drawable/bg_icon_tile_blue"
+                            android:gravity="center">
+
+                            <ImageView
+                                android:layout_width="19dp"
+                                android:layout_height="19dp"
+                                android:contentDescription="Xác thực RSA"
+                                android:src="@drawable/ic_verified"
+                                app:tint="@color/brand_600" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Bước 1 • Xác thực thẻ"
+                                android:textColor="@color/slate_900"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnScanAndVerifyRsa"
+                        style="@style/Widget.SmartID.Button.Soft"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="12dp"
+                        android:text="Quét thẻ &amp; xác thực RSA"
+                        app:icon="@drawable/ic_verified" />
+
+                    <TextView
+                        android:id="@+id/tvRsaChallengeStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:lineSpacingExtra="2dp"
+                        android:text="Chưa quét thẻ."
+                        android:textAppearance="@style/TextAppearance.SmartID.Micro"
+                        android:textColor="@color/emerald_600" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="18dp"
+                    android:layout_marginBottom="18dp"
+                    android:background="@color/slate_100" />
+
+                <TextView
+                    android:id="@+id/tvPinCardTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="Nhập Mã PIN (6 chữ số)"
+                    android:textColor="@color/slate_900"
+                    android:textSize="17sp"
                     android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvPinLockWarning"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center"
+                    android:lineSpacingExtra="2dp"
+                    android:text="Mã PIN mặc định: 123456"
+                    android:textAppearance="@style/TextAppearance.SmartID.Caption" />
+
+                <!-- PIN dots (rebuilt at runtime by LoginPinActivity) -->
+                <LinearLayout
+                    android:id="@+id/pinDotsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/bg_pin_dot_empty" />
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/bg_pin_dot_empty" />
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/bg_pin_dot_empty" />
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/bg_pin_dot_empty" />
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/bg_pin_dot_empty" />
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/bg_pin_dot_empty" />
+                </LinearLayout>
+
+                <!-- Hidden numeric field keeps the existing authentication logic intact -->
+                <EditText
+                    android:id="@+id/etStudentPin"
+                    android:layout_width="1dp"
+                    android:layout_height="1dp"
+                    android:importantForAccessibility="no"
+                    android:inputType="numberPassword"
+                    android:maxLength="8"
+                    android:text="123456"
+                    android:visibility="gone" />
+
+                <!-- Numeric keypad -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPin1"
+                        style="@style/Widget.SmartID.Button.Key"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:text="1" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPin2"
+                        style="@style/Widget.SmartID.Button.Key"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:text="2" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPin3"
+                        style="@style/Widget.SmartID.Button.Key"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:text="3" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPin4"
+                        style="@style/Widget.SmartID.Button.Key"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:text="4" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPin5"
+                        style="@style/Widget.SmartID.Button.Key"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:text="5" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPin6"
+                        style="@style/Widget.SmartID.Button.Key"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:text="6" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPin7"
+                        style="@style/Widget.SmartID.Button.Key"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:text="7" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPin8"
+                        style="@style/Widget.SmartID.Button.Key"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:text="8" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPin9"
+                        style="@style/Widget.SmartID.Button.Key"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:text="9" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPin0"
+                        style="@style/Widget.SmartID.Button.Key"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:text="0" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPinBackspace"
+                        style="@style/Widget.SmartID.Button.KeyIcon"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:layout_margin="6dp"
+                        android:contentDescription="Xóa một chữ số"
+                        app:icon="@drawable/ic_backspace" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnUnlockWithPin"
+                    style="@style/Widget.SmartID.Button.Primary"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="18dp"
+                    android:text="Mở khóa ứng dụng"
+                    app:icon="@drawable/ic_login" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSwitchStudentCard"
+                    style="@style/Widget.SmartID.Button.Outline"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="8dp"
+                    android:text="Đổi thẻ sinh viên khác"
+                    android:visibility="gone"
+                    app:icon="@drawable/ic_nav_card" />
+
+                <TextView
+                    android:id="@+id/tvLoginFeedback"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center"
+                    android:lineSpacingExtra="2dp"
+                    android:text=""
+                    android:textColor="@color/amber_600"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Admin portal & bridge configuration -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.SmartID.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="DÀNH CHO QUẢN TRỊ"
+                    android:textAppearance="@style/TextAppearance.SmartID.Label" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnOpenAdminDashboard"
+                    style="@style/Widget.SmartID.Button.Soft"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="8dp"
+                    android:text="Mở chế độ Quản trị"
+                    app:icon="@drawable/ic_person" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="14dp"
+                    android:layout_marginBottom="12dp"
+                    android:background="@color/slate_100" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="BRIDGE SERVER URL"
+                    android:textAppearance="@style/TextAppearance.SmartID.Label" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -77,218 +450,29 @@
                     <EditText
                         android:id="@+id/etBridgeUrl"
                         android:layout_width="0dp"
-                        android:layout_height="42dp"
+                        android:layout_height="44dp"
                         android:layout_weight="1"
-                        android:background="#0B1120"
+                        android:background="@drawable/bg_input"
                         android:hint="http://10.0.2.2:8080"
+                        android:importantForAutofill="no"
                         android:inputType="textUri"
-                        android:paddingHorizontal="12dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:singleLine="true"
                         android:text="http://10.0.2.2:8080"
-                        android:textColor="#F8FAFC"
-                        android:textColorHint="#64748B"
-                        android:textSize="13sp" />
-
-                    <Button
-                        android:id="@+id/btnApplyBridgeUrl"
-                        android:layout_width="wrap_content"
-                        android:layout_height="42dp"
-                        android:layout_marginStart="8dp"
-                        android:backgroundTint="#334155"
-                        android:text="Lưu URL"
-                        android:textAllCaps="false"
-                        android:textColor="#F8FAFC"
+                        android:textColor="@color/slate_700"
+                        android:textColorHint="@color/slate_400"
                         android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnApplyBridgeUrl"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="wrap_content"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="8dp"
+                        android:minWidth="72dp"
+                        android:text="Lưu" />
                 </LinearLayout>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- CARD 1: FIRST-TIME CARD SCAN & RSA CHALLENGE-RESPONSE (Shown when no session exists) -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardFirstTimeScan"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="12dp"
-            app:strokeColor="#4F46E5"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Bước 1: Quét Thẻ &amp; Xác Thực Chống Giả Mạo RSA-1024"
-                    android:textColor="#A5B4FC"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Gửi Nonce 16 bytes ngẫu nhiên xuống thẻ JCIDE (INS 0x14) yêu cầu ký bằng Private Key RSA-1024 để chống thẻ giả (Clone Card)."
-                    android:textColor="#94A3B8"
-                    android:textSize="12sp" />
-
-                <Button
-                    android:id="@+id/btnScanAndVerifyRsa"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="12dp"
-                    android:backgroundTint="#4F46E5"
-                    android:text="🔍 Quét Thẻ JCIDE &amp; Kiểm Tra Chữ Ký RSA-1024"
-                    android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/tvRsaChallengeStatus"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:background="#0B1120"
-                    android:fontFamily="monospace"
-                    android:padding="10dp"
-                    android:text="Trạng thái thẻ: Chưa quét thẻ. Hãy bấm nút Quét Thẻ phía trên."
-                    android:textColor="#34D399"
-                    android:textSize="11sp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- CARD 2: PIN ENTRY & FAST SESSION UNLOCK (CN 2.1, 2.2, 2.3) -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardBackgroundColor="#1E293B"
-            app:cardCornerRadius="12dp"
-            app:strokeColor="#10B981"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:id="@+id/tvPinCardTitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Bước 2: Nhập Mã PIN Thẻ Sinh Viên (6 số)"
-                    android:textColor="#34D399"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/tvPinLockWarning"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="PIN mặc định: 123456. Nhập sai quá 3 lần sẽ khóa thẻ (SW=6983) và tự động xóa sạch Session trên máy (Auto-Wipe)."
-                    android:textColor="#CBD5E1"
-                    android:textSize="12sp" />
-
-                <EditText
-                    android:id="@+id/etStudentPin"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="12dp"
-                    android:background="#0B1120"
-                    android:gravity="center"
-                    android:hint="••••••"
-                    android:inputType="numberPassword"
-                    android:letterSpacing="0.3"
-                    android:maxLength="8"
-                    android:text="123456"
-                    android:textColor="#F8FAFC"
-                    android:textColorHint="#64748B"
-                    android:textSize="20sp"
-                    android:textStyle="bold" />
-
-                <Button
-                    android:id="@+id/btnUnlockWithPin"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="12dp"
-                    android:backgroundTint="#10B981"
-                    android:text="🔓 Mở Khóa Bằng Mã PIN (Verify PIN)"
-                    android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
-                <Button
-                    android:id="@+id/btnSwitchStudentCard"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:layout_marginTop="8dp"
-                    android:backgroundTint="#334155"
-                    android:text="🔄 Đổi Thẻ Sinh Viên Khác (Xóa Session Hiện Tại)"
-                    android:textAllCaps="false"
-                    android:textColor="#F8FAFC"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
-
-                <TextView
-                    android:id="@+id/tvLoginFeedback"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:text="Sẵn sàng xác thực."
-                    android:textColor="#FBBF24"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- ADMIN ROLE SWITCHER CARD (Phòng Đào Tạo) -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            app:cardBackgroundColor="#1E1B4B"
-            app:cardCornerRadius="12dp"
-            app:strokeColor="#6366F1"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="👨‍💼 Phân Hệ Quản Trị Thẻ — Phòng Đào Tạo (Role Admin)"
-                    android:textColor="#C7D2FE"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Phát hành thẻ SV mới (AES-128 + RSA-1024), chuyển đổi thẻ ảo đang gắn vào JCIDE và mở khóa thẻ bị khóa bằng mã PUK 8 số."
-                    android:textColor="#94A3B8"
-                    android:textSize="12sp" />
-
-                <Button
-                    android:id="@+id/btnOpenAdminDashboard"
-                    android:layout_width="match_parent"
-                    android:layout_height="46dp"
-                    android:layout_marginTop="10dp"
-                    android:backgroundTint="#6366F1"
-                    android:text="⚙️ Mở Bảng Điều Khiển Admin (Phòng Đào Tạo)"
-                    android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

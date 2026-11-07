@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Main Student container layout in clean, spacious Light Mode with 4 bottom navigation tabs -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/slate_50"
+    android:orientation="vertical">
+
+    <!-- Top header -->
+    <LinearLayout
+        android:id="@+id/headerBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        android:elevation="1dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp">
+
+        <LinearLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_icon_tile_blue"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="21dp"
+                android:layout_height="21dp"
+                android:contentDescription="@string/app_name"
+                android:src="@drawable/ic_school"
+                app:tint="@color/brand_600" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvHeaderGreeting"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Vũ Ngọc Hải • CT7C"
+                android:textColor="@color/slate_900"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvHeaderPerfBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:background="@drawable/bg_pill_green"
+                android:paddingStart="8dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="2dp"
+                android:text="● Phiên PIN bảo mật • 14 ms"
+                android:textColor="@color/emerald_600"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnHeaderSwitchCard"
+            style="@style/Widget.SmartID.Button.Pill"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_marginStart="10dp"
+            android:minWidth="0dp"
+            android:text="Đổi thẻ"
+            app:icon="@drawable/ic_nav_card" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/slate_100" />
+
+    <!-- ViewPager2 hosting the 4 Student Fragments -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPagerStudent"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/slate_100" />
+
+    <!-- Bottom navigation -->
+    <LinearLayout
+        android:id="@+id/bottomNavBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="72dp"
+        android:background="@color/white"
+        android:elevation="8dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="6dp"
+        android:paddingBottom="6dp">
+
+        <LinearLayout
+            android:id="@+id/navTabCard"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:id="@+id/navIconBgCard"
+                android:layout_width="46dp"
+                android:layout_height="30dp"
+                android:background="@drawable/bg_nav_active">
+
+                <ImageView
+                    android:id="@+id/ivNavIconCard"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="Thẻ sinh viên"
+                    android:src="@drawable/ic_nav_card"
+                    app:tint="@color/brand_600" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/tvNavLabelCard"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="Thẻ SV"
+                android:textColor="@color/brand_600"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navTabQr"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:id="@+id/navIconBgQr"
+                android:layout_width="46dp"
+                android:layout_height="30dp">
+
+                <ImageView
+                    android:id="@+id/ivNavIconQr"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="Điểm danh QR"
+                    android:src="@drawable/ic_nav_qr"
+                    app:tint="@color/slate_500" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/tvNavLabelQr"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="Điểm danh"
+                android:textColor="@color/slate_500"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navTabLibrary"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:id="@+id/navIconBgLibrary"
+                android:layout_width="46dp"
+                android:layout_height="30dp">
+
+                <ImageView
+                    android:id="@+id/ivNavIconLibrary"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="Thư viện"
+                    android:src="@drawable/ic_nav_library"
+                    app:tint="@color/slate_500" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/tvNavLabelLibrary"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="Thư viện"
+                android:textColor="@color/slate_500"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navTabSecurityOpt"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:id="@+id/navIconBgSecurityOpt"
+                android:layout_width="46dp"
+                android:layout_height="30dp">
+
+                <ImageView
+                    android:id="@+id/ivNavIconSecurityOpt"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="Bảo mật và tối ưu"
+                    android:src="@drawable/ic_nav_security"
+                    app:tint="@color/slate_500" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/tvNavLabelSecurityOpt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="Bảo mật"
+                android:textColor="@color/slate_500"
+                android:textSize="10sp" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

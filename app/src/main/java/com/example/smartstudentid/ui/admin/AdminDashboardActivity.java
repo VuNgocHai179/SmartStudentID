@@ -48,6 +48,7 @@ public class AdminDashboardActivity extends BaseSecureActivity {
     private TextView tvIssueCardLog;
     private TextView tvPukStatus;
     private TextView tvAdminAcademicSummary;
+    private TextView tvIssuedCardsCount;
     private RecyclerView rvIssuedCards;
 
     private EncryptedCacheManager cacheManager;
@@ -58,6 +59,8 @@ public class AdminDashboardActivity extends BaseSecureActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_admin_dashboard);
+        applySafeAreaPadding(findViewById(R.id.adminRoot), true, true);
+        findViewById(R.id.adminRoot).setVerticalScrollBarEnabled(false);
 
         cacheManager = EncryptedCacheManager.getInstance(this);
         issuedCards = cacheManager.getIssuedCardsList();
@@ -77,6 +80,7 @@ public class AdminDashboardActivity extends BaseSecureActivity {
         tvIssueCardLog = findViewById(R.id.tvIssueCardLog);
         tvPukStatus = findViewById(R.id.tvPukStatus);
         tvAdminAcademicSummary = findViewById(R.id.tvAdminAcademicSummary);
+        tvIssuedCardsCount = findViewById(R.id.tvIssuedCardsCount);
         rvIssuedCards = findViewById(R.id.rvIssuedCards);
 
         Button btnBackToLogin = findViewById(R.id.btnBackToLogin);
@@ -90,8 +94,17 @@ public class AdminDashboardActivity extends BaseSecureActivity {
 
     private void setupRecyclerView() {
         rvIssuedCards.setLayoutManager(new LinearLayoutManager(this));
+        rvIssuedCards.setHasFixedSize(true);
+        rvIssuedCards.setVerticalScrollBarEnabled(false);
         adapter = new IssuedCardAdapter();
         rvIssuedCards.setAdapter(adapter);
+        updateIssuedCardsCount();
+    }
+
+    private void updateIssuedCardsCount() {
+        if (tvIssuedCardsCount != null) {
+            tvIssuedCardsCount.setText(issuedCards.size() + " thẻ");
+        }
     }
 
     /**
@@ -109,7 +122,7 @@ public class AdminDashboardActivity extends BaseSecureActivity {
             return;
         }
 
-        tvIssueCardLog.setText("Đang khởi tạo thẻ mới trên Background ThreadPool...");
+        tvIssueCardLog.setText("Đang phát hành thẻ...");
         StudentCardRecord newCard = new StudentCardRecord(
                 studentId, fullName, dob, className, dept, "123456", false, 85, 0
         );
@@ -163,12 +176,10 @@ public class AdminDashboardActivity extends BaseSecureActivity {
             cacheManager.saveIssuedCardsList(issuedCards);
             cacheManager.saveStudentProfile(newCard);
             adapter.notifyDataSetChanged();
+            updateIssuedCardsCount();
 
-            tvIssueCardLog.setText(
-                    "✅ PHÁT HÀNH THẺ THÀNH CÔNG (" + totalMs + " ms)\n"
-                            + "• Sinh viên: " + newCard.getFullName() + " (" + newCard.getStudentId() + ")\n"
-                            + "• AES-128 EEPROM & RSA-1024: " + summary
-            );
+            tvIssueCardLog.setText("✓ Đã phát hành thẻ cho " + newCard.getFullName()
+                    + " (" + totalMs + " ms)");
             Toast.makeText(this, "Đã phát hành và gắn thẻ " + newCard.getStudentId() + " vào JCIDE!",
                     Toast.LENGTH_SHORT).show();
         });
@@ -198,9 +209,10 @@ public class AdminDashboardActivity extends BaseSecureActivity {
                 }
                 cacheManager.saveIssuedCardsList(issuedCards);
                 adapter.notifyDataSetChanged();
-                tvPukStatus.setText("✅ ĐÃ MỞ KHÓA THẺ THÀNH CÔNG (SW=9000)! OwnerPIN.resetAndUnblock() đã đưa PIN về 123456 (3 lần thử).");
+                updateIssuedCardsCount();
+                tvPukStatus.setText("✓ Đã mở khóa thẻ. PIN mặc định: 123456.");
             } else {
-                tvPukStatus.setText("❌ SAI MÃ PUK ADMIN (SW=" + resp.getSwHex() + ")! Vui lòng nhập đúng 88888888.");
+                tvPukStatus.setText("❌ Sai mã PUK.");
             }
         });
     }
@@ -229,6 +241,17 @@ public class AdminDashboardActivity extends BaseSecureActivity {
         tvAdminAcademicSummary.setText(sb.toString().trim());
     }
 
+    private String initialBadge(String fullName) {
+        if (fullName == null || fullName.trim().isEmpty()) {
+            return "SV";
+        }
+        String[] parts = fullName.trim().split("\\s+");
+        if (parts.length >= 2) {
+            return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        }
+        return fullName.substring(0, Math.min(2, fullName.length())).toUpperCase();
+    }
+
     private class IssuedCardAdapter extends RecyclerView.Adapter<IssuedCardAdapter.ViewHolder> {
 
         @NonNull
@@ -242,16 +265,19 @@ public class AdminDashboardActivity extends BaseSecureActivity {
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             StudentCardRecord item = issuedCards.get(position);
-            holder.tvTitle.setText(item.getStudentId() + " — " + item.getFullName());
-            holder.tvSub.setText("Lớp: " + item.getClassName() + " | Khoa: " + item.getDepartment()
-                    + " | ĐRL: " + item.getTrainingScore() + " | ĐD: " + item.getAttendanceCount());
+            holder.tvAvatar.setText(initialBadge(item.getFullName()));
+            holder.tvTitle.setText(item.getFullName());
+            holder.tvSub.setText("MSSV " + item.getStudentId() + " • Lớp " + item.getClassName()
+                    + " • " + item.getDepartment());
 
             if (item.isCardLocked()) {
-                holder.tvStatus.setText("🔒 Trạng thái: Đang bị khóa PIN (Dùng PUK để mở)");
-                holder.tvStatus.setTextColor(0xFFF43F5E);
+                holder.tvStatus.setText("Đang khóa PIN");
+                holder.tvStatus.setTextColor(0xFFDC2626);
+                holder.tvStatus.setBackgroundResource(R.drawable.bg_pill_red);
             } else {
-                holder.tvStatus.setText("✅ Trạng thái: Hoạt động (AES-128 & RSA-1024 Ready)");
-                holder.tvStatus.setTextColor(0xFF34D399);
+                holder.tvStatus.setText("Sẵn sàng");
+                holder.tvStatus.setTextColor(0xFF059669);
+                holder.tvStatus.setBackgroundResource(R.drawable.bg_pill_green);
             }
 
             holder.btnActivate.setOnClickListener(v -> {
@@ -280,6 +306,7 @@ public class AdminDashboardActivity extends BaseSecureActivity {
         }
 
         class ViewHolder extends RecyclerView.ViewHolder {
+            final TextView tvAvatar;
             final TextView tvTitle;
             final TextView tvSub;
             final TextView tvStatus;
@@ -287,6 +314,7 @@ public class AdminDashboardActivity extends BaseSecureActivity {
 
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
+                tvAvatar = itemView.findViewById(R.id.tvItemAvatarInitials);
                 tvTitle = itemView.findViewById(R.id.tvItemStudentTitle);
                 tvSub = itemView.findViewById(R.id.tvItemStudentSub);
                 tvStatus = itemView.findViewById(R.id.tvItemCardStatus);
