@@ -13,5 +13,10 @@ if exist "E:\AndroidSDK\platform-tools\adb.exe" (
 
 echo Compiling and starting Smart Student ID PC Bridge & SQLite Database Server...
 javac -encoding UTF-8 --add-modules java.smartcardio,jdk.httpserver,java.sql -cp "bridge-server\lib\*" bridge-server\src\DatabaseManager.java bridge-server\src\BridgeServer.java -d bridge-server\out
+if errorlevel 1 (
+    echo [ERROR] BridgeServer compilation failed. Fix the errors above before starting the server.
+    pause
+    exit /b 1
+)
 java -Dfile.encoding=UTF-8 --add-modules java.smartcardio,jdk.httpserver,java.sql -cp "bridge-server\out;bridge-server\lib\*" BridgeServer
 pause
