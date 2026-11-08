@@ -92,9 +92,15 @@ public class StudentMainActivity extends BaseSecureActivity {
         navTabLibrary.setOnClickListener(v -> viewPagerStudent.setCurrentItem(2, true));
         navTabSecurityOpt.setOnClickListener(v -> viewPagerStudent.setCurrentItem(3, true));
 
-        btnHeaderSwitchCard.setOnClickListener(v -> finish());
+        btnHeaderSwitchCard.setOnClickListener(v -> logoutCurrentCard());
 
         updateBottomNavHighlight(0);
+    }
+
+    public void logoutCurrentCard() {
+        new com.example.smartstudentid.security.PinSessionManager(this).clearSession();
+        android.widget.Toast.makeText(this, "Đã đăng xuất thẻ sinh viên", android.widget.Toast.LENGTH_SHORT).show();
+        finish();
     }
 
     private void setupViewPager() {

@@ -205,20 +205,22 @@ public class DynamicQrFragment extends Fragment {
                 String sigHex = ApduCommands.bytesToHex(resp.getData());
                 String sigShort = sigHex.length() > 36 ? sigHex.substring(0, 36) + "..." : sigHex;
 
-                List<AttendanceRecord> history = cacheManager.getAttendanceHistory();
-                history.add(0, new AttendanceRecord(
+                AttendanceRecord newRecord = new AttendanceRecord(
                         studentId,
                         "AT19N01",
                         finalCourse,
                         System.currentTimeMillis() / 1000L,
                         sigShort,
                         true
-                ));
-                cacheManager.saveAttendanceHistory(history);
+                );
 
-                tvAttendanceSignResult.setText("✓ Điểm danh thành công (" + totalMs + " ms)");
-                renderAttendanceHistory();
-                Toast.makeText(requireContext(), "Đã ký số điểm danh thành công!", Toast.LENGTH_SHORT).show();
+                ApduThreadPool.getInstance().execute(() -> {
+                    ApduClient.getInstance().syncAttendanceToServerDb(newRecord);
+                    return true;
+                }, (ok, bMs, tMs) -> renderAttendanceHistory());
+
+                tvAttendanceSignResult.setText("✓ Điểm danh & lưu Server SQLite thành công (" + totalMs + " ms)");
+                Toast.makeText(requireContext(), "Đã ký số điểm danh lên Server SQLite!", Toast.LENGTH_SHORT).show();
             } else {
                 tvAttendanceSignResult.setText("❌ Điểm danh thất bại.");
             }
@@ -226,21 +228,29 @@ public class DynamicQrFragment extends Fragment {
     }
 
     private void renderAttendanceHistory() {
-        List<AttendanceRecord> history = cacheManager.getAttendanceHistory();
-        if (history.isEmpty()) {
-            tvAttendanceHistoryList.setText("• Hôm nay 07:30 — AT19N01\n"
-                    + "• Hôm qua 13:00 — AT19N02");
-            return;
-        }
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM HH:mm", Locale.getDefault());
-        StringBuilder sb = new StringBuilder();
-        int limit = Math.min(5, history.size());
-        for (int i = 0; i < limit; i++) {
-            AttendanceRecord item = history.get(i);
-            String timeStr = sdf.format(new Date(item.getTimestampSeconds() * 1000L));
-            sb.append("• ").append(timeStr).append(" — ").append(item.getCourseName()).append("\n");
-        }
-        tvAttendanceHistoryList.setText(sb.toString().trim());
+        StudentCardRecord profile = cacheManager.getStudentProfile();
+        final String studentId = (profile != null && profile.getStudentId() != null)
+                ? profile.getStudentId() : "CT070315";
+
+        ApduThreadPool.getInstance().execute(
+                () -> ApduClient.getInstance().fetchAttendanceByStudentFromServerDb(studentId),
+                (history, mainBlockedMs, totalMs) -> {
+                    if (!isAdded()) return;
+                    if (history == null || history.isEmpty()) {
+                        tvAttendanceHistoryList.setText("• Chưa có bản ghi điểm danh trên Server SQLite.");
+                        return;
+                    }
+                    SimpleDateFormat sdf = new SimpleDateFormat("dd/MM HH:mm", Locale.getDefault());
+                    StringBuilder sb = new StringBuilder();
+                    int limit = Math.min(5, history.size());
+                    for (int i = 0; i < limit; i++) {
+                        AttendanceRecord item = history.get(i);
+                        String timeStr = sdf.format(new Date(item.getTimestampSeconds() * 1000L));
+                        sb.append("• ").append(timeStr).append(" — ").append(item.getCourseName()).append("\n");
+                    }
+                    tvAttendanceHistoryList.setText(sb.toString().trim());
+                }
+        );
     }
 
     private Bitmap encodeQrBitmap(String content, int sizePx) {

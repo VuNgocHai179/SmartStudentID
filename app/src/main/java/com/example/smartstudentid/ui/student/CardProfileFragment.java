@@ -86,6 +86,17 @@ public class CardProfileFragment extends Fragment {
         btnReloadFromChip.setOnClickListener(v -> reloadProfileAndAvatarFromCard());
         btnOpenEditProfileDialog.setOnClickListener(v -> showEditProfileDialog());
         btnOpenChangePinDialog.setOnClickListener(v -> showChangePinDialog());
+        View btnLogoutCard = view.findViewById(R.id.btnLogoutCard);
+        if (btnLogoutCard != null) {
+            btnLogoutCard.setOnClickListener(v -> {
+                if (getActivity() instanceof StudentMainActivity) {
+                    ((StudentMainActivity) getActivity()).logoutCurrentCard();
+                } else if (getActivity() != null) {
+                    pinSessionManager.clearSession();
+                    getActivity().finish();
+                }
+            });
+        }
 
         loadInitialProfileState();
     }
@@ -171,7 +182,7 @@ public class CardProfileFragment extends Fragment {
             double kb = payload.avatarBytes.length / 1024.0;
             tvAvatarMetaBadge.setText(String.format(Locale.US, "WebP %.1f KB", kb));
             tvProfileSyncStatus.setText(String.format(Locale.US,
-                    "✓ Đã đồng bộ trong %d ms.", totalMs));
+                    "✓ Đọc APDU + AES-128 + " + ImageOptimizer.calculateApduPacketCount(payload.avatarBytes.length) + " gói WebP (%d ms • 60 FPS)", totalMs));
         });
     }
 

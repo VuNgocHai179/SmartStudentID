@@ -76,8 +76,8 @@
             android:layout_height="38dp"
             android:layout_marginStart="10dp"
             android:minWidth="0dp"
-            android:text="Đổi thẻ"
-            app:icon="@drawable/ic_nav_card" />
+            android:text="Đăng xuất"
+            app:icon="@drawable/ic_close" />
     </LinearLayout>
 
     <View

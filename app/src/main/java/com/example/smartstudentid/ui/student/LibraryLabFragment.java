@@ -46,7 +46,7 @@ public class LibraryLabFragment extends Fragment {
     private TextView tvOnCardActivityLogs;
 
     private EncryptedCacheManager cacheManager;
-    private List<BookLoanRecord> bookList;
+    private final List<BookLoanRecord> bookList = new ArrayList<>();
     private BookLoanAdapter bookAdapter;
 
     @Nullable
@@ -62,7 +62,6 @@ public class LibraryLabFragment extends Fragment {
 
         cacheManager = EncryptedCacheManager.getInstance(requireContext());
         view.setVerticalScrollBarEnabled(false);
-        bookList = cacheManager.getBookLoans();
 
         tvBorrowedQuota = view.findViewById(R.id.tvBorrowedQuota);
         tvBookCount = view.findViewById(R.id.tvBookCount);
@@ -83,7 +82,22 @@ public class LibraryLabFragment extends Fragment {
         btnSwipeLabDoor.setOnClickListener(v -> handleLabDoorSwipe());
         btnReadOnCardLogs.setOnClickListener(v -> readCircularLogsFromChip());
 
-        updateBorrowedQuotaHeader();
+        loadBooksFromServerSqlite();
+    }
+
+    private void loadBooksFromServerSqlite() {
+        ApduThreadPool.getInstance().execute(
+                () -> ApduClient.getInstance().fetchBooksFromServerDb(),
+                (remoteBooks, mainBlockedMs, totalMs) -> {
+                    if (!isAdded()) return;
+                    bookList.clear();
+                    if (remoteBooks != null) {
+                        bookList.addAll(remoteBooks);
+                    }
+                    bookAdapter.notifyDataSetChanged();
+                    updateBorrowedQuotaHeader();
+                }
+        );
     }
 
     private void updateBorrowedQuotaHeader() {
@@ -130,7 +144,10 @@ public class LibraryLabFragment extends Fragment {
                 String sig = ApduCommands.bytesToHex(resp.getData());
                 book.setRsaSignatureHex(sig.length() > 24 ? sig.substring(0, 24) + "..." : sig);
 
-                cacheManager.saveBookLoans(bookList);
+                ApduThreadPool.getInstance().execute(() -> {
+                    ApduClient.getInstance().syncBookLoanToServerDb(book);
+                    return true;
+                }, null);
                 bookAdapter.notifyItemChanged(position);
                 updateBorrowedQuotaHeader();
 

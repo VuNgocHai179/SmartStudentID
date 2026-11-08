@@ -18,7 +18,7 @@ flowchart TB
 
     subgraph PC_Server ["PC Bridge & Card Management Server (Java)"]
         BRIDGE["TCP/HTTP Server + PC/SC Bridge (javax.smartcardio)"]
-        DB[("CSDL (cards_database.json)\n- Hồ sơ & Snapshot các thẻ ảo\n- Public Key RSA của từng thẻ\n- Lịch sử Giao dịch Ví (Nạp/Thanh toán)\n- Lịch sử Điểm danh & Mượn sách")]
+        DB[("CSDL Quan Hệ SQLite (smartcard.db)\n- Bảng cards: Hồ sơ & Public Key RSA\n- Bảng attendance_logs: Điểm danh ký số\n- Bảng book_loans: Mượn/Trả sách\n- Bảng card_audit_logs: Nhật ký bảo mật")]
         BRIDGE <--> DB
     end
 
@@ -136,7 +136,7 @@ flowchart TB
 
 ### 🚩 MỐC 3 (Dự kiến 28/12/2026) – Hoàn thiện CSDL, Báo cáo Cuối kỳ & Vấn đáp
 * **Yêu cầu tối thiểu của giảng viên:**
-  - [ ] **Hoàn thiện CSDL trên máy tính:** Bổ sung lưu trữ **SQLite Database** (`smartcard.db`) song song với `cards_database.json` trên `BridgeServer` (gồm các bảng: `cards`, `wallet_transactions`, `attendance_logs`, `book_loans`).
+  - [x] **Hoàn thiện CSDL tập trung trên Máy chủ (Server):** Lưu trữ duy nhất tại **SQLite Database** (`bridge-server/data/smartcard.db`) trên `BridgeServer` gồm các bảng quan hệ 3NF: `cards`, `attendance_logs`, `book_loans`, `card_audit_logs` (không lưu dữ liệu chung của người khác trên điện thoại Client).
   - [ ] **Hoàn thiện Hồ sơ nộp bản mềm (trước ngày báo cáo 2 ngày):**
     - Quy tắc đặt tên file bắt buộc: `Tên lớp tín chỉ_Tên nhóm_Tên đề tài` (Ví dụ: `L01_Nhóm 1_Thẻ sinh viên thông minh`).
     - **Báo cáo Word (tối thiểu 30 trang A4):** Chỉ gồm **2 Chương** (*Chương 1: Mô tả bài toán & Phân tích thiết kế hệ thống*; *Chương 2: Cài đặt và Thực nghiệm* – Lưu ý: **Bỏ qua chương Cơ sở lý thuyết** theo đúng yêu cầu của cô).
@@ -156,7 +156,7 @@ flowchart TB
    - [ ] **Thay đổi mã PIN, mã hóa mã PIN (0.5 điểm):** Băm mã PIN, đổi mã PIN và tái mã hóa lại dữ liệu thẻ theo khóa AES của PIN mới.
    - [x] **Tạo được cặp khóa RSA (0.5 điểm):** Sinh cặp khóa `RSA-1024` ngay trên chip thẻ và xuất `Public Key (Modulus N, Exponent E)`.
    - [ ] **Xác thực được theo chức năng (0.5 điểm):** Xác thực PIN + Ký số & Kiểm tra chữ ký RSA khi **Nạp tiền, Thanh toán**, Điểm danh, Mượn sách.
-   - [ ] **Có CSDL (0.5 điểm):** Lưu trữ thông tin thẻ, `Public Key RSA`, số dư và lịch sử giao dịch vào CSDL trên máy tính.
+   - [x] **Có CSDL (0.5 điểm):** Lưu trữ thông tin thẻ, `Public Key RSA`, điểm rèn luyện và lịch sử giao dịch vào CSDL SQLite tập trung (`smartcard.db`) trên Máy chủ (`BridgeServer`).
    - [x] **Có demo chức năng (0.5 điểm):** Demo trực tiếp đầy đủ các luồng trên JCIDE Simulator + PC + Android.
 4. **Trả lời câu hỏi Vấn đáp (4.0 điểm – Điểm liệt nếu không trả lời được):**
    - Nắm vững cấu trúc gói tin `Command APDU (CLA, INS, P1, P2, Lc, Data, Le)` và `Response APDU (Data, SW1, SW2)`.

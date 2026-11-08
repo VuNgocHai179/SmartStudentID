@@ -25,7 +25,7 @@ import androidx.core.view.WindowInsetsCompat;
  */
 public abstract class BaseSecureActivity extends AppCompatActivity {
 
-    private boolean flagSecureEnabled = true;
+    private boolean flagSecureEnabled = false;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -33,7 +33,9 @@ public abstract class BaseSecureActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         configureEdgeToEdgeSystemBars();
-        applyFlagSecure(true);
+        // Keep FLAG_SECURE off by default during development/projector live demo so Android Studio
+        // Device Mirroring & Scrcpy can display the UI instead of a black screen.
+        applyFlagSecure(false);
     }
 
     @SuppressWarnings("deprecation")

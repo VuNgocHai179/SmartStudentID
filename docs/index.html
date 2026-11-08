@@ -635,8 +635,8 @@
                         <label class="check-item">
                             <input type="checkbox" data-check="step-8" onchange="updateProgress()">
                             <div class="check-content">
-                                <div class="check-title">8. Xây dựng <code>BridgeServer.java</code> & <code>cards_database.json</code> (<code>SC-07</code>)</div>
-                                <div class="check-desc">Server Java kết nối JCIDE qua <code>javax.smartcardio</code> (PC/SC) + hỗ trợ chế độ giả lập thẻ dự phòng (Fallback Simulator) và tính năng <strong>Virtual Card Switcher</strong> nạp thẻ SV bất kỳ vào đầu đọc.</div>
+                                <div class="check-title">8. Xây dựng <code>BridgeServer.java</code>, <code>DatabaseManager.java</code> &amp; CSDL SQLite <code>smartcard.db</code> (<code>SC-07</code>)</div>
+                                <div class="check-desc">Server Java kết nối JCIDE qua <code>javax.smartcardio</code> (PC/SC) + quản trị CSDL quan hệ SQLite 3NF (<code>cards</code>, <code>attendance_logs</code>, <code>book_loans</code>, <code>card_audit_logs</code>) và tính năng <strong>Virtual Card Switcher</strong> nạp thẻ SV bất kỳ vào đầu đọc.</div>
                             </div>
                         </label>
                     </div>
@@ -874,8 +874,8 @@
                             <td><strong>3.8</strong></td>
                             <td>Nội dung Project: <strong>Có CSDL</strong></td>
                             <td><strong>0.5 điểm</strong></td>
-                            <td>Đã có <code>cards_database.json</code> trên Server & <code>EncryptedSharedPreferences</code> trên App.</td>
-                            <td><span class="badge badge-emerald">Đã có (Bổ sung thêm lịch sử giao dịch Ví ở Bước 15)</span></td>
+                            <td>Đã có CSDL Quan hệ SQLite 3NF (<code>smartcard.db</code>) tập trung trên Server (<code>DatabaseManager.java</code>).</td>
+                            <td><span class="badge badge-emerald">Đã hoàn thiện CSDL SQLite</span></td>
                         </tr>
                         <tr>
                             <td><strong>3.9</strong></td>
@@ -967,8 +967,8 @@
                         • Truyền lệnh APDU xuống JCIDE qua <code>javax.smartcardio</code>
                     </div>
                     <div class="arch-item">
-                        <strong>🗄️ CSDL <code>cards_database.json</code></strong>
-                        • Lưu danh sách toàn bộ thẻ SV, số dư ví & lịch sử giao dịch Nạp/Thanh toán<br>
+                        <strong>🗄️ CSDL Quan Hệ SQLite <code>smartcard.db</code></strong>
+                        • Lưu tập trung trên Server gồm 4 bảng 3NF: <code>cards</code>, <code>attendance_logs</code>, <code>book_loans</code>, <code>card_audit_logs</code><br>
                         • Lưu <code>Public Key RSA (Modulus N, Exponent E)</code> của từng thẻ để đối chiếu chữ ký khi Nạp tiền, Thanh toán, Điểm danh, Mượn sách<br>
                         • Lưu Snapshot EEPROM để nạp nhanh thẻ bất kỳ vào JCIDE (&lt; 50ms)
                     </div>
@@ -1029,11 +1029,17 @@
 │   ├── src/SmartCampusApplet.java         # Applet: PIN->AES-128, RSA-1024, Ví điện tử
 │   └── scripts/test_apdu_full.scr         # Kịch bản test 17 lệnh APDU (SC-08)
 ├── bridge-server/
-│   ├── src/BridgeServer.java              # HTTP/TCP Bridge + PC Dashboard + SQLite/JSON DB
-│   └── data/cards_database.json           # Lưu danh sách thẻ ảo, Giao dịch Ví & Public Key RSA
+│   ├── src/BridgeServer.java              # HTTP/TCP Bridge + PC Dashboard + REST API
+│   ├── src/DatabaseManager.java           # Quản trị CSDL SQLite 3NF qua JDBC (ACID, Foreign Keys)
+│   └── data/smartcard.db                  # CSDL SQLite tập trung (cards, attendance_logs, book_loans)
 └── docs/
-    ├── index.html                         # Trang Web Kế Hoạch & Kiến Trúc (File này)
-    └── ui-prototype.html                  # Giao diện Phần mềm Máy tính & Prototype</pre>
+    ├── tối ưu phần mềm di động/           # Tài liệu môn Tối ưu PM di động (Báo cáo & Thảo luận 4 chủ đề)
+    │   ├── tai_lieu_phan_tich_4_chu_de.doc
+    │   ├── tai_lieu_thao_luan_giua_ky.doc / .html / .md
+    │   └── tai_lieu_thao_luan_va_bao_cao.html
+    ├── thesinhvien.html                   # Tài liệu Đặc tả nghiệp vụ SRS & Kiến trúc
+    ├── ui-prototype.html                  # Giao diện Phần mềm Máy tính & Prototype
+    └── index.html                         # Trang Web Kế Hoạch & Kiến Trúc (File này)</pre>
                 </div>
 
                 <div class="card">
