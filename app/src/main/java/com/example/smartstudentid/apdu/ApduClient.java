@@ -1,11 +1,17 @@
 package com.example.smartstudentid.apdu;
 
+import com.example.smartstudentid.model.AttendanceRecord;
+import com.example.smartstudentid.model.BookLoanRecord;
+import com.example.smartstudentid.model.StudentCardRecord;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -21,15 +27,27 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Client responsible for transmitting APDU frames to the PC Bridge Server (or local fallback simulator)
+ * Client responsible for transmitting APDU frames to the PC Bridge Server (or local fallback simulator),
+ * synchronizing relational records with the PC SQLite Database (`smartcard.db`),
+ * auto-discovering the active bridge server endpoint (USB cable `127.0.0.1` vs Wi-Fi LAN `192.168.0.101`),
  * and managing reusable byte buffers to prevent memory churn (OPT-05).
  */
 public class ApduClient {
 
     private static ApduClient instance;
 
-    // Default Emulator host alias for connecting to PC Bridge Server on port 8080
-    private String serverBaseUrl = "http://10.0.2.2:8080";
+    // Supported Bridge Server endpoints:
+    // 1. USB cable with ADB reverse (127.0.0.1:8080)
+    // 2. Wi-Fi Local Area Network (192.168.0.101:8080)
+    // 3. Android Studio Emulator loopback (10.0.2.2:8080)
+    private static final String[] CANDIDATE_BASE_URLS = new String[]{
+            "http://127.0.0.1:8080",
+            "http://192.168.0.101:8080",
+            "http://10.0.2.2:8080"
+    };
+
+    private volatile String serverBaseUrl = "http://127.0.0.1:8080";
+    private final Gson gson = new Gson();
 
     // Reusable buffer for chunked avatar transfers to prevent memory churn (OPT-05)
     private final ByteArrayOutputStream reusableAvatarStream = new ByteArrayOutputStream(8192);
@@ -87,12 +105,41 @@ public class ApduClient {
         long startNs = System.nanoTime();
         String cmdHex = ApduCommands.bytesToHex(frame);
 
+        CardResponse remoteResp = tryTransmitApdu(serverBaseUrl, cmdHex, frame, startNs);
+        if (remoteResp != null) {
+            return remoteResp;
+        }
+
+        for (String candidate : CANDIDATE_BASE_URLS) {
+            if (candidate.equalsIgnoreCase(serverBaseUrl)) continue;
+            remoteResp = tryTransmitApdu(candidate, cmdHex, frame, startNs);
+            if (remoteResp != null) {
+                this.serverBaseUrl = candidate;
+                return remoteResp;
+            }
+        }
+
+        byte[] fullResp = localFallback.processApdu(frame);
+        long elapsedMs = Math.max(1, (System.nanoTime() - startNs) / 1_000_000);
+        int sw = ApduCommands.SW_NO_ERROR;
+        byte[] dataBytes = new byte[0];
+        if (fullResp.length >= 2) {
+            sw = ((fullResp[fullResp.length - 2] & 0xFF) << 8) | (fullResp[fullResp.length - 1] & 0xFF);
+            dataBytes = Arrays.copyOf(fullResp, fullResp.length - 2);
+        }
+        String rawRespHex = ApduCommands.bytesToHex(dataBytes)
+                + (dataBytes.length > 0 ? " " : "") + String.format("%04X", sw);
+        recordApduLog(cmdHex, rawRespHex, elapsedMs);
+        return new CardResponse(dataBytes, sw, elapsedMs, cmdHex, rawRespHex);
+    }
+
+    private CardResponse tryTransmitApdu(String baseUrl, String cmdHex, byte[] frame, long startNs) {
         try {
-            URL url = new URL(serverBaseUrl + "/api/apdu");
+            URL url = new URL(baseUrl + "/api/apdu");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
-            conn.setConnectTimeout(600);
-            conn.setReadTimeout(1500);
+            conn.setConnectTimeout(1800);
+            conn.setReadTimeout(3500);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             conn.setDoOutput(true);
 
@@ -115,27 +162,12 @@ public class ApduClient {
                 }
             }
         } catch (Exception ignored) {
-            // Fall through to the local embedded card simulator if the PC server is unreachable
         }
-
-        byte[] fullResp = localFallback.processApdu(frame);
-        long elapsedMs = Math.max(1, (System.nanoTime() - startNs) / 1_000_000);
-        int sw = ApduCommands.SW_NO_ERROR;
-        byte[] dataBytes = new byte[0];
-        if (fullResp.length >= 2) {
-            sw = ((fullResp[fullResp.length - 2] & 0xFF) << 8) | (fullResp[fullResp.length - 1] & 0xFF);
-            dataBytes = Arrays.copyOf(fullResp, fullResp.length - 2);
-        }
-        String rawRespHex = ApduCommands.bytesToHex(dataBytes)
-                + (dataBytes.length > 0 ? " " : "") + String.format("%04X", sw);
-        recordApduLog(cmdHex, rawRespHex, elapsedMs);
-        return new CardResponse(dataBytes, sw, elapsedMs, cmdHex, rawRespHex);
+        return null;
     }
 
     /**
      * Uploads an avatar byte array across multiple APDU chunks (INS 0x22).
-     *
-     * @return Total number of APDU packets transmitted.
      */
     public int uploadAvatarInChunks(byte[] avatarBytes) {
         if (avatarBytes == null || avatarBytes.length == 0) {
@@ -187,22 +219,230 @@ public class ApduClient {
      */
     public void activateVirtualCard(String studentId, String pipeDelimitedInfo, String pin) {
         localFallback.loadSnapshot(studentId, pipeDelimitedInfo, pin);
+        String json = String.format("{\"studentId\":\"%s\",\"studentInfo\":\"%s\",\"pin\":\"%s\"}",
+                studentId, pipeDelimitedInfo, pin);
+        postJsonSilently("/api/activate-card", json);
+    }
+
+    // =========================================================================
+    // RELATIONAL SQLITE SERVER SYNC API (`smartcard.db` on BridgeServer)
+    // =========================================================================
+
+    public void syncCardToServerDb(StudentCardRecord card) {
+        if (card == null) return;
+        postJsonSilently("/api/cards", gson.toJson(card));
+    }
+
+    public List<StudentCardRecord> fetchCardsFromServerDb() {
+        String resp = getJsonSilently("/api/cards");
+        if (resp == null || resp.isEmpty()) return null;
         try {
-            URL url = new URL(serverBaseUrl + "/api/activate-card");
+            Type type = new TypeToken<ArrayList<StudentCardRecord>>() {}.getType();
+            return gson.fromJson(resp, type);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public void syncUnblockCardOnServerDb(String studentId) {
+        String json = String.format("{\"studentId\":\"%s\"}", studentId != null ? studentId : "");
+        postJsonSilently("/api/cards/unblock", json);
+    }
+
+    public void syncUnblockAllCardsOnServerDb() {
+        syncUnblockCardOnServerDb("");
+    }
+
+    public void syncAttendanceToServerDb(AttendanceRecord record) {
+        if (record == null) return;
+        postJsonSilently("/api/attendance", gson.toJson(record));
+    }
+
+    public List<AttendanceRecord> fetchAttendanceFromServerDb() {
+        return fetchAttendanceByStudentFromServerDb(null);
+    }
+
+    public List<AttendanceRecord> fetchAttendanceByStudentFromServerDb(String studentId) {
+        String path = (studentId != null && !studentId.trim().isEmpty())
+                ? "/api/attendance?studentId=" + studentId.trim()
+                : "/api/attendance";
+        String resp = getJsonSilently(path);
+        if (resp == null || resp.isEmpty()) return null;
+        try {
+            Type type = new TypeToken<ArrayList<AttendanceRecord>>() {}.getType();
+            return gson.fromJson(resp, type);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public void syncBookLoanToServerDb(BookLoanRecord book) {
+        if (book == null) return;
+        postJsonSilently("/api/books", gson.toJson(book));
+    }
+
+    public List<BookLoanRecord> fetchBooksFromServerDb() {
+        String resp = getJsonSilently("/api/books");
+        if (resp == null || resp.isEmpty()) return null;
+        try {
+            Type type = new TypeToken<ArrayList<BookLoanRecord>>() {}.getType();
+            return gson.fromJson(resp, type);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // =========================================================================
+    // ADMIN AUTHENTICATION API (`admin_accounts` table in `smartcard.db`)
+    // =========================================================================
+
+    public static class AdminAuthResult {
+        public boolean success;
+        public String message;
+        public String token;
+        public String username;
+        public String fullName;
+        public String role;
+        public String lastLogin;
+
+        public AdminAuthResult(boolean success, String message) {
+            this.success = success;
+            this.message = message;
+        }
+    }
+
+    /**
+     * Authenticates an administrator directly against the relational database on BridgeServer.
+     * The server compares salted SHA-256 hashes stored in `admin_accounts`.
+     */
+    public AdminAuthResult authenticateAdmin(String username, String password) {
+        String jsonBody = String.format("{\"username\":\"%s\",\"password\":\"%s\"}",
+                escapeJsonString(username), escapeJsonString(password));
+
+        AdminAuthResult res = tryPostAdminAuth(serverBaseUrl + "/api/auth/admin-login", jsonBody);
+        if (res != null) return res;
+
+        for (String candidate : CANDIDATE_BASE_URLS) {
+            if (candidate.equalsIgnoreCase(serverBaseUrl)) continue;
+            res = tryPostAdminAuth(candidate + "/api/auth/admin-login", jsonBody);
+            if (res != null) {
+                this.serverBaseUrl = candidate;
+                return res;
+            }
+        }
+
+        return new AdminAuthResult(false, "Không thể kết nối đến Máy chủ Trung tâm (BridgeServer). Vui lòng kiểm tra lại cáp kết nối hoặc mạng LAN.");
+    }
+
+    private AdminAuthResult tryPostAdminAuth(String fullUrl, String jsonBody) {
+        try {
+            URL url = new URL(fullUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
-            conn.setConnectTimeout(500);
-            conn.setReadTimeout(800);
+            conn.setConnectTimeout(2500);
+            conn.setReadTimeout(4000);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             conn.setDoOutput(true);
-            String json = String.format("{\"studentId\":\"%s\",\"studentInfo\":\"%s\",\"pin\":\"%s\"}",
-                    studentId, pipeDelimitedInfo, pin);
             try (OutputStream os = conn.getOutputStream()) {
-                os.write(json.getBytes(StandardCharsets.UTF_8));
+                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
             }
-            conn.getResponseCode();
+
+            int responseCode = conn.getResponseCode();
+            InputStream is = (responseCode >= 200 && responseCode < 300)
+                    ? conn.getInputStream()
+                    : conn.getErrorStream();
+
+            if (is == null) return null;
+            String respStr = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+
+            JsonObject root = JsonParser.parseString(respStr).getAsJsonObject();
+            String status = root.has("status") ? root.get("status").getAsString() : "";
+            String message = root.has("message") ? root.get("message").getAsString() : "";
+
+            if (responseCode == 200 && "success".equalsIgnoreCase(status)) {
+                AdminAuthResult ok = new AdminAuthResult(true, message);
+                if (root.has("token")) ok.token = root.get("token").getAsString();
+                if (root.has("admin") && root.get("admin").isJsonObject()) {
+                    JsonObject adm = root.getAsJsonObject("admin");
+                    if (adm.has("username")) ok.username = adm.get("username").getAsString();
+                    if (adm.has("fullName")) ok.fullName = adm.get("fullName").getAsString();
+                    if (adm.has("role")) ok.role = adm.get("role").getAsString();
+                    if (adm.has("lastLogin")) ok.lastLogin = adm.get("lastLogin").getAsString();
+                }
+                return ok;
+            } else {
+                return new AdminAuthResult(false, !message.isEmpty() ? message : "Tài khoản hoặc mật khẩu không đúng (Mã " + responseCode + ")");
+            }
+        } catch (Exception e) {
+            return null; // Network unreachable on this candidate URL, try next candidate
+        }
+    }
+
+    private String escapeJsonString(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
+    }
+
+    private void postJsonSilently(String path, String jsonBody) {
+        if (tryPost(serverBaseUrl + path, jsonBody)) return;
+
+        for (String candidate : CANDIDATE_BASE_URLS) {
+            if (candidate.equalsIgnoreCase(serverBaseUrl)) continue;
+            if (tryPost(candidate + path, jsonBody)) {
+                this.serverBaseUrl = candidate;
+                return;
+            }
+        }
+    }
+
+    private boolean tryPost(String fullUrl, String jsonBody) {
+        try {
+            URL url = new URL(fullUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(3500);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setDoOutput(true);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
+            }
+            return conn.getResponseCode() == 200;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private String getJsonSilently(String path) {
+        String res = tryGet(serverBaseUrl + path);
+        if (res != null) return res;
+
+        for (String candidate : CANDIDATE_BASE_URLS) {
+            if (candidate.equalsIgnoreCase(serverBaseUrl)) continue;
+            res = tryGet(candidate + path);
+            if (res != null) {
+                this.serverBaseUrl = candidate;
+                return res;
+            }
+        }
+        return null;
+    }
+
+    private String tryGet(String fullUrl) {
+        try {
+            URL url = new URL(fullUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(3500);
+            if (conn.getResponseCode() == 200) {
+                try (InputStream is = conn.getInputStream()) {
+                    return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            }
         } catch (Exception ignored) {
         }
+        return null;
     }
 
     private synchronized void recordApduLog(String cmdHex, String respHex, long timeMs) {
@@ -219,7 +459,43 @@ public class ApduClient {
     /**
      * Embedded fallback smart card simulator mirroring SmartCampusApplet for offline emulator testing.
      */
+    public String getActiveCardId() { return localFallback.activeCardId; }
+    public String getActiveCardInfo() { return localFallback.activeInfoUtf8; }
+
+    private long lastSeenTapEventId = -1L;
+
+    /**
+     * Polls the PC Bridge Server (/api/status) to check if a new .scr card file was just loaded on PC/JCIDE.
+     * Returns true when a new card load event is detected.
+     */
+    public boolean pollBridgeCardTapEvent() {
+        String respText = getJsonSilently("/api/status");
+        if (respText == null || respText.isEmpty()) return false;
+        try {
+            JsonObject obj = JsonParser.parseString(respText).getAsJsonObject();
+            long remoteTapId = obj.has("tapEventId") ? obj.get("tapEventId").getAsLong() : 0L;
+            String studentId = obj.has("activeStudentId") ? obj.get("activeStudentId").getAsString() : "";
+            String studentInfo = obj.has("activeStudentInfo") ? obj.get("activeStudentInfo").getAsString() : "";
+
+            if (!studentInfo.isEmpty() && studentInfo.contains("|")) {
+                localFallback.loadSnapshot(studentId, studentInfo, "123456");
+            }
+
+            if (lastSeenTapEventId == -1L) {
+                lastSeenTapEventId = remoteTapId;
+                return false;
+            }
+            if (remoteTapId > 0L && remoteTapId != lastSeenTapEventId) {
+                lastSeenTapEventId = remoteTapId;
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
     private static class LocalFallbackCardEngine {
+        String activeInfoUtf8 = "CT070315|Vũ Ngọc Hải|15/08/2003|CT7C|An toàn Thông tin";
         String activeCardId = "CT070315";
         String currentPin = "123456";
         final String adminPuk = "88888888";
@@ -256,6 +532,8 @@ public class ApduClient {
 
         void loadSnapshot(String cardId, String infoUtf8, String pin) {
             this.activeCardId = cardId;
+            this.activeInfoUtf8 = infoUtf8;
+            this.avatarLength = 0;
             this.currentPin = (pin != null && !pin.isEmpty()) ? pin : "123456";
             this.pinTriesRemaining = 3;
             this.pinValidated = true;

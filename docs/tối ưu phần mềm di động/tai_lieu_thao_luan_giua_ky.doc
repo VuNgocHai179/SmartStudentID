@@ -1,0 +1,248 @@
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+    <meta charset="utf-8">
+    <title>Tài Liệu Đọc Hiểu & Thuyết Trình Giữa Kỳ</title>
+    <!--[if gte mso 9]>
+    <xml>
+        <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+        </w:WordDocument>
+    </xml>
+    <![endif]-->
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 2.5cm 2.0cm 2.5cm 2.0cm;
+            mso-page-orientation: portrait;
+        }
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 13pt;
+            line-height: 1.5;
+            color: #000000;
+        }
+        h1 {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #1e3a8a;
+            text-align: center;
+            margin-top: 18pt;
+            margin-bottom: 12pt;
+            text-transform: uppercase;
+        }
+        h2 {
+            font-size: 15pt;
+            font-weight: bold;
+            color: #1e40af;
+            margin-top: 16pt;
+            margin-bottom: 8pt;
+            border-bottom: 1.5pt solid #cbd5e1;
+            padding-bottom: 4pt;
+        }
+        h3 {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #0f172a;
+            margin-top: 12pt;
+            margin-bottom: 6pt;
+        }
+        p {
+            margin-bottom: 6pt;
+            text-align: justify;
+        }
+        ul, ol {
+            margin-top: 4pt;
+            margin-bottom: 8pt;
+            padding-left: 24pt;
+        }
+        li {
+            margin-bottom: 4pt;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8pt;
+            margin-bottom: 12pt;
+            font-size: 11.5pt;
+        }
+        th, td {
+            border: 1pt solid #475569;
+            padding: 6pt 8pt;
+            vertical-align: top;
+        }
+        th {
+            background-color: #f1f5f9;
+            font-weight: bold;
+            text-align: center;
+        }
+        .callout {
+            border: 1pt solid #cbd5e1;
+            border-left: 4pt solid #0284c7;
+            background-color: #f8fafc;
+            padding: 8pt 12pt;
+            margin: 8pt 0;
+            font-style: italic;
+        }
+        .code-box {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background-color: #f1f5f9;
+            border: 1pt solid #cbd5e1;
+            padding: 6pt 10pt;
+            font-size: 11pt;
+            margin: 6pt 0;
+        }
+        .badge {
+            font-weight: bold;
+            color: #0369a1;
+        }
+    </style>
+</head>
+<body>
+
+    <p style="text-align: center; font-weight: bold; font-size: 11pt; color: #475569; margin-bottom: 4pt;">
+        HỌC VIỆN KỸ THUẬT MẬT MÃ • KHOA CÔNG NGHỆ THÔNG TIN
+    </p>
+    <p style="text-align: center; font-weight: bold; font-size: 12pt; margin-bottom: 18pt;">
+        BÁO CÁO THẢO LUẬN GIỮA KỲ (ĐỒ ÁN PHÁT TRIỂN ỨNG DỤNG THẺ THÔNG MINH)
+    </p>
+
+    <h1>TỐI ƯU HIỆU NĂNG VÀ BẢO MẬT CHO ỨNG DỤNG THẺ SINH VIÊN THÔNG MINH TRÊN ANDROID</h1>
+
+    <div class="callout">
+        <strong>Tài liệu đặc tả lý thuyết & Kịch bản thực nghiệm:</strong> Bám sát 100% phạm vi 4 nội dung đã đăng ký với lớp trưởng, phân tích từ gốc rễ kỹ thuật và hướng dẫn kịch bản Live Demo 3–5 phút kèm lời thoại báo cáo trước giảng viên.
+    </div>
+
+    <h2>0. BỨC TRANH TỔNG THỂ: SỢI DÂY LIÊN KẾT 4 NỘI DUNG ĐÃ ĐĂNG KÝ</h2>
+    <p>
+        Thực chất, 4 gạch đầu dòng trong đề tài không phải là 4 mảnh ghép rời rạc, mà là <strong>1 bài toán gốc (Phần 1)</strong> kéo theo <strong>3 giải pháp tối ưu triệt để (Phần 2, 3, 4)</strong>:
+    </p>
+    <ul>
+        <li><strong>Phần 1 (Bài toán gốc - Điểm nghẽn):</strong> Khi ứng dụng Android giao tiếp với thẻ Java Card, dữ liệu phải đi qua các gói tin nhỏ <strong>APDU</strong> và phải thực thi <strong>Mật mã (AES-128, RSA-1024)</strong> để bảo mật. Quá trình này chậm (từ vài trăm mili-giây đến gần 3 giây) → Điểm nghẽn hiệu năng APDU & Mật mã.</li>
+        <li><strong>Phần 2 (Chống đơ màn hình):</strong> Vì thẻ phản hồi chậm (210ms – 2800ms), nếu bắt luồng vẽ giao diện chính (<code>Main Thread</code>) đứng chờ thì màn hình sẽ bị đơ cứng. → <strong>Giải pháp:</strong> Xây dựng mô hình Đa luồng tách biệt I/O thẻ và mật mã khỏi Main Thread để giữ độ mượt 60 FPS (<code>ApduThreadPool.java</code>).</li>
+        <li><strong>Phần 3 (Chống hỏi thẻ lặp đi lặp lại):</strong> Dù đã chạy ngầm, nhưng nếu mỗi lần chuyển tab lại gửi 5 lệnh APDU xuống thẻ đọc lại thông tin thì rất lãng phí. → <strong>Giải pháp:</strong> Thiết kế bộ nhớ đệm bảo mật <strong>Offline-First</strong> (<code>LocalCacheManager.java</code> & <code>EncryptedCacheManager.java</code>) đọc 1 lần rồi mã hóa lưu trên máy, các lần sau mở tức thì trong ~9ms.</li>
+        <li><strong>Phần 4 (Chống nghẽn băng thông & tràn RAM khi truyền ảnh):</strong> Ảnh chân dung gốc 180 KB phải cắt thành 750 gói APDU và gây xáo trộn bộ nhớ (<em>Memory Churn</em>). → <strong>Giải pháp:</strong> Thu nhỏ + Nén ảnh chuẩn <strong>WebP 75% (~3.5 KB, chỉ còn 15 gói APDU)</strong> kết hợp <strong>Tái sử dụng bộ đệm cố định 8KB</strong> (<code>ImageOptimizer.java</code> & <code>ApduClient.java</code>).</li>
+    </ul>
+
+    <h2>1. PHẦN 1: ĐIỂM NGHẼN APDU & THỰC THI MẬT MÃ TRÊN ANDROID</h2>
+    <h3>1.1. Gói tin APDU và tại sao băng thông rất hẹp?</h3>
+    <p>
+        Thẻ thông minh (Java Card) chỉ là vi mạch siêu nhỏ gắn trên thẻ nhựa, không có nguồn pin riêng, chỉ nhận nguồn điện cảm ứng từ đầu đọc; RAM siêu nhỏ (2 KB – 8 KB), EEPROM chỉ từ 32 KB – 144 KB. Chuẩn quốc tế ISO/IEC 7816-4 quy định mọi giao tiếp bắt buộc đóng gói thành các khung lệnh APDU:
+    </p>
+    <ul>
+        <li><code>Command APDU</code>: <code>[CLA] [INS] [P1] [P2] [Lc] [Data] [Le]</code></li>
+        <li><code>Response APDU</code>: <code>[Data] [SW1] [SW2]</code> (ví dụ: <code>0x9000</code> thành công, <code>0x6983</code> khóa thẻ).</li>
+    </ul>
+    <p><strong>3 Nguyên nhân tạo nên điểm nghẽn truyền thông APDU:</strong></p>
+    <ol>
+        <li><em>Giới hạn gói Short APDU:</em> Trường <code>Lc</code> chỉ có 1 byte → mỗi gói chỉ chở được tối đa 240 bytes dữ liệu. File lớn bắt buộc phải chia mảnh (Chunking).</li>
+        <li><em>Giao tiếp Bán song công Tuần tự (Half-Duplex):</em> Gửi lệnh 1 xong phải đứng chờ thẻ xử lý và trả về <code>90 00</code> mới được gửi tiếp lệnh 2. Độ trễ cộng dồn tuyến tính.</li>
+        <li><em>Tốc độ ghi EEPROM rất chậm:</em> Mất từ 2 – 5 ms cho mỗi chu kỳ ghi trang nhớ trên chip thẻ.</li>
+    </ol>
+
+    <h3>1.2. Chi phí thời gian của các thuật toán mật mã</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Thuật toán Mật mã</th>
+                <th>Vị trí Thực thi</th>
+                <th>Mục đích Bảo mật</th>
+                <th>Chi phí Hiệu năng</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>AES-128 CBC + PKCS#7</strong></td>
+                <td>Trên chip thẻ (SmartCampusApplet)</td>
+                <td>Mã hóa hồ sơ sinh viên lưu vào EEPROM bằng khóa sinh từ mã PIN</td>
+                <td><strong>~35 – 55 ms / lệnh</strong></td>
+            </tr>
+            <tr>
+                <td><strong>RSA-1024 Signature</strong></td>
+                <td>Thẻ ký (Private Key) - Android xác minh (Public Key)</td>
+                <td>Xác thực Challenge-Response chống làm giả thẻ thật</td>
+                <td><strong>~80 – 110 ms / lệnh</strong></td>
+            </tr>
+            <tr>
+                <td><strong>PBKDF2-HMAC-SHA256</strong></td>
+                <td>Trên Android (CryptoManager)</td>
+                <td>Băm mã PIN kèm Salt ngẫu nhiên 10.000 vòng lặp</td>
+                <td><strong>~25 – 45 ms CPU</strong></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>
+        <strong>Tổng kết điểm nghẽn chưa tối ưu:</strong> Chuỗi 5 lệnh APDU cơ bản tốn ~210 ms. Nếu cộng thêm ảnh PNG 180 KB (750 gói APDU) tốn ~2.800 ms. Tổng thời gian đọc thẻ lên tới <strong>~3.000 ms (3 giây)</strong>!
+    </p>
+
+    <h2>2. PHẦN 2: MÔ HÌNH ĐA LUỒNG 60 FPS (TÁCH BIỆT I/O THẺ & MẬT MÃ)</h2>
+    <h3>2.1. Ngưỡng 16.67 ms của Android UI và hiện tượng giật khung hình (Jank)</h3>
+    <p>
+        Trên Android, <code>Main Thread</code> đảm nhận nhận tương tác và vẽ lại màn hình 60 khung hình/giây:
+        <br><strong>1.000 ms ÷ 60 khung hình = 16.67 ms / khung hình.</strong>
+        <br>Nếu chạy chuỗi lệnh APDU (210ms – 2800ms) trên Main Thread, luồng UI bị khóa cứng (Blocked), bỏ lỡ từ 13 đến 170 khung hình (Skipped Frames). Tốc độ khung hình tụt xuống dưới 15 FPS, ứng dụng bị đóng băng và có nguy cơ văng lỗi ANR.
+    </p>
+
+    <h3>2.2. Kiến trúc ApduThreadPool (FixedThreadPool + MainLooper Handler)</h3>
+    <ul>
+        <li><strong>Hồ luồng ngầm:</strong> <code>Executors.newFixedThreadPool(4)</code> túc trực nhận việc nặng.</li>
+        <li><strong>Giao việc siêu tốc:</strong> Main Thread chỉ mất chưa tới <strong>0.7 ms</strong> để giao việc qua <code>submit()</code> rồi quay lại vẽ UI 60 FPS ngay lập tức.</li>
+        <li><strong>Trả kết quả an toàn:</strong> Sử dụng <code>mainThreadHandler.post(...)</code> trả kết quả về UI an toàn.</li>
+        <li><strong>Đồng bộ tuần tự:</strong> Hàm <code>transmitRawFrame()</code> có từ khóa <code>synchronized</code> đảm bảo các gói tin vào thẻ xếp hàng tuần tự, chống xung đột bộ đệm APDU vật lý.</li>
+    </ul>
+
+    <h2>3. PHẦN 3: LƯU ĐỆM BẢO MẬT THEO KIẾN TRÚC OFFLINE-FIRST</h2>
+    <h3>3.1. Nguyên lý Offline-First: Giảm 100% lệnh APDU dư thừa</h3>
+    <p>
+        Mỗi lần sinh viên chuyển tab, thay vì gửi 5 lệnh APDU xuống thẻ đọc lại thông tin cũ, <code>LocalCacheManager.java</code> ưu tiên đọc từ bộ đệm máy:
+    </p>
+    <ul>
+        <li><strong>Cache HIT:</strong> Hiển thị hồ sơ chỉ trong <strong>~8 – 12 ms</strong> (nhanh hơn 21 lần), số lệnh APDU gửi xuống thẻ là <strong>0 lệnh</strong> (giảm 100% lệnh dư thừa).</li>
+        <li><strong>Cache MISS / Làm mới:</strong> Gửi 5 lệnh APDU xuống thẻ và ghi đè kết quả vào Cache mã hóa.</li>
+    </ul>
+
+    <h3>3.2. Bảo mật Bộ đệm 2 Lớp (Chuẩn OWASP MASVS-STORAGE)</h3>
+    <ul>
+        <li><strong>Tầng 1 (Phần cứng AndroidKeyStore):</strong> Giữ <code>MasterKey (AES256_GCM)</code> trong chip TEE/StrongBox, không thể trích xuất ra ngoài.</li>
+        <li><strong>Tầng 2 (EncryptedSharedPreferences):</strong> Tên biến mã hóa bằng <code>AES-256-SIV</code>; nội dung hồ sơ & ảnh mã hóa bằng <code>AES-256-GCM</code> kèm thẻ xác thực toàn vẹn 128-bit.</li>
+        <li><strong>Cơ chế tự hủy (Auto-Wipe):</strong> Nhập sai PIN 3 lần liên tiếp → tự động xóa sạch toàn bộ hồ sơ trong bộ đệm.</li>
+    </ul>
+
+    <h2>4. PHẦN 4: NÉN ẢNH WEBP & TÁI SỬ DỤNG BỘ ĐỆM (CHỐNG MEMORY CHURN)</h2>
+    <h3>4.1. Downsampling & Nén ảnh WebP 75%</h3>
+    <ul>
+        <li>Khung hiển thị ảnh thẻ chỉ cần <code>150 × 150 px</code>. Ảnh gốc <code>600 × 600 px PNG</code> nặng 180 KB cần 750 gói APDU (~2.830 ms).</li>
+        <li><strong>Xử lý 2 pha trong <code>ImageOptimizer.java</code>:</strong>
+            <br>• Pha 1: <code>inJustDecodeBounds = true</code>, tính <code>inSampleSize</code> giảm kích thước về 150x150px mà không tốn RAM.
+            <br>• Pha 2: Nén sang chuẩn <strong>WebP 75%</strong>, dung lượng giảm từ 180 KB xuống chỉ còn <strong>~3.5 KB</strong>, số gói APDU giảm từ <strong>750 gói xuống 15 gói</strong> (truyền trong ~50 ms, tiết kiệm <strong>98% băng thông</strong>).</li>
+        <li><strong>Truyền Offset 16-bit qua (P1, P2):</strong> Dùng <code>P1 = offset >> 8</code> và <code>P2 = offset & 0xFF</code> làm con trỏ vị trí byte để thẻ ghi chính xác vào EEPROM.</li>
+    </ul>
+
+    <h3>4.2. Tái sử dụng Bộ đệm cố định 8KB (Chống Memory Churn)</h3>
+    <p>
+        Trong <code>ApduClient.java</code>, cấp phát sẵn duy nhất 1 bộ đệm tĩnh:
+        <br><code>private final ByteArrayOutputStream reusableAvatarStream = new ByteArrayOutputStream(8192);</code>
+        <br>Mỗi lần tải các mảnh ảnh từ thẻ chỉ gọi <code>reusableAvatarStream.reset()</code> để đưa con trỏ về 0 và ghi đè, hoàn toàn không cấp phát lại Heap, triệt tiêu hiện tượng <strong>Memory Churn</strong> và loại bỏ <strong>GC Pause</strong>. Đồng thời gọi <code>sampled.recycle()</code> để giải phóng Bitmap trung gian.
+    </p>
+
+    <h2>5. KỊCH BẢN LIVE DEMO TRỰC QUAN (3–5 PHÚT TRÊN BỤC GIẢNG)</h2>
+    <ol>
+        <li><strong>Thao tác 1 (Tab Thẻ Sinh Viên - Phút 1):</strong> Đăng nhập PIN <code>123456</code> → Bấm <em>"Làm mới từ Thẻ (APDU)"</em>. Cho thầy thấy UI vẫn mượt 60 FPS, ảnh WebP 3.5KB tải nhanh, lưu vào Cache. Chuyển sang Tab 2 rồi quay lại Tab 1: hiển thị tức thì (~9ms, 0 lệnh APDU).</li>
+        <li><strong>Thao tác 2 (Tab Optimization Lab - Phút 2–3):</strong> Gạt công tắc bật/tắt tối ưu → Bấm <em>"Chạy Benchmark Toàn diện"</em>. Chiếu kết quả đo trực tiếp: WebP 3.5KB tiết kiệm <strong>98%</strong>; Cache ~9ms nhanh hơn <strong>21 lần</strong>; UI giữ vững <strong>60 FPS</strong>.</li>
+        <li><strong>Thao tác 3 (Tab Security Lab - Phút 4):</strong> Bấm <em>"Xem Bản mã AES-128 & Gói tin APDU Hex"</em>. Chiếu đối chiếu: Bản rõ sau giải mã vs Bản mã AES-128 thô trong EEPROM thẻ, kèm log APDU hex và thời gian từng lệnh.</li>
+    </ol>
+
+    <h2>6. LỜI THOẠI MẪU CHO GIẢNG VIÊN & CÂU HỎI PHẢN BIỆN</h2>
+    <p><strong>Lời thoại mẫu mở đầu:</strong> <em>"Em chào thầy và các bạn. Đề tài của nhóm em giải quyết bài toán cân bằng giữa bảo mật mật mã chặt chẽ trên thẻ thông minh (AES-128, RSA-1024) và trải nghiệm người dùng mượt mà 60 FPS trên Android qua 4 nội dung cốt lõi..."</em></p>
+    <p><strong>4 Câu hỏi phản biện thường gặp:</strong></p>
+    <ol>
+        <li><em>Hỏi:</em> Làm sao thẻ biết thứ tự 15 gói ảnh để ghép lại? → <em>Đáp:</em> Dùng 2 byte tham số Header <code>P1, P2</code> làm con trỏ offset 16-bit.</li>
+        <li><em>Hỏi:</em> 4 luồng ngầm gửi APDU cùng lúc có xung đột thẻ không? → <em>Đáp:</em> Không, vì hàm gửi vật lý <code>transmitRawFrame()</code> dùng từ khóa <code>synchronized</code> để xếp hàng tuần tự.</li>
+        <li><em>Hỏi:</em> Đổi thông tin thẻ thì Cache trên máy có bị cũ không? → <em>Đáp:</em> Không, Cache được ghi đè ngay khi cập nhật, có nút làm mới trực tiếp và tự động xóa sạch khi đổi thẻ hoặc nhập sai PIN 3 lần.</li>
+        <li><em>Hỏi:</em> Tại sao dùng WebP 75% mà không dùng JPEG? → <em>Đáp:</em> WebP 75% nén tốt hơn JPEG 30%, giảm 98% so với PNG, vừa vặn trong mảng 8KB của thẻ mà mắt thường nhìn khung 150x150px không thấy giảm chất lượng.</li>
+    </ol>
+
+</body>
+</html>

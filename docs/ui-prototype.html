@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Student ID — Clean Light Mode UI</title>
+    <style>
+        :root {
+            --bg-studio: #eef2f6;
+            --bg-phone: #f8fafc;
+            --bg-card: #ffffff;
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+            --border-light: #e2e8f0;
+            --primary-blue: #2563eb;
+            --primary-blue-soft: #eff6ff;
+            --emerald: #059669;
+            --emerald-soft: #ecfdf5;
+            --amber: #d97706;
+            --amber-soft: #fffbeb;
+            --shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.05);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-studio);
+            color: var(--text-dark);
+            padding: 28px 20px 60px;
+        }
+
+        .top-header {
+            max-width: 1360px;
+            margin: 0 auto 28px;
+            background: #ffffff;
+            border: 1px solid var(--border-light);
+            border-radius: 18px;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .top-header h1 {
+            font-size: 1.18rem;
+            font-weight: 800;
+            color: var(--text-dark);
+        }
+
+        .top-header p {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .filter-pills {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .pill-tab {
+            background: #f1f5f9;
+            border: 1px solid transparent;
+            color: #475569;
+            padding: 9px 16px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pill-tab.active, .pill-tab:hover {
+            background: var(--primary-blue);
+            color: #ffffff;
+        }
+
+        .phones-grid {
+            max-width: 1360px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 32px;
+            justify-items: center;
+        }
+
+        /* Clean Light Mode Phone Shell */
+        .phone {
+            width: 368px;
+            height: 770px;
+            background: var(--bg-phone);
+            border: 10px solid #1e293b;
+            border-radius: 44px;
+            box-shadow: 0 24px 48px rgba(15, 23, 42, 0.14);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .status-bar {
+            height: 34px;
+            padding: 0 24px;
+            background: var(--bg-phone);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.74rem;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+
+        .screen-content {
+            flex: 1;
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+        }
+
+        .screen-title {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: var(--text-dark);
+            letter-spacing: -0.02em;
+        }
+
+        .white-card {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 18px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 11px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .badge-green { background: var(--emerald-soft); color: var(--emerald); }
+        .badge-blue { background: var(--primary-blue-soft); color: var(--primary-blue); }
+        .badge-amber { background: var(--amber-soft); color: var(--amber); }
+
+        .btn-primary {
+            width: 100%;
+            background: var(--primary-blue);
+            color: #ffffff;
+            border: none;
+            border-radius: 14px;
+            padding: 13px 16px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+
+        .btn-soft {
+            background: var(--primary-blue-soft);
+            color: var(--primary-blue);
+            border: none;
+            border-radius: 999px;
+            padding: 7px 14px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .btn-outline {
+            background: #ffffff;
+            color: var(--primary-blue);
+            border: 1.5px solid #bfdbfe;
+            border-radius: 999px;
+            padding: 7px 14px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        /* Screen 1: PIN Keypad */
+        .pin-dots {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            margin: 18px 0 22px;
+        }
+
+        .pin-dot {
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            border: 2px solid #94a3b8;
+        }
+        .pin-dot.filled {
+            background: var(--primary-blue);
+            border-color: var(--primary-blue);
+        }
+
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            max-width: 240px;
+            margin: 0 auto;
+        }
+
+        .key-circle {
+            width: 62px;
+            height: 62px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin: 0 auto;
+        }
+
+        /* Screen 3 (Tab 1): Apple Wallet Student ID Card */
+        .wallet-card {
+            background: linear-gradient(135deg, #1d4ed8 0%, #0284c7 60%, #06b6d4 100%);
+            border-radius: 22px;
+            padding: 20px;
+            color: #ffffff;
+            box-shadow: 0 14px 28px rgba(37, 99, 235, 0.25);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .wallet-photo {
+            width: 68px;
+            height: 82px;
+            border-radius: 14px;
+            background: #ffffff;
+            color: var(--primary-blue);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.1rem;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .stat-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .stat-box {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 14px;
+            text-align: center;
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .stat-box span {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: block;
+        }
+
+        .stat-box strong {
+            font-size: 1.3rem;
+            color: var(--text-dark);
+            margin-top: 4px;
+            display: block;
+        }
+
+        .menu-list {
+            background: #ffffff;
+            border-radius: 20px;
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
+        }
+
+        .menu-row {
+            padding: 15px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.86rem;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .menu-row:last-child { border-bottom: none; }
+
+        /* QR Ring on Tab 2 */
+        .qr-ring {
+            width: 196px;
+            height: 196px;
+            border-radius: 50%;
+            border: 5px solid #dbeafe;
+            border-top-color: var(--primary-blue);
+            border-right-color: var(--primary-blue);
+            margin: 12px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .qr-inner {
+            width: 132px;
+            height: 132px;
+            background: #0f172a;
+            border-radius: 12px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qr-timer-pill {
+            background: #ffffff;
+            color: var(--primary-blue);
+            font-weight: 800;
+            font-size: 0.9rem;
+            padding: 6px 12px;
+            border-radius: 999px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+        }
+
+        /* Bottom Nav */
+        .bottom-nav {
+            height: 64px;
+            background: #ffffff;
+            border-top: 1px solid var(--border-light);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            padding: 6px 8px;
+        }
+
+        .nav-tab {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            gap: 2px;
+        }
+
+        .nav-tab.active {
+            color: var(--primary-blue);
+            font-weight: 700;
+        }
+
+        .progress-line {
+            height: 7px;
+            background: #e2e8f0;
+            border-radius: 999px;
+            overflow: hidden;
+            margin-top: 6px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary-blue);
+            border-radius: 999px;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="top-header">
+        <div>
+            <h1>🎓 Smart Student ID — Giao Diện Light Mode Tinh Gọn</h1>
+            <p>Thiết kế tối giản, thoáng đãng theo phong cách Apple Wallet & VNeID (6 Màn hình)</p>
+        </div>
+        <div class="filter-pills">
+            <button class="pill-tab active" onclick="showGroup('ALL', this)">Tất cả 6 Màn hình</button>
+            <button class="pill-tab" onclick="showGroup('G1', this)">1 & 2. Mở khóa PIN + Admin</button>
+            <button class="pill-tab" onclick="showGroup('G2', this)">3 & 4. Thẻ SV + Điểm danh QR</button>
+            <button class="pill-tab" onclick="showGroup('G3', this)">5 & 6. Thư viện + Bảo mật & Tối ưu</button>
+        </div>
+    </header>
+
+    <main class="phones-grid">
+
+        <!-- 1. QUICK PIN UNLOCK SCREEN -->
+        <section class="phone" data-group="G1">
+            <div class="status-bar">
+                <span>12:30</span>
+                <span>5G • 100%</span>
+            </div>
+            <div class="screen-content" style="align-items:center; justify-content:center; text-align:center;">
+                <div style="width:64px; height:64px; border-radius:20px; background:#eff6ff; display:flex; align-items:center; justify-content:center; font-size:1.8rem;">
+                    🎓
+                </div>
+                <div>
+                    <h2 style="font-size:1.25rem; font-weight:800;">Xin chào, Vũ Ngọc Hải</h2>
+                    <p style="font-size:0.82rem; color:#64748b; margin-top:4px;">MSSV: CT070315 • Lớp CT7C</p>
+                </div>
+
+                <div class="pin-dots">
+                    <div class="pin-dot filled"></div>
+                    <div class="pin-dot filled"></div>
+                    <div class="pin-dot filled"></div>
+                    <div class="pin-dot"></div>
+                    <div class="pin-dot"></div>
+                    <div class="pin-dot"></div>
+                </div>
+
+                <div class="keypad">
+                    <div class="key-circle">1</div>
+                    <div class="key-circle">2</div>
+                    <div class="key-circle">3</div>
+                    <div class="key-circle">4</div>
+                    <div class="key-circle">5</div>
+                    <div class="key-circle">6</div>
+                    <div class="key-circle">7</div>
+                    <div class="key-circle">8</div>
+                    <div class="key-circle">9</div>
+                    <div></div>
+                    <div class="key-circle">0</div>
+                    <div class="key-circle" style="font-size:1rem;">⌫</div>
+                </div>
+
+                <p style="font-size:0.78rem; color:#64748b; margin-top:16px;">
+                    Đổi thẻ khác &nbsp;•&nbsp; <strong style="color:#2563eb;">Chế độ Admin</strong>
+                </p>
+            </div>
+        </section>
+
+        <!-- 2. ADMIN PORTAL SCREEN -->
+        <section class="phone" data-group="G1">
+            <div class="status-bar">
+                <span>12:30</span>
+                <span>Admin Portal</span>
+            </div>
+            <div class="screen-content">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="screen-title">Phòng Đào Tạo</div>
+                    <span class="badge badge-blue">JCIDE Online</span>
+                </div>
+
+                <div style="display:flex; gap:6px; background:#e2e8f0; padding:4px; border-radius:999px;">
+                    <span style="flex:1; text-align:center; background:#2563eb; color:#fff; padding:7px 0; border-radius:999px; font-size:0.75rem; font-weight:700;">Danh sách thẻ</span>
+                    <span style="flex:1; text-align:center; color:#475569; padding:7px 0; font-size:0.75rem; font-weight:600;">Phát hành mới</span>
+                    <span style="flex:1; text-align:center; color:#475569; padding:7px 0; font-size:0.75rem; font-weight:600;">Mở khóa PUK</span>
+                </div>
+
+                <div class="white-card" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="font-size:0.92rem;">Vũ Ngọc Hải — CT070315</strong>
+                        <div style="margin-top:6px;"><span class="badge badge-green">● Đang hoạt động</span></div>
+                    </div>
+                    <button class="btn-soft">Gắn thẻ</button>
+                </div>
+
+                <div class="white-card" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="font-size:0.92rem;">Nguyễn Minh Quân — CT070301</strong>
+                        <div style="margin-top:6px;"><span class="badge badge-green">● Đang hoạt động</span></div>
+                    </div>
+                    <button class="btn-soft">Gắn thẻ</button>
+                </div>
+
+                <div class="white-card" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="font-size:0.92rem;">Trần Thu Hà — CT070322</strong>
+                        <div style="margin-top:6px;"><span class="badge badge-amber">🔒 Đã khóa PIN</span></div>
+                    </div>
+                    <button class="btn-soft">Mở PUK</button>
+                </div>
+
+                <button class="btn-primary" style="margin-top:auto;">+ Phát hành thẻ sinh viên mới</button>
+            </div>
+        </section>
+
+        <!-- 3. TAB 1: STUDENT CARD -->
+        <section class="phone" data-group="G2">
+            <div class="status-bar">
+                <span>12:30</span>
+                <span>5G • 100%</span>
+            </div>
+            <div class="screen-content">
+                <div class="screen-title">Thẻ Sinh Viên</div>
+
+                <div class="wallet-card">
+                    <div>
+                        <div style="font-size:0.7rem; opacity:0.85; font-weight:700;">SMART STUDENT ID</div>
+                        <div style="font-size:1.15rem; font-weight:800; margin-top:12px;">VŨ NGỌC HẢI</div>
+                        <div style="font-size:0.8rem; opacity:0.92; margin-top:4px;">CT070315 • CT7C</div>
+                        <div style="font-size:0.76rem; opacity:0.85; margin-top:2px;">An toàn Thông tin</div>
+                    </div>
+                    <div class="wallet-photo">
+                        VH
+                        <span style="font-size:0.58rem; font-weight:600; color:#64748b; margin-top:4px;">WebP 3.5K</span>
+                    </div>
+                </div>
+
+                <div class="stat-grid-2">
+                    <div class="stat-box">
+                        <span>Điểm rèn luyện</span>
+                        <strong>88</strong>
+                    </div>
+                    <div class="stat-box">
+                        <span>Điểm danh</span>
+                        <strong>12 buổi</strong>
+                    </div>
+                </div>
+
+                <div class="menu-list">
+                    <div class="menu-row">
+                        <span>👤 Cập nhật thông tin cá nhân</span>
+                        <span style="color:#94a3b8;">›</span>
+                    </div>
+                    <div class="menu-row">
+                        <span>🖼️ Đổi ảnh thẻ (Chuẩn nén WebP)</span>
+                        <span style="color:#94a3b8;">›</span>
+                    </div>
+                    <div class="menu-row">
+                        <span>🔑 Đổi mã PIN bảo mật</span>
+                        <span style="color:#94a3b8;">›</span>
+                    </div>
+                </div>
+            </div>
+            <div class="bottom-nav">
+                <div class="nav-tab active">💳<span>Thẻ SV</span></div>
+                <div class="nav-tab">📷<span>Điểm danh</span></div>
+                <div class="nav-tab">📚<span>Thư viện</span></div>
+                <div class="nav-tab">🛡️<span>Bảo mật</span></div>
+            </div>
+        </section>
+
+        <!-- 4. TAB 2: ATTENDANCE QR -->
+        <section class="phone" data-group="G2">
+            <div class="status-bar">
+                <span>12:30</span>
+                <span>FLAG_SECURE</span>
+            </div>
+            <div class="screen-content">
+                <div class="screen-title">Điểm danh lớp học</div>
+
+                <div style="background:#e2e8f0; padding:9px 14px; border-radius:999px; text-align:center; font-size:0.78rem; font-weight:600; color:#334155;">
+                    An toàn PM Di động • Phòng B302
+                </div>
+
+                <div class="white-card" style="text-align:center; padding:24px 18px;">
+                    <div class="qr-ring">
+                        <div class="qr-inner">
+                            <span class="qr-timer-pill">24s</span>
+                        </div>
+                    </div>
+                    <span class="badge badge-green" style="margin-top:8px;">✔ Chữ ký RSA-1024 hợp lệ</span>
+                    <p style="font-size:0.74rem; color:#64748b; margin-top:8px;">
+                        Mã QR tự động đổi mới mỗi 30 giây &amp; chặn chụp màn hình
+                    </p>
+                </div>
+
+                <button class="btn-primary" style="margin-top:auto;">Quẹt thẻ điểm danh ngay</button>
+            </div>
+            <div class="bottom-nav">
+                <div class="nav-tab">💳<span>Thẻ SV</span></div>
+                <div class="nav-tab active">📷<span>Điểm danh</span></div>
+                <div class="nav-tab">📚<span>Thư viện</span></div>
+                <div class="nav-tab">🛡️<span>Bảo mật</span></div>
+            </div>
+        </section>
+
+        <!-- 5. TAB 3: LIBRARY & LAB -->
+        <section class="phone" data-group="G3">
+            <div class="status-bar">
+                <span>12:30</span>
+                <span>Atomic TX</span>
+            </div>
+            <div class="screen-content">
+                <div class="screen-title">Thư viện &amp; Phòng Lab</div>
+
+                <div class="white-card">
+                    <div style="font-weight:800; font-size:0.96rem;">Cửa Phòng Lab An Toàn TT</div>
+                    <div style="margin-top:6px;"><span class="badge badge-green">Được phép ra vào</span></div>
+                    <button class="btn-primary" style="margin-top:14px;">🚪 Mở cửa Phòng Lab</button>
+                </div>
+
+                <div style="font-weight:800; font-size:0.95rem; margin-top:4px;">Sách đang mượn (2)</div>
+
+                <div class="stat-grid-2">
+                    <div class="white-card" style="text-align:center; padding:14px;">
+                        <div style="font-size:1.8rem; margin-bottom:6px;">📘</div>
+                        <strong style="font-size:0.8rem; display:block; margin-bottom:10px;">Java Card Technology</strong>
+                        <button class="btn-outline">Trả sách</button>
+                    </div>
+                    <div class="white-card" style="text-align:center; padding:14px;">
+                        <div style="font-size:1.8rem; margin-bottom:6px;">🛡️</div>
+                        <strong style="font-size:0.8rem; display:block; margin-bottom:10px;">OWASP Mobile Security</strong>
+                        <button class="btn-outline">Trả sách</button>
+                    </div>
+                </div>
+            </div>
+            <div class="bottom-nav">
+                <div class="nav-tab">💳<span>Thẻ SV</span></div>
+                <div class="nav-tab">📷<span>Điểm danh</span></div>
+                <div class="nav-tab active">📚<span>Thư viện</span></div>
+                <div class="nav-tab">🛡️<span>Bảo mật</span></div>
+            </div>
+        </section>
+
+        <!-- 6. TAB 4: SECURITY & OPTIMIZATION -->
+        <section class="phone" data-group="G3">
+            <div class="status-bar">
+                <span>12:30</span>
+                <span>60 FPS</span>
+            </div>
+            <div class="screen-content">
+                <div class="screen-title">Bảo mật &amp; Tối ưu</div>
+
+                <div style="background:linear-gradient(135deg, #059669, #10b981); color:#fff; border-radius:20px; padding:16px 18px; display:flex; align-items:center; gap:14px;">
+                    <div style="font-size:1.9rem;">🛡️</div>
+                    <div>
+                        <strong style="font-size:0.98rem; display:block;">Thiết bị An toàn</strong>
+                        <span style="font-size:0.75rem; opacity:0.92;">5/5 lớp chuẩn OWASP MASVS đạt chuẩn</span>
+                    </div>
+                </div>
+
+                <div class="white-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                        <div>
+                            <strong style="font-size:0.9rem; display:block;">Chế độ Tối ưu Hiệu năng</strong>
+                            <span style="font-size:0.74rem; color:#64748b;">Đang bật (WebP + ThreadPool + Cache)</span>
+                        </div>
+                        <span class="badge badge-blue">ON</span>
+                    </div>
+
+                    <div style="margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; font-weight:700;">
+                            <span>🖼️ Ảnh thẻ WebP: 3.5 KB</span>
+                            <span style="color:#059669;">-95% dung lượng</span>
+                        </div>
+                        <div class="progress-line"><div class="progress-fill" style="width:95%; background:#059669;"></div></div>
+                    </div>
+
+                    <div style="margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; font-weight:700;">
+                            <span>⚡ Tốc độ mở App (Cache)</span>
+                            <span style="color:#2563eb;">15 ms</span>
+                        </div>
+                        <div class="progress-line"><div class="progress-fill" style="width:92%;"></div></div>
+                    </div>
+
+                    <div style="margin-bottom:16px;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; font-weight:700;">
+                            <span>🚀 Tốc độ khung hình</span>
+                            <span style="color:#2563eb;">60 FPS mượt</span>
+                        </div>
+                        <div class="progress-line"><div class="progress-fill" style="width:100%;"></div></div>
+                    </div>
+
+                    <button class="btn-primary">Chạy đo kiểm Benchmark</button>
+                </div>
+            </div>
+            <div class="bottom-nav">
+                <div class="nav-tab">💳<span>Thẻ SV</span></div>
+                <div class="nav-tab">📷<span>Điểm danh</span></div>
+                <div class="nav-tab">📚<span>Thư viện</span></div>
+                <div class="nav-tab active">🛡️<span>Bảo mật</span></div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        function showGroup(g, btn) {
+            document.querySelectorAll('.pill-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.querySelectorAll('.phone').forEach(p => {
+                p.style.display = (g === 'ALL' || p.getAttribute('data-group') === g) ? 'flex' : 'none';
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,7 +1,29 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.SmartStudentID" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+    <!-- Always enforce the light design system, even when system Night Mode is active -->
+    <style name="Base.Theme.SmartStudentID" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/brand_600</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorPrimaryContainer">@color/brand_50</item>
+        <item name="colorOnPrimaryContainer">@color/brand_700</item>
+        <item name="colorSecondary">@color/emerald_600</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorSecondaryContainer">@color/emerald_50</item>
+        <item name="colorOnSecondaryContainer">@color/emerald_700</item>
+        <item name="colorSurface">@color/white</item>
+        <item name="colorOnSurface">@color/slate_900</item>
+        <item name="colorSurfaceVariant">@color/slate_100</item>
+        <item name="colorOnSurfaceVariant">@color/slate_600</item>
+        <item name="colorOutline">@color/slate_300</item>
+        <item name="colorOutlineVariant">@color/slate_200</item>
+        <item name="android:colorBackground">@color/slate_50</item>
+        <item name="android:windowBackground">@color/slate_50</item>
+        <item name="android:statusBarColor">@color/slate_50</item>
+        <item name="android:navigationBarColor">@color/white</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:windowAnimationStyle">@style/Animation.SmartID.Window</item>
     </style>
 </resources>

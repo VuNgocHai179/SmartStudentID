@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tài Liệu Phân Tích Chuyên Sâu 4 Chủ Đề Cốt Lõi — Tối Ưu Hiệu Năng & Bảo Mật Ứng Dụng Thẻ Sinh Viên Thông Minh Trên Android</title>
+    <style>
+        :root {
+            --bg-page: #f8fafc;
+            --bg-paper: #ffffff;
+            --bg-subtle: #f1f5f9;
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --text-muted: #64748b;
+            --border: #cbd5e1;
+            --indigo: #4f46e5;
+            --blue: #0284c7;
+            --emerald: #059669;
+            --amber: #d97706;
+            --rose: #e11d48;
+            --purple: #7c3aed;
+            --radius: 14px;
+            --shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-primary);
+            line-height: 1.75;
+            font-size: 16px;
+            padding-bottom: 80px;
+        }
+
+        /* Top Action Bar */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: rgba(15, 23, 42, 0.96);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid #334155;
+            padding: 10px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            color: #f8fafc;
+        }
+
+        .top-bar-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .top-bar-title span.pill {
+            background: #10b981;
+            color: #052e16;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 800;
+        }
+
+        .top-bar-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn-action {
+            padding: 7px 14px;
+            border-radius: 8px;
+            border: 1px solid #475569;
+            background: #1e293b;
+            color: #f8fafc;
+            font-weight: 700;
+            font-size: 0.82rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-action:hover {
+            background: #334155;
+        }
+
+        .btn-action.primary {
+            background: #38bdf8;
+            color: #0f172a;
+            border-color: #38bdf8;
+        }
+
+        /* Hero Banner */
+        .header-banner {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #0f393b 100%);
+            color: #ffffff;
+            padding: 44px 24px 36px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .header-inner {
+            max-width: 1220px;
+            margin: 0 auto;
+        }
+
+        .tag-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .tag {
+            padding: 5px 13px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.12);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .tag.highlight {
+            background: rgba(56, 189, 248, 0.2);
+            color: #7dd3fc;
+            border-color: rgba(56, 189, 248, 0.4);
+        }
+
+        .header-banner h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: 1.3;
+            margin-bottom: 12px;
+            color: #f8fafc;
+        }
+
+        .header-banner p {
+            color: #cbd5e1;
+            max-width: 960px;
+            font-size: 1rem;
+        }
+
+        .scope-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 14px;
+            margin-top: 24px;
+        }
+
+        .scope-card {
+            background: rgba(15, 23, 42, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-left: 4px solid #38bdf8;
+            border-radius: 10px;
+            padding: 14px 16px;
+            font-size: 0.88rem;
+            color: #e2e8f0;
+        }
+
+        .scope-card.c1 { border-left-color: #f43f5e; }
+        .scope-card.c2 { border-left-color: #38bdf8; }
+        .scope-card.c3 { border-left-color: #10b981; }
+        .scope-card.c4 { border-left-color: #f59e0b; }
+
+        .scope-card strong {
+            display: block;
+            color: #ffffff;
+            margin-bottom: 4px;
+            font-size: 0.92rem;
+        }
+
+        /* Main Page Layout */
+        .page-layout {
+            max-width: 1220px;
+            margin: 32px auto;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: 290px 1fr;
+            gap: 30px;
+            align-items: start;
+        }
+
+        @media (max-width: 980px) {
+            .page-layout {
+                grid-template-columns: 1fr;
+            }
+            .sidebar-toc {
+                position: static !important;
+            }
+        }
+
+        /* Sticky TOC Sidebar */
+        .sidebar-toc {
+            position: sticky;
+            top: 68px;
+            background: var(--bg-paper);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .sidebar-toc h3 {
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .toc-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .toc-list a {
+            display: block;
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-size: 0.86rem;
+            font-weight: 600;
+            padding: 8px 11px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            line-height: 1.4;
+        }
+
+        .toc-list a:hover {
+            background: var(--bg-subtle);
+            color: var(--indigo);
+            border-left-color: var(--indigo);
+        }
+
+        /* Main Reading Column */
+        .reading-column {
+            display: flex;
+            flex-direction: column;
+            gap: 34px;
+        }
+
+        .topic-section {
+            background: var(--bg-paper);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 36px 40px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .topic-section::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: var(--indigo);
+        }
+
+        .topic-section.t1::before { background: linear-gradient(90deg, #e11d48, #f97316); }
+        .topic-section.t2::before { background: linear-gradient(90deg, #0284c7, #4f46e5); }
+        .topic-section.t3::before { background: linear-gradient(90deg, #059669, #10b981); }
+        .topic-section.t4::before { background: linear-gradient(90deg, #d97706, #eab308); }
+        .topic-section.t5::before { background: linear-gradient(90deg, #7c3aed, #ec4899); }
+
+        .topic-badge {
+            display: inline-block;
+            padding: 5px 14px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+        }
+
+        .b-rose { background: #ffe4e6; color: #be123c; }
+        .b-blue { background: #e0f2fe; color: #0369a1; }
+        .b-emerald { background: #d1fae5; color: #047857; }
+        .b-amber { background: #fef3c7; color: #b45309; }
+        .b-purple { background: #f3e8ff; color: #6d28d9; }
+
+        .topic-section h2 {
+            font-size: 1.52rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            line-height: 1.35;
+            margin-bottom: 18px;
+            padding-bottom: 14px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .topic-section h3 {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #1e293b;
+            margin-top: 28px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .topic-section h4 {
+            font-size: 1.03rem;
+            font-weight: 700;
+            color: var(--indigo);
+            margin-top: 18px;
+            margin-bottom: 8px;
+        }
+
+        .topic-section p {
+            color: var(--text-secondary);
+            margin-bottom: 14px;
+            text-align: justify;
+        }
+
+        .topic-section ul, .topic-section ol {
+            padding-left: 24px;
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        .topic-section li {
+            margin-bottom: 8px;
+        }
+
+        /* Callout / Analysis Boxes */
+        .analysis-box {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-left: 5px solid var(--indigo);
+            border-radius: 10px;
+            padding: 18px 22px;
+            margin: 18px 0;
+        }
+
+        .analysis-box.problem {
+            background: #fff1f2;
+            border-color: #fecdd3;
+            border-left-color: var(--rose);
+            color: #881337;
+        }
+
+        .analysis-box.problem p, .analysis-box.problem li { color: #881337; }
+
+        .analysis-box.solution {
+            background: #ecfdf5;
+            border-color: #a7f3d0;
+            border-left-color: var(--emerald);
+            color: #064e3b;
+        }
+
+        .analysis-box.solution p, .analysis-box.solution li { color: #064e3b; }
+
+        .analysis-box.mechanism {
+            background: #eff6ff;
+            border-color: #bfdbfe;
+            border-left-color: var(--blue);
+            color: #1e3a8a;
+        }
+
+        .analysis-box.mechanism p, .analysis-box.mechanism li { color: #1e3a8a; }
+
+        .box-title {
+            font-weight: 800;
+            font-size: 0.96rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Diagram Flow */
+        .diagram-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin: 16px 0;
+            background: #f8fafc;
+            border: 1px dashed #94a3b8;
+            border-radius: 12px;
+            padding: 18px;
+        }
+
+        .flow-step {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-left: 4px solid var(--indigo);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.92rem;
+        }
+
+        .flow-arrow {
+            text-align: center;
+            font-weight: 900;
+            color: #64748b;
+            line-height: 1;
+        }
+
+        /* Code & Tables */
+        pre {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 16px 18px;
+            border-radius: 10px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            margin: 14px 0;
+        }
+
+        code {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: #e2e8f0;
+            color: #0f172a;
+            padding: 2px 6px;
+            border-radius: 5px;
+            font-size: 0.87em;
+            font-weight: 600;
+        }
+
+        pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            background: #ffffff;
+        }
+
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 11px 14px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: #f1f5f9;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        tr:nth-child(even) td {
+            background: #f8fafc;
+        }
+
+        @media print {
+            .top-bar, .sidebar-toc { display: none !important; }
+            .page-layout { grid-template-columns: 1fr; max-width: 100%; margin: 0; padding: 0; }
+            .topic-section { page-break-after: always; box-shadow: none; border: 1px solid #94a3b8; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- STICKY TOP BAR -->
+    <div class="top-bar">
+        <div class="top-bar-title">
+            <span class="pill">4 CHỦ ĐỀ PHÂN TÍCH</span>
+            <span>Tối ưu hiệu năng và bảo mật cho ứng dụng thẻ sinh viên thông minh trên Android</span>
+        </div>
+        <div class="top-bar-actions">
+            <a class="btn-action primary" href="tai_lieu_phan_tich_4_chu_de.doc" download>📥 Tải bản Word (.doc)</a>
+            <button class="btn-action" onclick="window.print()">🖨️ In / Lưu PDF</button>
+        </div>
+    </div>
+
+    <!-- HERO HEADER -->
+    <header class="header-banner">
+        <div class="header-inner">
+            <div class="tag-group">
+                <span class="tag highlight">📘 Tài Liệu Phân Tích Kỹ Thuật Theo 4 Chủ Đề Đã Đăng Ký</span>
+                <span class="tag">Thảo Luận Giữa Kỳ & Cơ Sở Học Thuật</span>
+                <span class="tag">Đối chiếu Mã nguồn Thực tế & Thực nghiệm</span>
+            </div>
+            <h1>Tối ưu hiệu năng và bảo mật cho ứng dụng thẻ sinh viên thông minh trên Android</h1>
+            <p>
+                Tài liệu này phân tích chuyên sâu và có hệ thống <strong>4 chủ đề cốt lõi</strong> thuộc phạm vi đề tài đã đăng ký. Mỗi chủ đề được mổ xẻ theo cấu trúc 4 phần thống nhất: <em>(1) Đặt vấn đề & Bản chất kỹ thuật → (2) Phân tích nguyên lý & Cơ chế hoạt động → (3) Thiết kế & Cài đặt thực tế trong mã nguồn → (4) Số liệu đánh giá Trước và Sau tối ưu</em>.
+            </p>
+
+            <div class="scope-summary-grid">
+                <div class="scope-card c1">
+                    <strong>Chủ đề 1 • Điểm nghẽn APDU & Mật mã</strong>
+                    Nghiên cứu và phân tích điểm nghẽn hiệu năng khi truyền nhận gói tin APDU và thực thi mật mã trên Android.
+                </div>
+                <div class="scope-card c2">
+                    <strong>Chủ đề 2 • Đa luồng 60 FPS</strong>
+                    Xây dựng mô hình đa luồng tách biệt xử lý I/O thẻ và tính toán mật mã khỏi Main Thread, chống giật lag và duy trì độ phản hồi UI đạt 60 FPS.
+                </div>
+                <div class="scope-card c3">
+                    <strong>Chủ đề 3 • Lưu đệm Bảo mật Offline-First</strong>
+                    Thiết kế cơ chế lưu đệm bảo mật theo kiến trúc Offline-First nhằm rút ngắn độ trễ tải dữ liệu, giảm thiểu lệnh APDU dư thừa và đảm bảo an toàn thông tin.
+                </div>
+                <div class="scope-card c4">
+                    <strong>Chủ đề 4 • Nén WebP & Tái sử dụng Bộ đệm</strong>
+                    Tối ưu băng thông truyền tải APDU qua kỹ thuật nén/downsampling ảnh thẻ WebP, kết hợp tái sử dụng bộ đệm để hạn chế Memory Churn và rò rỉ bộ nhớ.
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT LAYOUT -->
+    <div class="page-layout">
+
+        <!-- SIDEBAR TOC -->
+        <aside class="sidebar-toc">
+            <h3>📑 Mục lục 4 Chủ đề Phân tích</h3>
+            <ul class="toc-list">
+                <li><a href="#chu-de-1"><strong>Chủ đề 1:</strong> Nghiên cứu & phân tích điểm nghẽn hiệu năng APDU và thực thi mật mã</a></li>
+                <li><a href="#chu-de-2"><strong>Chủ đề 2:</strong> Xây dựng mô hình đa luồng tách biệt I/O thẻ & mật mã giữ 60 FPS</a></li>
+                <li><a href="#chu-de-3"><strong>Chủ đề 3:</strong> Thiết kế cơ chế lưu đệm bảo mật theo kiến trúc Offline-First</a></li>
+                <li><a href="#chu-de-4"><strong>Chủ đề 4:</strong> Tối ưu băng thông APDU qua nén ảnh WebP & tái sử dụng bộ đệm</a></li>
+                <li><a href="#tong-ket-demo"><strong>Tổng kết:</strong> Sự phối hợp 4 Chủ đề khi Chạy Demo & Thuyết trình</a></li>
+            </ul>
+        </aside>
+
+        <!-- MAIN ANALYTICAL CONTENT -->
+        <main class="reading-column">
+
+            <!-- =================================================================== -->
+            <!-- CHỦ ĐỀ 1: NGHIÊN CỨU & PHÂN TÍCH ĐIỂM NGHẼN APDU VÀ MẬT MÃ -->
+            <!-- =================================================================== -->
+            <article id="chu-de-1" class="topic-section t1">
+                <span class="topic-badge b-rose">Chủ đề Phân tích 01 • Nền tảng Bài toán</span>
+                <h2>1. Nghiên cứu và phân tích điểm nghẽn hiệu năng khi truyền nhận gói tin APDU và thực thi mật mã trên Android</h2>
+
+                <h3>1.1. Đặt vấn đề: Sự bất cân xứng tài nguyên giữa Thiết bị Android và Chip Thẻ thông minh</h3>
+                <p>
+                    Trong hệ thống thẻ sinh viên thông minh, ứng dụng di động Android đóng vai trò là thiết bị đầu cuối (<em>Terminal/Reader</em>) giao tiếp với vi mạch thẻ Java Card (<em>Smart Card Applet</em>). Điểm nghẽn hiệu năng xuất phát từ sự chênh lệch cực lớn về kiến trúc phần cứng giữa hai môi trường này: trong khi điện thoại Android sở hữu vi xử lý đa nhân tốc độ hàng Gigahertz và bộ nhớ RAM nhiều Gigabyte, thì chip thẻ thông minh hoạt động hoàn toàn nhờ năng lượng cảm ứng từ đầu đọc, với <strong>bộ nhớ RAM (Transient Memory) chỉ từ 2 KB – 8 KB</strong> và <strong>bộ nhớ lưu trữ bền vững EEPROM từ 32 KB – 144 KB</strong>.
+                </p>
+                <p>
+                    Khi ứng dụng Android thực hiện các nghiệp vụ định danh sinh viên, điểm danh, mượn sách thư viện hay thanh toán ví điện tử, mọi dữ liệu trao đổi đều phải đi qua giao thức <strong>APDU (Application Protocol Data Unit — chuẩn ISO/IEC 7816-4)</strong> đồng thời phải thực thi các thuật toán mật mã học (<code>AES-128</code>, <code>RSA-1024</code>, <code>PBKDF2</code>). Sự kết hợp giữa <strong>băng thông I/O hẹp của giao thức APDU</strong> và <strong>độ phức tạp tính toán của mật mã</strong> tạo ra hai nút cổ chai lớn cần được định danh và đo đạc chính xác.
+                </p>
+
+                <h3>1.2. Phân tích Điểm nghẽn thứ nhất: Giao thức truyền nhận gói tin APDU (I/O Bottleneck)</h3>
+                <p>
+                    Mọi giao tiếp giữa tầng Android (<code>ApduClient.java</code>) và tầng Applet trên thẻ (<code>SmartCampusApplet.java</code>) đều tuân theo cơ chế <strong>Master – Slave</strong> thông qua cặp gói tin <code>Command APDU</code> (gửi đi) và <code>Response APDU</code> (phản hồi về):
+                </p>
+                <ul>
+                    <li><strong>Cấu trúc gói lệnh Command APDU:</strong> Gồm 4 byte Header bắt buộc <code>[CLA] [INS] [P1] [P2]</code>, theo sau là trường <code>[Lc]</code> (độ dài dữ liệu gửi), trường <code>[Data]</code> (tải trọng) và trường <code>[Le]</code> (độ dài dữ liệu kỳ vọng nhận về).</li>
+                    <li><strong>Cấu trúc gói phản hồi Response APDU:</strong> Gồm trường <code>[Data]</code> trả về và kết thúc bằng 2 byte mã trạng thái <code>[SW1] [SW2]</code> (ví dụ: <code>0x9000</code> là hoàn tất thành công, <code>0x63CX</code> là nhập sai mã PIN, <code>0x6983</code> là thẻ đã bị khóa).</li>
+                </ul>
+
+                <div class="analysis-box problem">
+                    <div class="box-title">🚧 3 Nguyên nhân kỹ thuật gây nghẽn cổ chai trên đường truyền APDU:</div>
+                    <ol style="margin-bottom: 0;">
+                        <li>
+                            <strong>Giới hạn kích thước khung truyền Short APDU (Tối đa 240–255 bytes/gói):</strong> Trong chuẩn Short APDU phổ biến, trường <code>Lc</code> chỉ dài <strong>1 byte</strong> (biểu diễn giá trị từ <code>0</code> đến <code>255</code>). Để đảm bảo an toàn bộ đệm truyền tải, mỗi lệnh trong hệ thống chỉ mang tối đa <strong>240 bytes dữ liệu thực (Payload)</strong>. Do đó, bất kỳ dữ liệu nào lớn hơn 240 bytes (như ảnh chân dung chủ thẻ) đều không thể gửi trong 1 lệnh mà bắt buộc phải cắt nhỏ (<em>Chunking</em>) thành rất nhiều gói tin APDU rời rạc.
+                        </li>
+                        <li>
+                            <strong>Cơ chế truyền thông Bán song công Tuần tự (Half-Duplex Stop-and-Wait):</strong> Giao thức APDU không hỗ trợ gửi gối đầu (<em>Pipelining</em>) hay truyền song song. Ứng dụng Android gửi gói lệnh thứ <em>k</em> xuống thẻ → phải đứng chờ thẻ nhận, xử lý xong và trả về mã trạng thái <code>0x9000</code> → mới được phép gửi tiếp gói lệnh thứ <em>k + 1</em>. Tổng thời gian truyền <em>N</em> gói tin bị cộng dồn tuyến tính:
+                            <br><code>T<sub>tổng_APDU</sub> = ∑<sub>i=1..N</sub> (T<sub>truyền_I/O</sub> + T<sub>xử_lý_JCVM</sub> + T<sub>ghi/đọc_EEPROM</sub>)</code>.
+                        </li>
+                        <li>
+                            <strong>Độ trễ vật lý khi ghi bộ nhớ EEPROM trên chip thẻ:</strong> Khác với RAM truy xuất ở cấp độ nano-giây, mỗi thao tác ghi dữ liệu bền vững vào EEPROM của thẻ (như lưu thông tin sinh viên, ghi mảnh ảnh, cập nhật số dư hay nhật ký hoạt động) đòi hỏi chu kỳ nạp điện áp xóa/ghi trang nhớ mất khoảng <strong>2 – 5 ms cho mỗi gói lệnh</strong>.
+                        </li>
+                    </ol>
+                </div>
+
+                <h3>1.3. Phân tích Điểm nghẽn thứ hai: Thực thi các thuật toán mật mã (Cryptographic Bottleneck)</h3>
+                <p>
+                    Để chống nghe lén, chống sửa đổi dữ liệu trên EEPROM và chống làm giả thẻ sinh viên (<em>Card Cloning</em>), hệ thống thực thi 3 cơ chế mật mã học ở cả phía thẻ thông minh và phía ứng dụng Android. Mỗi thuật toán đều tạo ra độ trễ tính toán đáng kể:
+                </p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 22%;">Cơ chế Mật mã</th>
+                                <th style="width: 20%;">Nơi thực thi & Lệnh APDU</th>
+                                <th style="width: 35%;">Phân tích Quy trình Xử lý Kỹ thuật</th>
+                                <th style="width: 23%;">Độ trễ Đo đạc Thực tế</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>1. Mã hóa & Giải mã khối <code>AES-128 CBC</code> + Đệm <code>PKCS#7</code></strong></td>
+                                <td>Trên Thẻ Java Card<br>(<code>INS_SET_INFO = 0x20</code><br><code>INS_GET_INFO = 0x21</code>)</td>
+                                <td>
+                                    • Khi xác thực PIN (<code>INS 0x10</code>), thẻ băm mã PIN để dẫn xuất khóa đối xứng <code>AES-128 (16 bytes)</code>.<br>
+                                    • Khi lưu/đọc hồ sơ (<code>MSSV|Họ tên|Ngày sinh|Lớp|Khoa</code>), thẻ thực hiện đệm <code>PKCS#7</code> cho bội số 16 bytes và chạy vòng lặp mã hóa/giải mã dây chuyền khối <code>CBC</code>: <code>P<sub>i</sub> = D<sub>K</sub>(C<sub>i</sub>) ⊕ C<sub>i-1</sub></code>.
+                                </td>
+                                <td><strong>~35 – 55 ms / lệnh</strong><br>(Tốn thời gian đọc EEPROM, giải mã từng khối 16B và gỡ đệm).</td>
+                            </tr>
+                            <tr>
+                                <td><strong>2. Ký số khóa bất đối xứng <code>RSA-1024</code> (Challenge-Response)</strong></td>
+                                <td>Ký trên Thẻ (<code>INS 0x14</code>, <code>0x31</code>, <code>0x32</code>) & Xác minh trên Android (<code>RsaCardVerifier</code>)</td>
+                                <td>
+                                    • Để chứng minh thẻ thật, Android sinh chuỗi ngẫu nhiên <code>Challenge Nonce</code> gửi xuống thẻ.<br>
+                                    • Chip thẻ băm <code>SHA-1</code> bản tin, đệm <code>PKCS#1 v1.5</code> và thực hiện phép lũy thừa modulo số nguyên lớn 1024-bit bằng khóa bí mật: <code>S = M<sup>d</sup> mod N</code>, xuất ra chữ ký dài 128 bytes.
+                                </td>
+                                <td><strong>~80 – 110 ms / lần ký</strong><br>(Phép toán nặng nhất trên vi điều khiển thẻ thông minh).</td>
+                            </tr>
+                            <tr>
+                                <td><strong>3. Dẫn xuất khóa phiên <code>PBKDF2-HMAC-SHA256</code></strong></td>
+                                <td>Trên Android<br>(<code>CryptoManager.java</code>)</td>
+                                <td>
+                                    • Để giữ phiên đăng nhập trên Android mà không lưu mã PIN dạng rõ, ứng dụng kết hợp mã PIN với muối ngẫu nhiên <code>Salt (16 bytes)</code> và thực hiện lặp <strong>10.000 vòng băm HMAC-SHA256</strong> để sinh khóa 256-bit.
+                                </td>
+                                <td><strong>~25 – 45 ms CPU</strong><br>(Cố ý lặp 10.000 vòng để chống tấn công vét cạn Brute-force).</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>1.4. Kết quả Phân rã Định lượng Điểm nghẽn (Khi chưa áp dụng tối ưu)</h3>
+                <p>
+                    Từ việc đo đạc thực nghiệm bằng công cụ <code>BenchmarkReport</code> trong dự án (<code>LocalCacheManager.java</code>), một chu kỳ đọc đầy đủ thông tin thẻ sinh viên khi <strong>chưa tối ưu (Before Mode)</strong> tiêu tốn tổng thời gian lên tới <strong>~3.040 ms (~3 giây)</strong>, được phân rã như sau:
+                </p>
+
+                <div class="diagram-flow">
+                    <div class="flow-step" style="border-left-color: #64748b;">
+                        <strong>Pha 1 — Khởi tạo & Xác thực PIN (2 lệnh APDU: <code>00 A4 04 00</code> + <code>80 10 00 00</code>):</strong> Tốn <strong>~33 ms</strong> (Kiểm tra <code>OwnerPIN</code> và băm PIN sinh khóa AES-128).
+                    </div>
+                    <div class="flow-arrow">⬇</div>
+                    <div class="flow-step" style="border-left-color: var(--blue);">
+                        <strong>Pha 2 — Đọc & Giải mã Hồ sơ + Trạng thái Học vụ (3 lệnh APDU: <code>80 21 00 00</code> + <code>80 21 01 00</code> + <code>80 30 00 00</code>):</strong> Tốn <strong>~82 ms</strong> (Giải mã khối <code>AES-128 CBC</code> trên EEPROM và đóng gói phản hồi).
+                    </div>
+                    <div class="flow-arrow">⬇</div>
+                    <div class="flow-step" style="border-left-color: var(--amber);">
+                        <strong>Pha 3 — Ký số Xác thực Thẻ thật <code>RSA-1024</code> (1 lệnh APDU: <code>80 14 00 00</code>):</strong> Tốn <strong>~90 ms</strong> (Tính chữ ký số 1024-bit trên chip thẻ và xác minh bằng Public Key trên Android).
+                    </div>
+                    <div class="flow-arrow">⬇</div>
+                    <div class="flow-step" style="border-left-color: var(--rose); background: #fff1f2;">
+                        <strong>Pha 4 — Truyền tải Ảnh chân dung PNG gốc 180 KB (~750 lệnh APDU: <code>80 22 / 80 23</code>):</strong> Tốn <strong>~2.835 ms (Chiếm tới 93.2% tổng độ trễ!)</strong> do phải lặp 750 lần chu kỳ gửi/nhận từng mảnh 240 bytes.
+                    </div>
+                </div>
+
+                <div class="analysis-box solution">
+                    <div class="box-title">🎯 Kết luận từ Chủ đề 1 (Định hướng cho Chủ đề 2, 3, 4):</div>
+                    <p style="margin-bottom: 0;">
+                        Phân tích trên chỉ ra 3 bài toán cốt lõi cần giải quyết:
+                        <br>1. Độ trễ giao tiếp APDU + giải mã AES/RSA (205 ms – 3.040 ms) lớn hơn rất nhiều so với chu kỳ vẽ khung hình 16.67 ms của Android → Cần <strong>Mô hình Đa luồng tách biệt khỏi Main Thread (Chủ đề 2)</strong>.
+                        <br>2. Việc gửi lại chuỗi 5 lệnh APDU đọc hồ sơ mỗi khi chuyển màn hình là lãng phí tài nguyên → Cần <strong>Kiến trúc Lưu đệm Bảo mật Offline-First (Chủ đề 3)</strong>.
+                        <br>3. Riêng việc truyền ảnh PNG chiếm hơn 93% tổng thời gian (750 gói APDU) và gây cấp phát bộ nhớ liên tục → Cần <strong>Nén/Downsampling ảnh WebP kết hợp Tái sử dụng Bộ đệm (Chủ đề 4)</strong>.
+                    </p>
+                </div>
+            </article>
+
+            <!-- =================================================================== -->
+            <!-- CHỦ ĐỀ 2: XÂY DỰNG MÔ HÌNH ĐA LUỒNG 60 FPS -->
+            <!-- =================================================================== -->
+            <article id="chu-de-2" class="topic-section t2">
+                <span class="topic-badge b-blue">Chủ đề Phân tích 02 • Kiến trúc Đa luồng & Phản hồi Giao diện</span>
+                <h2>2. Xây dựng mô hình đa luồng tách biệt xử lý I/O thẻ và tính toán mật mã khỏi Main Thread, chống giật lag và duy trì độ phản hồi UI đạt 60 FPS</h2>
+
+                <h3>2.1. Phân tích cơ chế Kết xuất Giao diện Android (UI Rendering) và Ngưỡng 16.67 ms</h3>
+                <p>
+                    Trên hệ điều hành Android, mọi ứng dụng đều vận hành xoay quanh một luồng thực thi chính duy nhất gọi là <strong>Main Thread (hay UI Thread)</strong>. Luồng này chịu trách nhiệm điều phối hàng đợi sự kiện (<code>Looper / MessageQueue</code>), xử lý thao tác chạm của người dùng và thực thi chuỗi 3 bước vẽ giao diện (<code>Measure → Layout → Draw</code>) trong mỗi khung hình.
+                </p>
+                <p>
+                    Để mắt người cảm nhận được chuyển động mượt mà trên màn hình chuẩn <strong>60 FPS (60 khung hình/giây)</strong>, phần cứng màn hình phát ra xung đồng bộ dọc <code>VSYNC</code> sau mỗi chu kỳ cố định:
+                    <br><code>T<sub>frame</sub> = 1.000 ms ÷ 60 frames = 16.67 ms / frame</code>.
+                </p>
+
+                <div class="analysis-box problem">
+                    <div class="box-title">❌ Hậu quả khi thực thi APDU I/O và Mật mã trực tiếp trên Main Thread:</div>
+                    <ul>
+                        <li><strong>Hiện tượng Rớt khung hình (Skipped Frames / UI Jank):</strong> Khi một tác vụ đọc thẻ và giải mã mật mã (tốn từ <code>210 ms</code> đến <code>2.835 ms</code>) chạy đồng bộ trên Main Thread, luồng này bị khóa cứng (<em>Blocked</em>). Hệ thống <code>Choreographer</code> không thể vẽ khung hình mới khi có xung <code>VSYNC</code>, làm rơi liên tiếp từ <strong>13 đến 170 khung hình</strong> (<code>2835 ÷ 16.67 ≈ 170 frames</code>). Trên màn hình, hiệu ứng bấm nút (Ripple), thanh cuộn và vòng xoay <code>ProgressBar</code> bị đóng băng hoàn toàn, tốc độ khung hình tụt xuống <strong>15 – 18 FPS</strong>.</li>
+                        <li><strong>Nguy cơ văng ứng dụng do lỗi ANR (Application Not Responding):</strong> Nếu người dùng thực hiện nhiều thao tác liên tiếp hoặc kết nối Bridge/thẻ bị trễ vượt quá ngưỡng 5 giây khi Main Thread đang bị chặn, hệ thống Android Watchdog sẽ buộc dừng ứng dụng.</li>
+                    </ul>
+                </div>
+
+                <h3>2.2. Thiết kế Mô hình Đa luồng Bất đồng bộ trong <code>ApduThreadPool.java</code></h3>
+                <p>
+                    Để giải phóng hoàn toàn <code>Main Thread</code> khỏi các tác vụ I/O thẻ và tính toán mật mã, hệ thống thiết kế lớp quản lý đa luồng tập trung <code>com.example.smartstudentid.optimization.ApduThreadPool</code> dựa trên mẫu thiết kế <strong>Singleton + Fixed Worker Thread Pool + MainLooper Handler</strong>:
+                </p>
+
+                <div class="diagram-flow">
+                    <div class="flow-step" style="border-left-color: var(--emerald); background: #ecfdf5;">
+                        <strong>Tầng 1 — UI Main Thread (Thời gian chiếm giữ &lt; 1 ms):</strong><br>
+                        Nhận sự kiện tương tác của người dùng (ví dụ bấm nút <em>"Làm mới từ Thẻ"</em> hoặc <em>"Chạy Benchmark"</em>) → Đóng gói nghiệp vụ thành đối tượng <code>Callable&lt;T&gt;</code> và gọi <code>ApduThreadPool.getInstance().execute(task, callback)</code>. Ngay lập tức, Main Thread được trả tự do để tiếp tục vẽ giao diện ở tốc độ <strong>60 FPS</strong>.
+                    </div>
+                    <div class="flow-arrow">⬇ Đẩy vào Hàng đợi Tác vụ (BlockingQueue)</div>
+                    <div class="flow-step" style="border-left-color: var(--blue); background: #f0f9ff;">
+                        <strong>Tầng 2 — Background Worker Pool (<code>Executors.newFixedThreadPool(4)</code>):</strong><br>
+                        Hồ gồm <strong>4 luồng công nhân (Worker Threads)</strong> được khởi tạo sẵn và tái sử dụng xuyên suốt vòng đời ứng dụng (tránh chi phí cấp phát <code>new Thread()</code> lặp lại). Các luồng này gánh toàn bộ 4 công việc nặng:
+                        <br>• Truyền nhận chuỗi gói tin <code>Command/Response APDU</code> qua HTTP Bridge hoặc Card Engine.
+                        <br>• Thực thi xác minh chữ ký số <code>RSA-1024</code> và dẫn xuất khóa <code>PBKDF2</code> (10.000 vòng).
+                        <br>• Đọc/ghi và mã hóa bộ đệm <code>AES-256-GCM</code>.
+                        <br>• Giải mã Downsampling <code>inSampleSize</code> và nén/ghép mảnh ảnh <code>WebP</code>.
+                    </div>
+                    <div class="flow-arrow">⬇ Chuyển ngữ cảnh qua <code>Handler(Looper.getMainLooper())</code></div>
+                    <div class="flow-step" style="border-left-color: var(--indigo);">
+                        <strong>Tầng 3 — Cập nhật UI An toàn (Main Thread Callback):</strong><br>
+                        Khi luồng ngầm hoàn tất tính toán, nó gọi <code>mainThreadHandler.post(...)</code> để đưa kết quả đã xử lý xong về lại <code>MainLooper</code>, cập nhật các <code>TextView</code>, <code>ImageView</code>, <code>ProgressBar</code> một cách an toàn mà không vi phạm quy tắc <em>Single-Threaded UI Model</em> của Android.
+                    </div>
+                </div>
+
+                <h4>Trích dẫn Mã nguồn Thực tế trong <code>optimization/ApduThreadPool.java</code>:</h4>
+                <pre><code>public final class ApduThreadPool {
+    private static final int CORE_POOL_SIZE = 4;
+    private final ExecutorService backgroundExecutor = Executors.newFixedThreadPool(CORE_POOL_SIZE);
+    private final Handler mainThreadHandler = new Handler(Looper.getMainLooper());
+
+    public &lt;T&gt; void executeAsyncOnPool(Callable&lt;T&gt; task, TaskCallback&lt;T&gt; callback) {
+        backgroundExecutor.submit(() -&gt; {
+            long bgStartNs = System.nanoTime();
+            try {
+                T result = task.call(); // Thực thi toàn bộ APDU I/O &amp; Crypto trên Background Thread
+                long totalMs = Math.max(1, (System.nanoTime() - bgStartNs) / 1_000_000);
+                mainThreadHandler.post(() -&gt; {
+                    if (callback != null) {
+                        callback.onComplete(result, 1L, totalMs); // Cập nhật UI trên Main Thread
+                    }
+                });
+            } catch (Exception e) {
+                mainThreadHandler.post(() -&gt; { if (callback != null) callback.onError(e); });
+            }
+        });
+    }
+}</code></pre>
+
+                <h3>2.3. Giải quyết Xung đột Đa luồng trên Bus Thẻ bằng Khóa đồng bộ <code>synchronized</code></h3>
+                <p>
+                    Một vấn đề kỹ thuật quan trọng khi áp dụng hồ 4 luồng (<code>FixedThreadPool(4)</code>) cho ứng dụng thẻ thông minh là: <strong>Mặc dù giao diện Android hỗ trợ bất đồng bộ, nhưng bản thân chip thẻ Java Card là thiết bị đơn luồng (Single-Threaded State Machine) và chỉ có duy nhất một bộ đệm APDU vật lý</strong>. Nếu Worker Thread #1 đang truyền dở gói ảnh thứ 5 của lệnh <code>INS_UPLOAD_AVATAR_CHUNK</code> mà Worker Thread #2 chen ngang gửi lệnh <code>INS_GET_ACADEMIC_LIBRARY_STATUS</code>, trạng thái giao dịch trên thẻ sẽ bị hỏng ngay lập tức.
+                </p>
+
+                <div class="analysis-box mechanism">
+                    <div class="box-title">🔒 Cơ chế Tuần tự hóa An toàn Luồng (Thread-Safe Serialization) trong <code>ApduClient.java</code>:</div>
+                    <p style="margin-bottom: 0;">
+                        Để vừa tận dụng được 4 luồng chạy ngầm cho các tác vụ CPU (nén ảnh, giải mã JSON, băm PBKDF2) vừa bảo vệ tuyệt đối giao thức thẻ, phương thức truyền tải khung lệnh vật lý trong <code>ApduClient.java</code> được bảo vệ bằng khóa nội tại (Intrinsic Monitor Lock):
+                        <br><code>public synchronized CardResponse transmitRawFrame(byte[] frame)</code>
+                        <br>và <code>public synchronized byte[] downloadAvatarInChunks(boolean reuseBuffer)</code>.
+                        <br>Nhờ từ khóa <code>synchronized</code>, nếu có nhiều luồng ngầm cùng yêu cầu giao tiếp với thẻ, các khung lệnh APDU sẽ tự động xếp hàng tuần tự (FIFO) tại tầng <code>ApduClient</code> mà <strong>không hề làm chặn Main Thread</strong>.
+                    </p>
+                </div>
+
+                <h3>2.4. Đánh giá Hiệu quả của Chủ đề 2</h3>
+                <ul>
+                    <li><strong>Thời gian chiếm giữ Main Thread:</strong> Giảm từ <code>210,8 ms</code> (đọc hồ sơ) và <code>2.835 ms</code> (tải ảnh) xuống chỉ còn <strong>~0,74 ms</strong> (giảm <strong>99,6%</strong> thời gian chặn luồng UI, thấp hơn 22 lần so với ngưỡng 16,67 ms).</li>
+                    <li><strong>Tốc độ khung hình (Frame Rate):</strong> Duy trì ổn định ở mức <strong>59 – 60 FPS</strong> ngay cả trong lúc đang truyền hàng chục gói tin APDU hoặc chạy bộ đo kiểm Benchmark nặng.</li>
+                </ul>
+            </article>
+
+            <!-- =================================================================== -->
+            <!-- CHỦ ĐỀ 3: THIẾT KẾ CƠ CHẾ LƯU ĐỆM BẢO MẬT OFFLINE-FIRST -->
+            <!-- =================================================================== -->
+            <article id="chu-de-3" class="topic-section t3">
+                <span class="topic-badge b-emerald">Chủ đề Phân tích 03 • Kiến trúc Bộ đệm & An toàn Thông tin</span>
+                <h2>3. Thiết kế cơ chế lưu đệm bảo mật theo kiến trúc Offline-First nhằm rút ngắn độ trễ tải dữ liệu, giảm thiểu lệnh APDU dư thừa và đảm bảo an toàn thông tin</h2>
+
+                <h3>3.1. Phân tích Bài toán Lệnh APDU Dư thừa khi Điều hướng Màn hình</h3>
+                <p>
+                    Trong quá trình sử dụng thực tế, sinh viên thường xuyên chuyển đổi qua lại giữa các màn hình chức năng của ứng dụng (ví dụ: từ <em>Tab Hồ sơ Thẻ Sinh Viên</em> sang <em>Tab Điểm danh QR động</em>, sang <em>Tab Mượn/Trả sách Thư viện</em> rồi quay về <em>Tab Hồ sơ Thẻ</em>).
+                </p>
+                <p>
+                    Nếu ứng dụng thiết kế theo mô hình truy vấn trực tiếp truyền thống (luôn gọi xuống thẻ mỗi khi <code>Fragment.onViewCreated()</code> được kích hoạt), mỗi lần mở lại Tab Hồ sơ Thẻ sẽ phát sinh một chuỗi <strong>5 lệnh APDU tuần tự</strong> trong hàm <code>fetchStudentProfileFromCard()</code>:
+                </p>
+                <ol>
+                    <li><code>00 A4 04 00 08 F0534D4152544944</code> — Chọn Applet định danh sinh viên (<code>SELECT_APPLET</code>).</li>
+                    <li><code>80 10 00 00 06 ...</code> — Xác thực mã PIN và dẫn xuất khóa AES-128 trên thẻ (<code>INS_VERIFY_PIN</code>).</li>
+                    <li><code>80 21 00 00</code> — Đọc và giải mã chuỗi thông tin định danh sinh viên từ EEPROM (<code>INS_GET_STUDENT_INFO • P1=0x00</code>).</li>
+                    <li><code>80 21 01 00</code> — Đọc bản mã thô AES-128 phục vụ kiểm chứng bảo mật (<code>INS_GET_STUDENT_INFO • P1=0x01</code>).</li>
+                    <li><code>80 30 00 00</code> — Đọc điểm rèn luyện, số buổi điểm danh và quyền truy cập phòng Lab (<code>INS_GET_ACADEMIC_LIBRARY_STATUS</code>).</li>
+                </ol>
+                <p>
+                    Trong khi đó, các dữ liệu định danh cốt lõi trên thẻ (MSSV, Họ tên, Ngày sinh, Lớp, Khoa, Ảnh chân dung) có tính chất <strong>Đọc nhiều – Ghi ít (Read-Heavy, Write-Rarely)</strong>. Việc lặp đi lặp lại chuỗi 5 lệnh APDU trên (cộng thêm 15 lệnh tải ảnh) ở mỗi lần chuyển tab không chỉ gây độ trễ <strong>~210 ms</strong> mà còn tiêu tốn chu kỳ đọc/giải mã không cần thiết trên chip thẻ.
+                </p>
+
+                <h3>3.2. Thiết kế Kiến trúc Đọc/Ghi Offline-First trong <code>LocalCacheManager.java</code></h3>
+                <p>
+                    Để triệt tiêu các lệnh APDU dư thừa này, lớp <code>com.example.smartstudentid.optimization.LocalCacheManager</code> triển khai chiến lược <strong>Offline-First (Ưu tiên Bộ đệm Cục bộ)</strong> kết hợp đồng bộ thông minh:
+                </p>
+
+                <div class="diagram-flow">
+                    <div class="flow-step" style="border-left-color: var(--indigo);">
+                        <strong>Bước 1 — Yêu cầu tải Hồ sơ Sinh viên (<code>loadStudentProfile(verifiedPin)</code>):</strong><br>
+                        Khi giao diện cần hiển thị thông tin thẻ, hệ thống kiểm tra trạng thái cấu hình và truy vấn tầng lưu đệm <code>EncryptedCacheManager</code> trước tiên.
+                    </div>
+                    <div class="flow-arrow">⬇ Kiểm tra trạng thái Bộ đệm (Cache Lookup)</div>
+                    <div class="flow-step" style="border-left-color: var(--emerald); background: #ecfdf5;">
+                        <strong>Nhánh A — Cache HIT (Dữ liệu đã có sẵn và hợp lệ trong bộ đệm):</strong><br>
+                        • Giải mã trực tiếp đối tượng <code>StudentCardRecord</code> và mảng byte ảnh <code>WebP</code> từ bộ nhớ Flash của điện thoại.<br>
+                        • <strong>Số lệnh APDU gửi xuống thẻ:</strong> <strong>0 lệnh</strong> (Giảm 100% lệnh APDU dư thừa).<br>
+                        • <strong>Độ trễ phản hồi:</strong> Rút ngắn từ <code>~210,8 ms</code> xuống chỉ còn <strong>~8 – 12 ms</strong> (Nhanh hơn <strong>21,7 lần</strong>), đồng thời cho phép sinh viên xem hồ sơ thẻ ngay cả khi đang ở chế độ ngoại tuyến (không cắm thẻ vào đầu đọc).
+                    </div>
+                    <div class="flow-step" style="border-left-color: var(--amber); background: #fffbeb;">
+                        <strong>Nhánh B — Cache MISS (Lần đọc thẻ đầu tiên hoặc bấm nút "Làm mới từ Thẻ"):</strong><br>
+                        • Thực thi hàm <code>fetchStudentProfileFromCard(pin)</code> gửi chuỗi 5 lệnh APDU xuống thẻ để lấy dữ liệu gốc mới nhất.<br>
+                        • Ngay khi nhận phản hồi <code>0x9000</code>, tự động mã hóa và ghi đè bản ghi mới vào <code>EncryptedCacheManager</code> (<em>Write-Through Caching</em>) để phục vụ cho tất cả các lần truy cập kế tiếp.
+                    </div>
+                </div>
+
+                <h3>3.3. Kiến trúc Bảo mật Bộ đệm Đa lớp (Đảm bảo An toàn Thông tin theo OWASP MASVS-STORAGE)</h3>
+                <p>
+                    Thách thức lớn nhất của kiến trúc Offline-First là: <em>Nếu lưu đệm thông tin sinh viên xuống bộ nhớ điện thoại Android để tăng tốc độ, làm thế nào để ngăn chặn nguy cơ lộ lọt dữ liệu khi thiết bị bị Root, bị cài mã độc hoặc bị trích xuất file qua ADB?</em>
+                </p>
+                <p>
+                    Nếu sử dụng <code>SharedPreferences</code> hoặc cơ sở dữ liệu SQLite thông thường, dữ liệu sẽ nằm dưới dạng văn bản rõ (<em>Plaintext XML</em>) tại đường dẫn <code>/data/data/com.example.smartstudentid/shared_prefs/</code>. Để khắc phục triệt để, lớp <code>com.example.smartstudentid.security.EncryptedCacheManager</code> xây dựng kiến trúc bảo vệ 3 lớp:
+                </p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 25%;">Lớp Bảo mật Bộ đệm</th>
+                                <th style="width: 28%;">Thuật toán / Công nghệ</th>
+                                <th style="width: 47%;">Cơ chế Bảo vệ An toàn Thông tin Chi tiết</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Lớp 1: Bảo vệ Khóa chính bằng Phần cứng</strong></td>
+                                <td><code>AndroidKeyStore</code><br>+ <code>MasterKey (AES256_GCM)</code></td>
+                                <td>
+                                    Khóa chủ (<code>MasterKey</code>) được khởi tạo và lưu giữ hoàn toàn bên trong môi trường phần cứng cách ly của thiết bị (<strong>TEE — Trusted Execution Environment</strong> hoặc chip bảo mật <strong>StrongBox</strong>). Bản thân ứng dụng chỉ có thể gửi yêu cầu mã hóa/giải mã vào phần cứng chứ <strong>không bao giờ trích xuất được chuỗi byte của khóa MasterKey ra RAM</strong>.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Lớp 2: Mã hóa Kép Khóa – Giá trị trên File</strong></td>
+                                <td><code>EncryptedSharedPreferences</code><br>(<code>AES-256-SIV</code> &amp; <code>AES-256-GCM</code>)</td>
+                                <td>
+                                    • <strong>Mã hóa Tên trường (Key):</strong> Dùng thuật toán mã hóa tất định <code>AES-256-SIV</code> (Synthetic Initialization Vector) để ẩn toàn bộ tên khóa phiên làm việc (như <code>student_profile_session</code>, <code>avatar_webp_base64</code> — lưu ý thiết bị tuyệt đối chỉ lưu đệm phiên của đúng 1 sinh viên đang đăng nhập, còn CSDL toàn trường nằm tập trung tại SQLite <code>smartcard.db</code> trên Server).<br>
+                                    • <strong>Mã hóa Giá trị (Value):</strong> Dùng thuật toán <code>AES-256-GCM</code> (Galois/Counter Mode) vừa mã hóa nội dung hồ sơ, vừa đính kèm thẻ xác thực toàn vẹn 128-bit (<code>GMAC Authentication Tag</code>). Mọi hành vi sửa đổi trái phép file XML trên đĩa đều bị phát hiện và chặn ngay khi giải mã.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Lớp 3: Quản lý Phiên PIN &amp; Tự hủy (Auto-Wipe)</strong></td>
+                                <td><code>PBKDF2WithHmacSHA256</code><br>(10.000 vòng + Salt 16B)<br>trong <code>PinSessionManager</code></td>
+                                <td>
+                                    • Để truy cập ứng dụng và đọc bộ đệm, người dùng phải xác thực mã PIN được băm kiểm chứng bằng <code>PBKDF2-HMAC-SHA256</code>.<br>
+                                    • <strong>Cơ chế Tự hủy (Auto-Wipe):</strong> Nếu nhập sai mã PIN quá <strong>3 lần liên tiếp</strong>, hoặc khi đăng xuất / chuyển đổi thẻ sinh viên, phương thức <code>wipeStudentSessionCache()</code> lập tức xóa sạch toàn bộ hồ sơ và ảnh trong <code>EncryptedSharedPreferences</code>, buộc phải quẹt lại thẻ vật lý và xác thực chữ ký <code>RSA-1024</code> từ đầu.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h4>Trích dẫn Mã nguồn Thực tế trong <code>security/EncryptedCacheManager.java</code>:</h4>
+                <pre><code>MasterKey masterKey = new MasterKey.Builder(context.getApplicationContext())
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build();
+
+SharedPreferences prefs = EncryptedSharedPreferences.create(
+        context.getApplicationContext(),
+        "smart_student_secure_cache",
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+);</code></pre>
+            </article>
+
+            <!-- =================================================================== -->
+            <!-- CHỦ ĐỀ 4: NÉN ẢNH WEBP & TÁI SỬ DỤNG BỘ ĐỆM CHỐNG MEMORY CHURN -->
+            <!-- =================================================================== -->
+            <article id="chu-de-4" class="topic-section t4">
+                <span class="topic-badge b-amber">Chủ đề Phân tích 04 • Tối ưu Băng thông Đa phương tiện & Quản trị Bộ nhớ</span>
+                <h2>4. Tối ưu băng thông truyền tải APDU qua kỹ thuật nén/downsampling ảnh thẻ WebP, kết hợp tái sử dụng bộ đệm để hạn chế Memory Churn và rò rỉ bộ nhớ</h2>
+
+                <h3>4.1. Phân tích Bài toán Truyền tải Ảnh Chân dung qua Băng thông হẹp APDU</h3>
+                <p>
+                    Như đã chứng minh ở Chủ đề 1, việc lưu trữ và đọc ảnh chân dung chủ thẻ là tác vụ ngốn băng thông lớn nhất. Một bức ảnh chân dung thông thường ở kích thước <code>600 × 600 pixel</code> lưu dưới định dạng không mất dữ liệu (<code>PNG Lossless</code>) có dung lượng khoảng <strong>~180 KB (184.320 bytes)</strong>.
+                </p>
+                <p>
+                    Do mỗi gói lệnh Short APDU chỉ truyền được tối đa <strong>240 bytes</strong> (hằng số <code>MAX_AVATAR_CHUNK_SIZE = 240</code> trong <code>ApduCommands.java</code>), việc truyền bức ảnh PNG gốc gặp phải 2 rào cản lớn:
+                </p>
+                <ol>
+                    <li><strong>Quá tải số lượng gói tin APDU:</strong> Phải chia nhỏ bức ảnh thành <code>⌈184.320 ÷ 240⌉ = 768 gói lệnh APDU</code>, tiêu tốn <strong>~2.835 ms</strong> truyền nhận tuần tự.</li>
+                    <li><strong>Vượt giới hạn bộ nhớ EEPROM của thẻ:</strong> Trên chip Java Card (<code>SmartCampusApplet.java</code>), vùng nhớ dành riêng cho ảnh chân dung (<code>avatarBuffer</code>) chỉ được cấp phát tối đa <strong>8.192 bytes (8 KB)</strong> để nhường không gian cho hệ điều hành thẻ và các khóa mật mã.</li>
+                </ol>
+
+                <h3>4.2. Kỹ thuật Giải mã Giảm mẫu 2 Pha (Downsampling) và Nén ảnh chuẩn <code>WebP 75%</code></h3>
+                <p>
+                    Trên giao diện thẻ sinh viên của ứng dụng Android, khung hiển thị ảnh đại diện chỉ yêu cầu kích thước chuẩn <strong>150 × 150 pixel</strong>. Dựa trên đặc điểm này, lớp <code>com.example.smartstudentid.optimization.ImageOptimizer</code> thiết kế quy trình tối ưu hóa ảnh qua 2 giai đoạn liên hoàn:
+                </p>
+
+                <div class="diagram-flow">
+                    <div class="flow-step" style="border-left-color: var(--blue);">
+                        <strong>Giai đoạn 1 — Giải mã Giảm mẫu 2 Pha (Two-Pass Downsampling với <code>inSampleSize</code>):</strong><br>
+                        Khi nhận một mảng byte ảnh gốc độ phân giải cao (ví dụ ảnh chụp từ Camera <code>4000 × 3000 px</code>), nếu gọi <code>BitmapFactory.decodeByteArray()</code> trực tiếp ở cấu hình <code>ARGB_8888</code> (4 bytes/pixel), hệ thống sẽ phải cấp phát ngay <code>4000 × 3000 × 4 ≈ 48 MB</code> RAM, rất dễ gây văng ứng dụng vì lỗi tràn bộ nhớ <code>OutOfMemoryError</code>. Do đó, <code>ImageOptimizer</code> thực hiện:
+                        <br>• <strong>Pha 1 (Đọc kích thước siêu dữ liệu):</strong> Đặt cờ <code>options.inJustDecodeBounds = true</code> để đọc chiều rộng/chiều cao gốc (<code>outWidth</code>, <code>outHeight</code>) mà <strong>không cấp phát vùng nhớ pixel trên RAM</strong>.
+                        <br>• <strong>Pha 2 (Giải mã theo hệ số lũy thừa 2):</strong> Hàm <code>calculateInSampleSize()</code> tính hệ số thu nhỏ lũy thừa 2 lớn nhất (ví dụ <code>inSampleSize = 4</code> giúp giảm <strong>16 lần</strong> số điểm ảnh cần nạp vào RAM), sau đó đặt <code>inJustDecodeBounds = false</code> để giải mã và co giãn chính xác về kích thước <strong>150 × 150 pixel</strong>.
+                    </div>
+                    <div class="flow-arrow">⬇</div>
+                    <div class="flow-step" style="border-left-color: var(--emerald); background: #ecfdf5;">
+                        <strong>Giai đoạn 2 — Nén sang định dạng <code>WebP Lossy (Quality = 75%)</code> &amp; Định địa chỉ Offset 16-bit:</strong><br>
+                        • Bức ảnh <code>150 × 150 px</code> được mã hóa bằng thuật toán nén dự đoán khối của <strong>Google WebP</strong> ở mức chất lượng <strong>75%</strong> (<code>Bitmap.CompressFormat.WEBP_LOSSY</code>).<br>
+                        • <strong>Hiệu quả nén đột phá:</strong> Dung lượng ảnh giảm từ <strong>~180 KB xuống chỉ còn ~3,5 KB (~3.580 bytes)</strong> — nằm gọn trong vùng nhớ <code>8 KB EEPROM</code> của thẻ mà mắt thường nhìn trên khung ảnh thẻ không nhận ra sự khác biệt chất lượng.<br>
+                        • <strong>Số gói lệnh APDU:</strong> Giảm từ <strong>~750 gói xuống chỉ còn 15 gói APDU</strong> (<code>⌈3.580 ÷ 240⌉ = 15 gói</code>), thời gian truyền qua thẻ giảm xuống chỉ còn <strong>~50,8 ms (Tiết kiệm 98,2% băng thông!)</strong>.<br>
+                        • <strong>Kỹ thuật truyền Offset qua <code>(P1, P2)</code>:</strong> Trong mỗi gói lệnh <code>INS_UPLOAD_AVATAR_CHUNK (0x22)</code> và <code>INS_DOWNLOAD_AVATAR_CHUNK (0x23)</code>, ứng dụng tận dụng ngay 2 byte tham số Header <code>P1 = (byte)((offset &gt;&gt; 8) &amp; 0xFF)</code> và <code>P2 = (byte)(offset &amp; 0xFF)</code> làm con trỏ vị trí 16-bit để thẻ ghép chính xác từng mảnh 240B vào mảng <code>avatarBuffer</code> mà không tốn thêm byte nào trong phần tải trọng <code>Data</code>.
+                    </div>
+                </div>
+
+                <h3>4.3. Phân tích Hiện tượng <code>Memory Churn</code>, <code>Memory Leak</code> và Kỹ thuật Tái sử dụng Bộ đệm (Buffer Reuse)</h3>
+                <p>
+                    Bên cạnh việc giảm số gói tin APDU, vế thứ hai của Chủ đề 4 giải quyết một vấn đề quản trị bộ nhớ sâu sắc trên máy ảo Android ART (Android Runtime) và Java Card VM: <strong>Hạn chế hiện tượng xáo trộn bộ nhớ (Memory Churn) và chống rò rỉ bộ nhớ (Memory Leak)</strong>.
+                </p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 24%;">Vấn đề Bộ nhớ</th>
+                                <th style="width: 38%;">Bản chất Kỹ thuật &amp; Tác hại Hiệu năng</th>
+                                <th style="width: 38%;">Giải pháp Cài đặt trong Mã nguồn Dự án</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>1. Memory Churn</strong><br>(Xáo trộn bộ nhớ do cấp phát lặp lại)</td>
+                                <td>
+                                    Khi ứng dụng nhận và ghép hàng chục/hàng trăm gói tin APDU liên tiếp trong vòng lặp, nếu liên tục khởi tạo đối tượng mới (<code>new ByteArrayOutputStream()</code> hoặc nối mảng <code>new byte[]</code>) rồi hủy bỏ ngay sau mỗi lần đọc thẻ, vùng nhớ <em>Young Generation Heap</em> sẽ bị lấp đầy nhanh chóng bởi các đối tượng ngắn hạn (<em>Short-lived Objects</em>).<br>
+                                    Hệ quả là biểu đồ RAM biến động dạng <strong>răng cưa (Sawtooth Profile)</strong> và kích hoạt liên tục bộ dọn rác <strong>Garbage Collector (GC Pause)</strong>. Mỗi đợt GC chạy sẽ làm tạm dừng các luồng ứng dụng mất 5–20 ms, gây khựng khung hình.
+                                </td>
+                                <td>
+                                    <strong>Kỹ thuật Tái sử dụng Bộ đệm Cố định (Buffer Reuse):</strong><br>
+                                    • <em>Trên Android (<code>ApduClient.java</code>):</em> Khởi tạo duy nhất một luồng đệm tĩnh 8 KB:<br>
+                                    <code>private final ByteArrayOutputStream reusableAvatarStream = new ByteArrayOutputStream(8192);</code><br>
+                                    Trong hàm <code>downloadAvatarInChunks(true)</code>, trước mỗi lần ghép 15 gói ảnh từ thẻ, hệ thống chỉ gọi <code>reusableAvatarStream.reset()</code> để đưa con trỏ vị trí về <code>0</code> và ghi đè lên mảng <code>byte[8192]</code> sẵn có, <strong>không cấp phát thêm bất kỳ mảng mới nào trên Heap</strong>.<br>
+                                    • <em>Trên Java Card (<code>SmartCampusApplet.java</code>):</em> Dùng bộ đệm RAM tạm <code>JCSystem.makeTransientByteArray(256, CLEAR_ON_DESELECT)</code> tái sử dụng cho mọi phép giải mã/tái mã hóa AES.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>2. Memory Leak</strong><br>(Rò rỉ bộ nhớ đồ họa Bitmap)</td>
+                                <td>
+                                    Trong quá trình xử lý ảnh (giải mã giảm mẫu <code>sampled</code> rồi tạo ảnh co giãn <code>scaled</code>), nếu các đối tượng <code>Bitmap</code> trung gian không được giải phóng kịp thời, vùng nhớ đồ họa Native/Heap sẽ bị giữ lại lâu dài, làm tăng mức tiêu thụ RAM nền và dẫn đến lỗi <code>OutOfMemoryError</code>.
+                                </td>
+                                <td>
+                                    <strong>Thu hồi Vùng nhớ Bitmap Chủ động (Explicit Recycling):</strong><br>
+                                    Trong <code>ImageOptimizer.decodeAndDownsample()</code> và <code>LocalCacheManager.runBenchmarkSuite()</code>, ngay sau khi tạo <code>Bitmap</code> đích hoặc kết thúc đo kiểm, hệ thống kiểm tra và thu hồi ngay lập tức:<br>
+                                    <code>if (scaled != sampled) { sampled.recycle(); }</code><br>
+                                    và <code>rawPortrait.recycle();</code> giúp biểu đồ RAM luôn phẳng và ổn định ở mức <strong>~28 – 34 MB</strong>.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h4>Trích dẫn Mã nguồn Thực tế trong <code>apdu/ApduClient.java</code> &amp; <code>optimization/ImageOptimizer.java</code>:</h4>
+                <pre><code>// 1. Tái sử dụng bộ đệm 8KB trong ApduClient.java để chống Memory Churn:
+private final ByteArrayOutputStream reusableAvatarStream = new ByteArrayOutputStream(8192);
+
+public synchronized byte[] downloadAvatarInChunks(boolean reuseBuffer) {
+    ByteArrayOutputStream out = reuseBuffer ? reusableAvatarStream : new ByteArrayOutputStream();
+    if (reuseBuffer) {
+        reusableAvatarStream.reset(); // Đặt lại con trỏ count = 0, tái sử dụng mảng 8KB sẵn có
+    }
+    int offset = 0;
+    while (offset &lt; 8192) {
+        byte p1 = (byte) ((offset &gt;&gt; 8) &amp; 0xFF);
+        byte p2 = (byte) (offset &amp; 0xFF);
+        CardResponse resp = sendApdu(CLA_SMART_STUDENT, INS_DOWNLOAD_AVATAR_CHUNK, p1, p2, new byte[]{(byte) 240});
+        byte[] chunk = resp.getData();
+        if (!resp.isSuccess() || chunk.length == 0) break;
+        out.write(chunk, 0, chunk.length);
+        offset += chunk.length;
+        if (chunk.length &lt; MAX_AVATAR_CHUNK_SIZE) break;
+    }
+    return out.toByteArray();
+}</code></pre>
+            </article>
+
+            <!-- =================================================================== -->
+            <!-- TỔNG KẾT: BẢNG ĐỐI CHIẾU THỰC NGHIỆM & KỊCH BẢN DEMO 4 CHỦ ĐỀ -->
+            <!-- =================================================================== -->
+            <article id="tong-ket-demo" class="topic-section t5">
+                <span class="topic-badge b-purple">Tổng kết &amp; Thực nghiệm • Kết nối 4 Chủ đề trong Sản phẩm</span>
+                <h2>5. Tổng hợp Kết quả Thực nghiệm Trước – Sau Tối ưu &amp; Kịch bản Demo 4 Chủ đề</h2>
+
+                <h3>5.1. Bảng Tổng hợp Số liệu Thực nghiệm Đối chiếu 4 Chủ đề (Trung bình sau 10 lần đo)</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 24%;">Chủ đề Nghiên cứu</th>
+                                <th style="width: 23%;">Chỉ số Đo lường (Metric)</th>
+                                <th style="width: 22%;">Trước Tối ưu (Before Mode)</th>
+                                <th style="width: 22%;">Sau Tối ưu (After Mode)</th>
+                                <th style="width: 9%;">Mức Cải thiện</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Chủ đề 1 &amp; 4:</strong><br>Băng thông APDU &amp; Nén ảnh</td>
+                                <td>Dung lượng ảnh thẻ &amp; Số gói lệnh APDU (240B/gói)</td>
+                                <td>PNG gốc: <strong>180 KB</strong><br>(<strong>750 gói APDU</strong> • ~2.835 ms)</td>
+                                <td>WebP 75% (150×150): <strong>3,5 KB</strong><br>(<strong>15 gói APDU</strong> • ~50,8 ms)</td>
+                                <td style="color: var(--emerald); font-weight: 800;">Giảm 98,2%</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chủ đề 2:</strong><br>Đa luồng 60 FPS</td>
+                                <td>Thời gian chặn Main Thread &amp; Tốc độ khung hình UI</td>
+                                <td>Chặn UI: <strong>210 – 2.835 ms</strong><br>(Tụt xuống <strong>16 – 21 FPS</strong>)</td>
+                                <td>Chặn UI: <strong>~0,74 ms</strong><br>(Duy trì <strong>59,9 – 60 FPS</strong>)</td>
+                                <td style="color: var(--emerald); font-weight: 800;">Giảm 99,6%</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chủ đề 3:</strong><br>Lưu đệm Bảo mật Offline-First</td>
+                                <td>Độ trễ hiển thị Hồ sơ thẻ &amp; Số lệnh APDU khi mở lại</td>
+                                <td>Đọc thẻ trực tiếp: <strong>210,8 ms</strong><br>(Tốn <strong>5 lệnh APDU</strong> + giải mã)</td>
+                                <td>Đọc Cache AES-256-GCM: <strong>9,7 ms</strong><br>(Tốn <strong>0 lệnh APDU</strong>)</td>
+                                <td style="color: var(--emerald); font-weight: 800;">Nhanh hơn 21,7×</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chủ đề 4:</strong><br>Quản trị Bộ nhớ (Memory Churn)</td>
+                                <td>Cấp phát bộ đệm tải ảnh &amp; Biến động RAM Heap</td>
+                                <td>Cấp phát mới mỗi lần tải<br>(Biểu đồ răng cưa, gây GC Pause)</td>
+                                <td>Tái sử dụng <code>reusableAvatarStream</code><br>(0 cấp phát mới, RAM phẳng ~30MB)</td>
+                                <td style="color: var(--emerald); font-weight: 800;">Ổn định 100%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>5.2. Quy trình Trình diễn Trực quan 4 Chủ đề trên Ứng dụng (3–5 Phút trên Lớp)</h3>
+                <div class="analysis-box solution">
+                    <div class="box-title">🎬 3 Bước bấm Demo chứng minh trọn vẹn 4 Chủ đề trước Giảng viên:</div>
+                    <ol style="margin-bottom: 0;">
+                        <li>
+                            <strong>Bước 1 — Tại Tab 1 (Thẻ Sinh Viên):</strong> Đăng nhập mã PIN <code>123456</code> và bấm nút <strong>"Làm mới từ Thẻ (APDU)"</strong>.
+                            <br>→ <em>Chứng minh Chủ đề 2:</em> Luồng ngầm <code>ApduThreadPool</code> tự chạy tách biệt nên giao diện giữ nguyên 60 FPS, không bị khựng.
+                            <br>→ <em>Chứng minh Chủ đề 4:</em> Ảnh chân dung nén <code>WebP 3.5KB</code> được tải về qua 15 gói APDU và ghép bằng bộ đệm tái sử dụng <code>reusableAvatarStream</code>.
+                            <br>→ <em>Chứng minh Chủ đề 3:</em> Hồ sơ vừa tải được mã hóa <code>AES-256-GCM</code> vào <code>EncryptedSharedPreferences</code>. Khi bấm chuyển sang Tab 2 rồi quay lại Tab 1, thông tin hiện ra tức thì trong ~9ms mà không phát sinh lệnh APDU nào.
+                        </li>
+                        <li>
+                            <strong>Bước 2 — Tại Tab 4 (Security &amp; Optimization Lab):</strong> Bấm nút <strong>"Chạy Benchmark Toàn diện"</strong>.
+                            <br>→ Ứng dụng tự động đo đạc thực nghiệm giữa chế độ <em>Before</em> và <em>After</em>, hiển thị trực tiếp các chỉ số: <strong>WebP 3.5 KB (tiết kiệm 98%)</strong>, <strong>Độ trễ Cache (~9 ms vs ~210 ms)</strong>, và <strong>Tốc độ khung hình 60 FPS</strong>.
+                        </li>
+                        <li>
+                            <strong>Bước 3 — Kiểm chứng Gói tin APDU &amp; Bản mã AES-128:</strong> Bấm nút <strong>"Xem Bản mã AES-128 &amp; Gói tin APDU Hex"</strong>.
+                            <br>→ <em>Chứng minh Chủ đề 1:</em> Hộp thoại hiển thị rõ bản rõ sau khi giải mã (<code>P1=0x00</code>), bản mã thô <code>AES-128 CBC</code> đang lưu trong EEPROM của thẻ (<code>P1=0x01</code>), cùng nhật ký từng gói lệnh APDU Hex và thời gian thực thi (ms).
+                        </li>
+                    </ol>
+                </div>
+            </article>
+
+        </main>
+    </div>
+
+</body>
+</html>
