@@ -75,7 +75,7 @@ public class BridgeServer {
         // 1. Endpoint for checking Bridge & Card Reader connection status + tapEventId for phone auto-popup
         server.createContext("/api/status", exchange -> {
             String json = String.format(
-                    "{\"status\":\"ONLINE\",\"dbEngine\":\"SQLite (smartcard.db)\",\"reader\":\"%s\","
+                    "{\"status\":\"ONLINE\",\"apiVersion\":2,\"dbEngine\":\"SQLite (smartcard.db)\",\"reader\":\"%s\","
                             + "\"activeStudentId\":\"%s\",\"activeStudentInfo\":\"%s\",\"pinTries\":%d,\"tapEventId\":%d}",
                     escapeJson(activeReaderName),
                     escapeJson(virtualCard.activeCardId),
@@ -104,6 +104,7 @@ public class BridgeServer {
             }
 
             List<String> logs = executeScrScript(scriptContent);
+            virtualCard.applyLockState(DatabaseManager.isCardLocked(virtualCard.activeCardId));
             syncActiveCardInfoToDatabase();
             tapEventId = System.currentTimeMillis();
             System.out.println("[SCR LOADER] Loaded card script -> Active Student: " + virtualCard.activeInfoUtf8 + " (tapEventId=" + tapEventId + ")");
@@ -157,6 +158,12 @@ public class BridgeServer {
 
         // 4. Endpoint for retrieving or upserting Student Cards in SQLite (`cards` table)
         server.createContext("/api/cards", exchange -> {
+            // Java HttpServer matches contexts by prefix: do not let unknown /api/cards/* paths
+            // fall through into the POST upsert handler (which could overwrite card fields).
+            if (!"/api/cards".equals(exchange.getRequestURI().getPath())) {
+                sendJson(exchange, 404, "{\"error\":\"Endpoint not found\"}");
+                return;
+            }
             if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
                 sendJson(exchange, 200, DatabaseManager.getAllCardsJson());
             } else if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -211,6 +218,9 @@ public class BridgeServer {
             boolean ok = DatabaseManager.unblockCardByPuk(studentId);
             sendJson(exchange, 200, "{\"unblocked\":" + ok + ",\"studentId\":\"" + escapeJson(studentId) + "\",\"db\":\"smartcard.db\"}");
         });
+
+        // 5b. NOTE: lock state is persisted through POST /api/cards (full card record) and by the
+        // INS 0x12 handler itself. No separate /api/cards/lock route is exposed.
 
         // 6. Endpoint for Attendance History in SQLite (`attendance_logs` table)
         server.createContext("/api/attendance", exchange -> {
@@ -280,6 +290,7 @@ public class BridgeServer {
             String pin = extractJsonString(body, "pin");
 
             virtualCard.loadSnapshot(studentId, infoPlain, pin.isEmpty() ? "123456" : pin);
+            virtualCard.applyLockState(DatabaseManager.isCardLocked(studentId));
             syncActiveCardInfoToDatabase();
             tapEventId = System.currentTimeMillis();
             System.out.println("[CARD SWITCHER] Activated virtual card for Student: " + infoPlain);
@@ -352,8 +363,9 @@ public class BridgeServer {
             String cls = p.length > 3 ? p[3] : "";
             String dept = p.length > 4 ? p[4] : "";
             DatabaseManager.upsertCard(sid, name, dob, cls, dept, virtualCard.currentPin,
-                    virtualCard.pinTriesRemaining == 0, virtualCard.trainingScore,
-                    virtualCard.attendanceCount, "", "", bytesToHex(virtualCard.encryptedInfo));
+                    virtualCard.adminLocked || virtualCard.pinTriesRemaining == 0,
+                    virtualCard.trainingScore, virtualCard.attendanceCount,
+                    "", "", bytesToHex(virtualCard.encryptedInfo));
         }
     }
 
@@ -669,6 +681,7 @@ public class BridgeServer {
         final String adminPuk = "88888888";
         int pinTriesRemaining = 3;
         boolean pinValidated = false;
+        boolean adminLocked = false;
 
         byte[] encryptedInfo = new byte[0];
         int plainInfoLen = 0;
@@ -699,13 +712,28 @@ public class BridgeServer {
         }
 
         void loadSnapshot(String cardId, String infoUtf8, String pin) {
+            boolean sameCard = cardId != null && cardId.equalsIgnoreCase(this.activeCardId);
             this.activeCardId = cardId;
             this.activeInfoUtf8 = infoUtf8;
             this.currentPin = pin;
             this.pinTriesRemaining = 3;
             this.pinValidated = true;
-            this.avatarLength = 0;
+            this.adminLocked = false;
+            if (!sameCard) {
+                this.avatarLength = 0;
+            }
             encryptAndStoreInfo(infoUtf8.getBytes(StandardCharsets.UTF_8));
+        }
+
+        /**
+         * Restores the persistent PUK lock state when a card is mounted on the virtual reader.
+         */
+        void applyLockState(boolean locked) {
+            this.adminLocked = locked;
+            this.pinValidated = !locked;
+            if (locked) {
+                this.pinTriesRemaining = 0;
+            }
         }
 
         private void encryptAndStoreInfo(byte[] plain) {
@@ -754,7 +782,7 @@ public class BridgeServer {
             try {
                 switch (ins) {
                     case 0x10: {
-                        if (pinTriesRemaining == 0) return swOnly(0x6983);
+                        if (adminLocked || pinTriesRemaining == 0) return swOnly(0x6983);
                         String inputPin = new String(cdata, StandardCharsets.UTF_8);
                         if (currentPin.equals(inputPin)) {
                             pinTriesRemaining = 3;
@@ -787,10 +815,20 @@ public class BridgeServer {
                     case 0x12: {
                         String puk = new String(cdata, StandardCharsets.UTF_8);
                         if (!adminPuk.equals(puk)) return swOnly(0x6300);
-                        pinTriesRemaining = 3;
-                        currentPin = "123456";
-                        pinValidated = true;
-                        DatabaseManager.unblockCardByPuk(activeCardId);
+                        if (p1 == 0x01) {
+                            // P1=01: Admin PUK locks the card until a P1=00 unblock is sent
+                            adminLocked = true;
+                            pinTriesRemaining = 0;
+                            pinValidated = false;
+                            DatabaseManager.updateCardLockState(activeCardId, true);
+                        } else {
+                            // P1=00: Admin PUK unblocks and restores the default PIN
+                            adminLocked = false;
+                            pinTriesRemaining = 3;
+                            currentPin = "123456";
+                            pinValidated = true;
+                            DatabaseManager.unblockCardByPuk(activeCardId);
+                        }
                         return swOnly(0x9000);
                     }
                     case 0x13: {
@@ -816,8 +854,7 @@ public class BridgeServer {
                         return withSw(sig.sign(), 0x9000);
                     }
                     case 0x20: {
-                        if (!pinValidated) return swOnly(0x6982);
-                        avatarLength = 0;
+                        if (!pinValidated || adminLocked) return swOnly(0x6982);
                         encryptAndStoreInfo(cdata);
                         syncActiveCardInfoToDatabase();
                         tapEventId = System.currentTimeMillis();

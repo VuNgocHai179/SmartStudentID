@@ -1,9 +1,13 @@
 package com.example.smartstudentid.ui.admin;
 
+import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -11,10 +15,16 @@ import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.PickVisualMediaRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -33,6 +43,7 @@ import com.example.smartstudentid.security.EncryptedCacheManager;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.textfield.TextInputLayout;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -49,7 +60,8 @@ import java.util.Locale;
  *    into the Server's `cards` table (`POST /api/cards`).
  * 2. Unblock Card by Admin PUK: Sends 8-digit PUK (INS 0x12) to invoke OwnerPIN.resetAndUnblock()
  *    and updates the Server's `cards` table (`POST /api/cards/unblock`).
- * 3. Virtual Card Switcher: Activates any issued student card on the JCIDE reader in < 50ms.
+ * 3. Card Action Sheet: Tapping an issued card opens 3 actions (edit student info, unlock with PUK,
+ *    lock with PUK). The card is mounted on the reader automatically inside each action.
  * 4. Academic & Library Summary: Queries `cards`, `attendance_logs`, and `book_loans` from Server SQLite.
  */
 public class AdminDashboardActivity extends BaseSecureActivity {
@@ -59,13 +71,20 @@ public class AdminDashboardActivity extends BaseSecureActivity {
     private EditText etIssueFullName;
     private EditText etIssueDob;
     private AutoCompleteTextView actvIssueDepartment;
-    private EditText etAdminPuk;
     private TextView tvIssueCardLog;
-    private TextView tvPukStatus;
-    private TextView tvTargetUnblockCard;
+    private TextView tvCardActionStatus;
     private TextView tvIssuedCardsCount;
     private RecyclerView rvIssuedCards;
-    private String selectedUnblockStudentId = "";
+
+    private ImageView ivIssueAvatarPreview;
+    private TextView tvIssueAvatarHint;
+    private byte[] pendingIssueAvatarWebp;
+    private boolean issueAvatarProcessing;
+    private Uri pendingCameraUri;
+    private ActivityResultLauncher<PickVisualMediaRequest> pickIssueAvatarLauncher;
+    private ActivityResultLauncher<Uri> takeIssuePhotoLauncher;
+
+    private static final String CAMERA_CAPTURE_FILE = "issue_avatar_capture.jpg";
 
     private TabLayout tabLayoutAdmin;
     private View scrollTabManageCards;
@@ -78,6 +97,20 @@ public class AdminDashboardActivity extends BaseSecureActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Register the photo pickers before the activity reaches STARTED
+        pickIssueAvatarLauncher = registerForActivityResult(
+                new ActivityResultContracts.PickVisualMedia(),
+                uri -> {
+                    if (uri != null) prepareIssueAvatar(uri);
+                });
+        takeIssuePhotoLauncher = registerForActivityResult(
+                new ActivityResultContracts.TakePicture(),
+                success -> {
+                    if (Boolean.TRUE.equals(success) && pendingCameraUri != null) {
+                        prepareIssueAvatar(pendingCameraUri);
+                    }
+                });
 
         // Security check: Verify active admin session from SQLite authentication
         if (!AdminSessionManager.getInstance(this).isLoggedIn()) {
@@ -123,12 +156,17 @@ public class AdminDashboardActivity extends BaseSecureActivity {
         actvIssueDepartment.setAdapter(deptAdapter);
         actvIssueDepartment.setText(departments[0], false);
 
-        etAdminPuk = findViewById(R.id.etAdminPuk);
         tvIssueCardLog = findViewById(R.id.tvIssueCardLog);
-        tvPukStatus = findViewById(R.id.tvPukStatus);
-        tvTargetUnblockCard = findViewById(R.id.tvTargetUnblockCard);
+        tvCardActionStatus = findViewById(R.id.tvCardActionStatus);
         tvIssuedCardsCount = findViewById(R.id.tvIssuedCardsCount);
         rvIssuedCards = findViewById(R.id.rvIssuedCards);
+
+        ivIssueAvatarPreview = findViewById(R.id.ivIssueAvatarPreview);
+        tvIssueAvatarHint = findViewById(R.id.tvIssueAvatarHint);
+        Button btnPickIssueAvatar = findViewById(R.id.btnPickIssueAvatar);
+        if (btnPickIssueAvatar != null) {
+            btnPickIssueAvatar.setOnClickListener(v -> showIssueAvatarSourceDialog());
+        }
 
         TextView tvAdminIdentitySubtitle = findViewById(R.id.tvAdminIdentitySubtitle);
         if (tvAdminIdentitySubtitle != null) {
@@ -138,7 +176,6 @@ public class AdminDashboardActivity extends BaseSecureActivity {
 
         Button btnBackToLogin = findViewById(R.id.btnBackToLogin);
         Button btnIssueNewCard = findViewById(R.id.btnIssueNewCard);
-        Button btnUnblockByPuk = findViewById(R.id.btnUnblockByPuk);
 
         tabLayoutAdmin = findViewById(R.id.tabLayoutAdmin);
         scrollTabManageCards = findViewById(R.id.scrollTabManageCards);
@@ -171,7 +208,6 @@ public class AdminDashboardActivity extends BaseSecureActivity {
             finish();
         });
         btnIssueNewCard.setOnClickListener(v -> handleIssueNewCard());
-        btnUnblockByPuk.setOnClickListener(v -> handleUnblockByPuk());
     }
 
     private void setupRecyclerView() {
@@ -211,36 +247,6 @@ public class AdminDashboardActivity extends BaseSecureActivity {
             issuedCards.addAll(snapshot.cards);
             adapter.notifyDataSetChanged();
             updateIssuedCardsCount();
-
-            // Auto-select locked card or maintain selected card for unblocking
-            StudentCardRecord targetCard = null;
-            if (selectedUnblockStudentId != null && !selectedUnblockStudentId.isEmpty()) {
-                for (StudentCardRecord c : issuedCards) {
-                    if (c.getStudentId().equalsIgnoreCase(selectedUnblockStudentId)) {
-                        targetCard = c;
-                        break;
-                    }
-                }
-            }
-            if (targetCard == null) {
-                for (StudentCardRecord c : issuedCards) {
-                    if (c.isCardLocked()) {
-                        targetCard = c;
-                        break;
-                    }
-                }
-            }
-            if (targetCard == null && !issuedCards.isEmpty()) {
-                targetCard = issuedCards.get(0);
-            }
-            if (targetCard != null) {
-                selectedUnblockStudentId = targetCard.getStudentId();
-                if (tvTargetUnblockCard != null) {
-                    tvTargetUnblockCard.setText("Thẻ đang chọn để mở khóa: " + targetCard.getFullName()
-                            + " (" + targetCard.getStudentId() + ")"
-                            + (targetCard.isCardLocked() ? " [Đang khóa PIN]" : ""));
-                }
-            }
         });
     }
 
@@ -301,6 +307,103 @@ public class AdminDashboardActivity extends BaseSecureActivity {
     }
 
     /**
+     * Lets the admin pick the new card's portrait from the gallery or capture it with the camera.
+     */
+    private void showIssueAvatarSourceDialog() {
+        String[] options = new String[]{"Chọn ảnh từ thư viện", "Chụp ảnh mới"};
+        new AlertDialog.Builder(this)
+                .setTitle("Ảnh chân dung thẻ sinh viên")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        pickIssueAvatarLauncher.launch(new PickVisualMediaRequest.Builder()
+                                .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
+                                .build());
+                    } else {
+                        launchIssueCameraCapture();
+                    }
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+
+    private void launchIssueCameraCapture() {
+        try {
+            File captureFile = new File(getCacheDir(), CAMERA_CAPTURE_FILE);
+            if (captureFile.exists() && !captureFile.delete()) {
+                Toast.makeText(this, "Không thể tạo tệp ảnh tạm!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            pendingCameraUri = FileProvider.getUriForFile(this,
+                    getPackageName() + ".fileprovider", captureFile);
+            takeIssuePhotoLauncher.launch(pendingCameraUri);
+        } catch (Exception e) {
+            Toast.makeText(this, "Không mở được camera: " + e.getMessage(),
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Downsamples and compresses the chosen portrait right away so issuing the card stays fast.
+     */
+    private void prepareIssueAvatar(Uri uri) {
+        if (uri == null) return;
+        issueAvatarProcessing = true;
+        if (tvIssueCardLog != null) {
+            tvIssueCardLog.setVisibility(View.VISIBLE);
+            tvIssueCardLog.setText("Đang xử lý ảnh: Resize 150×150 → WebP 75%...");
+        }
+
+        ApduThreadPool.getInstance().execute(
+                () -> ImageOptimizer.decodeAndCompressAvatar(getApplicationContext(), uri),
+                (webpBytes, mainBlockedMs, totalMs) -> {
+                    issueAvatarProcessing = false;
+                    if (isFinishing() || isDestroyed()) return;
+                    if (webpBytes == null || webpBytes.length == 0) {
+                        pendingIssueAvatarWebp = null;
+                        if (tvIssueCardLog != null) {
+                            tvIssueCardLog.setText("❌ Không đọc được ảnh đã chọn. Vui lòng chọn ảnh khác.");
+                        }
+                        Toast.makeText(this, "Không thể giải mã ảnh đã chọn!",
+                                Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    pendingIssueAvatarWebp = webpBytes;
+                    Bitmap preview = BitmapFactory.decodeByteArray(webpBytes, 0, webpBytes.length);
+                    if (ivIssueAvatarPreview != null && preview != null) {
+                        ivIssueAvatarPreview.setPadding(0, 0, 0, 0);
+                        ivIssueAvatarPreview.setImageTintList(null);
+                        ivIssueAvatarPreview.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                        ivIssueAvatarPreview.setImageBitmap(preview);
+                    }
+                    if (tvIssueAvatarHint != null) {
+                        tvIssueAvatarHint.setText(String.format(Locale.US,
+                                "WebP %.1f KB • %d gói APDU (240 B)",
+                                webpBytes.length / 1024.0,
+                                ImageOptimizer.calculateApduPacketCount(webpBytes.length)));
+                    }
+                    if (tvIssueCardLog != null) {
+                        tvIssueCardLog.setText(String.format(Locale.US,
+                                "✓ Đã nạp ảnh WebP %.1f KB sẵn sàng ghi lên thẻ.",
+                                webpBytes.length / 1024.0));
+                    }
+                });
+    }
+
+    private void resetIssueAvatarPreview() {
+        if (ivIssueAvatarPreview == null) return;
+        int pad = Math.round(18 * getResources().getDisplayMetrics().density);
+        ivIssueAvatarPreview.setImageTintList(android.content.res.ColorStateList.valueOf(
+                getColor(R.color.slate_400)));
+        ivIssueAvatarPreview.setImageResource(R.drawable.ic_person);
+        ivIssueAvatarPreview.setPadding(pad, pad, pad, pad);
+        ivIssueAvatarPreview.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        if (tvIssueAvatarHint != null) {
+            tvIssueAvatarHint.setText("Tự động Resize 150×150 → WebP 75% (~3.5 KB)");
+        }
+    }
+
+    /**
      * Issues a new student smart card asynchronously and stores it in Server SQLite (`smartcard.db`).
      */
     private void handleIssueNewCard() {
@@ -309,6 +412,12 @@ public class AdminDashboardActivity extends BaseSecureActivity {
         String fullName = etIssueFullName.getText().toString().trim();
         String dob = etIssueDob.getText().toString().trim();
         String dept = actvIssueDepartment.getText().toString().trim();
+
+        if (issueAvatarProcessing) {
+            Toast.makeText(this, "Ảnh chân dung đang được xử lý, vui lòng đợi trong giây lát!",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
 
         // 1. Strict validation: Student ID
         if (studentId.isEmpty()) {
@@ -364,6 +473,7 @@ public class AdminDashboardActivity extends BaseSecureActivity {
         StudentCardRecord newCard = new StudentCardRecord(
                 studentId, fullName, dob, className, dept, "123456", false, 85, 0
         );
+        final byte[] selectedPhoto = pendingIssueAvatarWebp;
 
         ApduThreadPool.getInstance().execute(() -> {
             ApduClient client = ApduClient.getInstance();
@@ -389,12 +499,15 @@ public class AdminDashboardActivity extends BaseSecureActivity {
             newCard.setPublicKeyModulusHex(ApduCommands.bytesToHex(modResp.getData()));
             newCard.setPublicKeyExponentHex(ApduCommands.bytesToHex(expResp.getData()));
 
-            // 4. Downsample portrait to 150x150px, compress to WebP 75% (~3.5KB), and upload in APDU chunks (INS 0x22)
-            String initials = fullName.length() >= 2 ? fullName.substring(0, 2).toUpperCase() : "SV";
-            Bitmap avatarBmp = ImageOptimizer.generateSampleStudentAvatar(initials, 150);
-            byte[] webpBytes = ImageOptimizer.compressToOptimizedWebP(avatarBmp);
+            // 4. Use the admin-picked portrait when available; otherwise generate a placeholder
+            byte[] webpBytes = selectedPhoto;
+            if (webpBytes == null || webpBytes.length == 0) {
+                String initials = fullName.length() >= 2 ? fullName.substring(0, 2).toUpperCase() : "SV";
+                Bitmap avatarBmp = ImageOptimizer.generateSampleStudentAvatar(initials, 150);
+                webpBytes = ImageOptimizer.compressToOptimizedWebP(avatarBmp);
+                avatarBmp.recycle();
+            }
             int packets = client.uploadAvatarInChunks(webpBytes);
-            avatarBmp.recycle();
 
             // 5. Persist new card record into Server SQLite (`smartcard.db`)
             client.syncCardToServerDb(newCard);
@@ -404,6 +517,9 @@ public class AdminDashboardActivity extends BaseSecureActivity {
         }, (summary, mainBlockedMs, totalMs) -> {
             cacheManager.saveStudentProfile(newCard);
             loadCentralDatabaseFromServer();
+
+            pendingIssueAvatarWebp = null;
+            resetIssueAvatarPreview();
 
             tvIssueCardLog.setVisibility(View.VISIBLE);
             tvIssueCardLog.setText("✓ Đã phát hành thẻ cho " + newCard.getFullName());
@@ -427,47 +543,304 @@ public class AdminDashboardActivity extends BaseSecureActivity {
         });
     }
 
-    /**
-     * Unblocks a PIN-locked card using the 8-digit Admin PUK (INS 0x12 - CN 1.3) and updates Server SQLite.
-     * Default Admin PUK is 88888888. Only unblocks the selected/active card.
-     */
-    private void handleUnblockByPuk() {
-        String puk = etAdminPuk.getText() != null ? etAdminPuk.getText().toString().trim() : "";
-        if (puk.isEmpty()) {
-            puk = "88888888";
-            etAdminPuk.setText(puk);
-        }
-        if (puk.length() != 8) {
-            Toast.makeText(this, "Mã PUK của Admin phải gồm đúng 8 chữ số (mặc định: 88888888)!", Toast.LENGTH_SHORT).show();
-            return;
-        }
+    private void setCardActionStatus(String message, boolean success) {
+        if (tvCardActionStatus == null) return;
+        tvCardActionStatus.setVisibility(View.VISIBLE);
+        tvCardActionStatus.setText(message);
+        tvCardActionStatus.setTextColor(success ? 0xFF059669 : 0xFFDC2626);
+    }
 
-        final String finalPuk = puk;
-        final String targetStudentId = selectedUnblockStudentId;
+    private String resolveCardPin(StudentCardRecord card) {
+        if (card != null && card.getDefaultPin() != null && !card.getDefaultPin().isEmpty()) {
+            return card.getDefaultPin();
+        }
+        return "123456";
+    }
+
+    private EditText createCardDialogInput(String hint, String value) {
+        EditText et = new EditText(this);
+        et.setHint(hint);
+        et.setText(value != null ? value : "");
+        et.setTextSize(14f);
+        et.setMaxLines(1);
+        return et;
+    }
+
+    /**
+     * Tapping a card in the list opens the three admin actions: edit info, unlock with PUK, lock with PUK.
+     * Mounting the card ("Gắn thẻ") is performed automatically inside each action.
+     */
+    private void showCardActionsDialog(StudentCardRecord item) {
+        String title = item.getFullName() + " • " + item.getStudentId()
+                + (item.isCardLocked() ? " [Đang khóa]" : "");
+        String[] actions = new String[]{
+                "Sửa thông tin sinh viên",
+                "Mở thẻ bằng PUK quản trị",
+                "Khóa thẻ bằng PUK quản trị"
+        };
+
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setItems(actions, (dialog, which) -> {
+                    if (which == 0) {
+                        if (item.isCardLocked()) {
+                            setCardActionStatus("❌ Thẻ đang bị khóa. Hãy chọn \"Mở thẻ bằng PUK\" trước khi sửa thông tin.", false);
+                            Toast.makeText(this, "Thẻ đang khóa, cần mở bằng PUK trước!",
+                                    Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        showEditStudentInfoDialog(item);
+                    } else {
+                        promptPukDialog(item, which == 2);
+                    }
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+
+    /**
+     * Edits the student identity fields and writes them back to the selected card (INS 0x20).
+     */
+    private void showEditStudentInfoDialog(StudentCardRecord item) {
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        container.setPadding(pad, pad / 2, pad, 0);
+
+        EditText etName = createCardDialogInput("Họ và tên", item.getFullName());
+        EditText etDob = createCardDialogInput("Ngày sinh (dd/MM/yyyy)", item.getDob());
+        EditText etClass = createCardDialogInput("Lớp", item.getClassName());
+        EditText etDept = createCardDialogInput("Khoa / Viện", item.getDepartment());
+        container.addView(etName);
+        container.addView(etDob);
+        container.addView(etClass);
+        container.addView(etDept);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Sửa thông tin • " + item.getStudentId())
+                .setView(container)
+                .setPositiveButton("Lưu lên thẻ", null)
+                .setNegativeButton("Hủy", null)
+                .create();
+
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String fullName = etName.getText().toString().trim();
+                    String dob = etDob.getText().toString().trim();
+                    String className = etClass.getText().toString().trim();
+                    String dept = etDept.getText().toString().trim();
+
+                    if (!validateCardInfoInputs(fullName, dob, className, dept)) {
+                        return;
+                    }
+                    dialog.dismiss();
+                    saveStudentInfoToCard(item, fullName, dob, className, dept);
+                }));
+        dialog.show();
+    }
+
+    private boolean validateCardInfoInputs(String fullName, String dob, String className, String dept) {
+        if (fullName.length() < 2 || fullName.matches(".*\\d.*") || fullName.contains("|")) {
+            Toast.makeText(this, "Họ tên không hợp lệ (tối thiểu 2 ký tự, không chứa số hoặc '|')!",
+                    Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        if (!isValidDateOfBirth(dob)) {
+            Toast.makeText(this, "Ngày sinh không hợp lệ (dd/MM/yyyy, độ tuổi 16-70)!",
+                    Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        if (className.isEmpty() || className.contains("|")) {
+            Toast.makeText(this, "Tên lớp không hợp lệ!", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        if (dept.isEmpty() || dept.contains("|")) {
+            Toast.makeText(this, "Khoa / Viện không hợp lệ!", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Mounts the selected virtual card, verifies its PIN, encrypts the updated profile (INS 0x20)
+     * and synchronizes the new values into Server SQLite.
+     */
+    private void saveStudentInfoToCard(StudentCardRecord original, String fullName, String dob,
+                                       String className, String dept) {
+        setCardActionStatus("Đang nạp thẻ " + original.getStudentId() + " và ghi hồ sơ mới...", true);
+        final String pin = resolveCardPin(original);
+        final String infoUtf8 = original.getStudentId() + "|" + fullName + "|" + dob
+                + "|" + className + "|" + dept;
+
         ApduThreadPool.getInstance().execute(() -> {
             ApduClient client = ApduClient.getInstance();
-            CardResponse resp = client.sendApdu(
-                    ApduCommands.CLA_SMART_STUDENT,
-                    ApduCommands.INS_UNBLOCK_CARD_PUK,
-                    (byte) 0x00,
-                    (byte) 0x00,
-                    finalPuk.getBytes(StandardCharsets.UTF_8)
-            );
-            if (resp.isSuccess()) {
-                client.syncUnblockCardOnServerDb(targetStudentId);
+            // "Gắn thẻ" is implicit: mount the selected card before writing to its EEPROM.
+            client.activateVirtualCard(original.getStudentId(), original.toPipeDelimitedString(), pin);
+            client.sendApdu(ApduCommands.CLA_ISO, ApduCommands.INS_SELECT,
+                    (byte) 0x04, (byte) 0x00, ApduCommands.APPLET_AID);
+
+            CardResponse verify = client.sendApdu(ApduCommands.CLA_SMART_STUDENT,
+                    ApduCommands.INS_VERIFY_PIN, (byte) 0x00, (byte) 0x00,
+                    pin.getBytes(StandardCharsets.UTF_8));
+            if (!verify.isSuccess()) {
+                return new CardInfoUpdateResult(false, verify, null);
             }
-            return resp;
-        }, (resp, mainBlockedMs, totalMs) -> {
-            tvPukStatus.setVisibility(View.VISIBLE);
-            if (resp.isSuccess()) {
+
+            CardResponse writeResp = client.sendApdu(ApduCommands.CLA_SMART_STUDENT,
+                    ApduCommands.INS_SET_STUDENT_INFO, (byte) 0x00, (byte) 0x00,
+                    infoUtf8.getBytes(StandardCharsets.UTF_8));
+            if (!writeResp.isSuccess()) {
+                return new CardInfoUpdateResult(false, writeResp, null);
+            }
+
+            StudentCardRecord updated = new StudentCardRecord(original.getStudentId(), fullName,
+                    dob, className, dept, pin, original.isCardLocked(),
+                    original.getTrainingScore(), original.getAttendanceCount());
+            updated.setPublicKeyModulusHex(original.getPublicKeyModulusHex());
+            updated.setPublicKeyExponentHex(original.getPublicKeyExponentHex());
+            updated.setLabAccessGranted(original.isLabAccessGranted());
+            client.syncCardToServerDb(updated);
+            return new CardInfoUpdateResult(true, writeResp, updated);
+        }, (result, mainBlockedMs, totalMs) -> {
+            if (result.success) {
+                setCardActionStatus("✓ Đã cập nhật thông tin thẻ " + original.getStudentId()
+                        + " trên chip và CSDL trung tâm.", true);
+                Toast.makeText(this, "Đã lưu thông tin sinh viên lên thẻ!",
+                        Toast.LENGTH_SHORT).show();
                 loadCentralDatabaseFromServer();
-                String targetDisplay = !targetStudentId.isEmpty() ? (" [" + targetStudentId + "]") : "";
-                tvPukStatus.setText("✓ Đã mở khóa thẻ" + targetDisplay + " thành công. PIN mặc định: 123456");
-                Toast.makeText(this, "Đã mở khóa thẻ" + targetDisplay + "! PIN mặc định: 123456", Toast.LENGTH_SHORT).show();
             } else {
-                tvPukStatus.setText("❌ Mở khóa thất bại (Kiểm tra lại thẻ đang gắn hoặc mã PUK)");
+                String sw = result.response != null ? result.response.getSwHex() : "----";
+                setCardActionStatus("❌ Ghi thông tin thất bại (SW=" + sw
+                        + "). Kiểm tra thẻ đang khóa hoặc PIN đã thay đổi.", false);
+                Toast.makeText(this, "Không ghi được thông tin lên thẻ!",
+                        Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    /**
+     * Asks for the 8-digit Admin PUK before locking or unlocking the selected card.
+     */
+    private void promptPukDialog(StudentCardRecord item, boolean lock) {
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        container.setPadding(pad, pad / 2, pad, 0);
+
+        TextView hint = new TextView(this);
+        hint.setText(lock
+                ? "Nhập PUK quản trị để khóa thẻ. Sau khi khóa, mọi thao tác PIN đều bị từ chối."
+                : "Nhập PUK quản trị để mở thẻ. PIN sẽ được khôi phục về mặc định 123456.");
+        hint.setTextSize(12f);
+        hint.setTextColor(0xFF64748B);
+        hint.setPadding(0, 0, 0, (int) (8 * getResources().getDisplayMetrics().density));
+
+        EditText etPuk = createCardDialogInput("Mã PUK quản trị (8 chữ số)", "");
+        etPuk.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        container.addView(hint);
+        container.addView(etPuk);
+
+        String actionLabel = lock ? "Khóa thẻ" : "Mở thẻ";
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(actionLabel + " • " + item.getStudentId())
+                .setView(container)
+                .setPositiveButton(actionLabel, null)
+                .setNegativeButton("Hủy", null)
+                .create();
+
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String puk = etPuk.getText().toString().trim();
+                    if (puk.length() != 8 || !puk.matches("\\d{8}")) {
+                        etPuk.setError("Mã PUK phải gồm đúng 8 chữ số!");
+                        return;
+                    }
+                    dialog.dismiss();
+                    executePukAction(item, puk, lock);
+                }));
+        dialog.show();
+    }
+
+    /**
+     * Mounts the target card and sends INS 0x12 with P1=01 (lock) or P1=00 (unlock),
+     * then persists the new lock state in Server SQLite.
+     */
+    private void executePukAction(StudentCardRecord item, String puk, boolean lock) {
+        setCardActionStatus((lock ? "Đang khóa thẻ " : "Đang mở thẻ ")
+                + item.getStudentId() + " bằng PUK quản trị...", true);
+        final String pin = resolveCardPin(item);
+
+        ApduThreadPool.getInstance().execute(() -> {
+            ApduClient client = ApduClient.getInstance();
+            // An outdated BridgeServer ignores P1 on INS 0x12 and would report a false success.
+            if (client.fetchBridgeApiVersion() == 1) {
+                return new PukActionResult(null, true);
+            }
+
+            client.activateVirtualCard(item.getStudentId(), item.toPipeDelimitedString(), pin);
+            client.sendApdu(ApduCommands.CLA_ISO, ApduCommands.INS_SELECT,
+                    (byte) 0x04, (byte) 0x00, ApduCommands.APPLET_AID);
+
+            CardResponse resp = client.sendPukAdminAction(puk, lock);
+            if (resp.isSuccess()) {
+                // Sync the FULL card record (not a partial lock-only payload): this keeps the
+                // owner profile intact even when an older BridgeServer is still running.
+                item.setCardLocked(lock);
+                if (!lock) {
+                    item.setDefaultPin("123456");
+                }
+                client.syncCardToServerDb(item);
+            }
+            return new PukActionResult(resp, false);
+        }, (result, mainBlockedMs, totalMs) -> {
+            if (result.outdatedServer) {
+                setCardActionStatus("⚠ BridgeServer đang chạy bản cũ (chưa hỗ trợ khóa thẻ bằng PUK). "
+                        + "Hãy dừng và chạy lại bridge-server/start-bridge-server.bat rồi thử lại.", false);
+                Toast.makeText(this, "BridgeServer cần được khởi động lại để cập nhật!",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            CardResponse resp = result.response;
+            if (resp != null && resp.isSuccess()) {
+                setCardActionStatus((lock ? "✓ Đã khóa thẻ " : "✓ Đã mở thẻ ")
+                        + item.getStudentId() + " bằng PUK quản trị."
+                        + (lock ? "" : " PIN được khôi phục về 123456."), true);
+                Toast.makeText(this, lock ? "Đã khóa thẻ!" : "Đã mở khóa thẻ!",
+                        Toast.LENGTH_SHORT).show();
+                loadCentralDatabaseFromServer();
+            } else if (resp != null && resp.getSw() == 0x6300) {
+                setCardActionStatus("❌ Mã PUK quản trị không đúng.", false);
+                Toast.makeText(this, "Sai mã PUK quản trị!", Toast.LENGTH_SHORT).show();
+            } else {
+                String sw = resp != null ? resp.getSwHex() : "----";
+                setCardActionStatus("❌ Thao tác thất bại (SW=" + sw + ").", false);
+                Toast.makeText(this, "Thao tác thất bại (SW=" + sw + ")!",
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private static class PukActionResult {
+        final CardResponse response;
+        final boolean outdatedServer;
+
+        PukActionResult(CardResponse response, boolean outdatedServer) {
+            this.response = response;
+            this.outdatedServer = outdatedServer;
+        }
+    }
+
+    private static class CardInfoUpdateResult {
+        final boolean success;
+        final CardResponse response;
+        final StudentCardRecord updated;
+
+        CardInfoUpdateResult(boolean success, CardResponse response, StudentCardRecord updated) {
+            this.success = success;
+            this.response = response;
+            this.updated = updated;
+        }
     }
 
     private String initialBadge(String fullName) {
@@ -521,30 +894,7 @@ public class AdminDashboardActivity extends BaseSecureActivity {
                 holder.tvStatus.setBackgroundResource(R.drawable.bg_pill_green);
             }
 
-            holder.btnActivate.setOnClickListener(v -> {
-                selectedUnblockStudentId = item.getStudentId();
-                if (tvTargetUnblockCard != null) {
-                    tvTargetUnblockCard.setText("Thẻ đang chọn để mở khóa: " + item.getFullName()
-                            + " (" + item.getStudentId() + ")"
-                            + (item.isCardLocked() ? " [Đang khóa PIN]" : ""));
-                }
-                long startNs = System.nanoTime();
-                ApduThreadPool.getInstance().execute(() -> {
-                    ApduClient.getInstance().activateVirtualCard(
-                            item.getStudentId(),
-                            item.toPipeDelimitedString(),
-                            item.getDefaultPin() != null ? item.getDefaultPin() : "123456"
-                    );
-                    return true;
-                }, (ok, mainBlockedMs, totalMs) -> {
-                    long switchMs = Math.max(1, (System.nanoTime() - startNs) / 1_000_000);
-                    cacheManager.saveStudentProfile(item);
-                    Toast.makeText(AdminDashboardActivity.this,
-                            "Đã gắn thẻ " + item.getStudentId() + " (" + item.getFullName()
-                                    + ") vào JCIDE trong " + switchMs + " ms!",
-                            Toast.LENGTH_SHORT).show();
-                });
-            });
+            holder.itemView.setOnClickListener(v -> showCardActionsDialog(item));
         }
 
         @Override
@@ -557,7 +907,6 @@ public class AdminDashboardActivity extends BaseSecureActivity {
             final TextView tvTitle;
             final TextView tvSub;
             final TextView tvStatus;
-            final Button btnActivate;
 
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
@@ -565,7 +914,6 @@ public class AdminDashboardActivity extends BaseSecureActivity {
                 tvTitle = itemView.findViewById(R.id.tvItemStudentTitle);
                 tvSub = itemView.findViewById(R.id.tvItemStudentSub);
                 tvStatus = itemView.findViewById(R.id.tvItemCardStatus);
-                btnActivate = itemView.findViewById(R.id.btnActivateVirtualCard);
             }
         }
     }

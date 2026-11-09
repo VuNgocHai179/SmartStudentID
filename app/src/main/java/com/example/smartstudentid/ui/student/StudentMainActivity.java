@@ -179,8 +179,10 @@ public class StudentMainActivity extends BaseSecureActivity {
         boolean fromCache = getIntent().getBooleanExtra("FROM_CACHE", true);
         if (fromCache) {
             tvHeaderPerfBadge.setText("● Phiên PIN bảo mật • " + loadMs + " ms");
+        tvHeaderPerfBadge.setVisibility(android.view.View.GONE);
         } else {
             tvHeaderPerfBadge.setText("● Xác thực RSA-1024 • " + loadMs + " ms");
+        tvHeaderPerfBadge.setVisibility(android.view.View.GONE);
         }
     }
 }

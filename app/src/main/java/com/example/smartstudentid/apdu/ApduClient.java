@@ -168,6 +168,8 @@ public class ApduClient {
 
     /**
      * Uploads an avatar byte array across multiple APDU chunks (INS 0x22).
+     *
+     * @return the number of APDU packets sent, or -1 when the card rejects a chunk.
      */
     public int uploadAvatarInChunks(byte[] avatarBytes) {
         if (avatarBytes == null || avatarBytes.length == 0) {
@@ -180,7 +182,11 @@ public class ApduClient {
             byte[] chunk = Arrays.copyOfRange(avatarBytes, offset, offset + len);
             byte p1 = (byte) ((offset >> 8) & 0xFF);
             byte p2 = (byte) (offset & 0xFF);
-            sendApdu(ApduCommands.CLA_SMART_STUDENT, ApduCommands.INS_UPLOAD_AVATAR_CHUNK, p1, p2, chunk);
+            CardResponse resp = sendApdu(ApduCommands.CLA_SMART_STUDENT,
+                    ApduCommands.INS_UPLOAD_AVATAR_CHUNK, p1, p2, chunk);
+            if (!resp.isSuccess()) {
+                return -1;
+            }
             offset += len;
             packetCount++;
         }
@@ -220,7 +226,7 @@ public class ApduClient {
     public void activateVirtualCard(String studentId, String pipeDelimitedInfo, String pin) {
         localFallback.loadSnapshot(studentId, pipeDelimitedInfo, pin);
         String json = String.format("{\"studentId\":\"%s\",\"studentInfo\":\"%s\",\"pin\":\"%s\"}",
-                studentId, pipeDelimitedInfo, pin);
+                escapeJsonString(studentId), escapeJsonString(pipeDelimitedInfo), escapeJsonString(pin));
         postJsonSilently("/api/activate-card", json);
     }
 
@@ -245,8 +251,19 @@ public class ApduClient {
     }
 
     public void syncUnblockCardOnServerDb(String studentId) {
-        String json = String.format("{\"studentId\":\"%s\"}", studentId != null ? studentId : "");
+        String json = String.format("{\"studentId\":\"%s\"}", escapeJsonString(studentId));
         postJsonSilently("/api/cards/unblock", json);
+    }
+
+    /**
+     * Sends the admin PUK to lock (P1=01) or unblock/reset (P1=00) the active card (INS 0x12).
+     */
+    public CardResponse sendPukAdminAction(String puk, boolean lock) {
+        return sendApdu(ApduCommands.CLA_SMART_STUDENT,
+                ApduCommands.INS_UNBLOCK_CARD_PUK,
+                lock ? ApduCommands.P1_PUK_LOCK : ApduCommands.P1_PUK_UNBLOCK,
+                (byte) 0x00,
+                puk != null ? puk.getBytes(StandardCharsets.UTF_8) : new byte[0]);
     }
 
     public void syncUnblockAllCardsOnServerDb() {
@@ -462,6 +479,21 @@ public class ApduClient {
     public String getActiveCardId() { return localFallback.activeCardId; }
     public String getActiveCardInfo() { return localFallback.activeInfoUtf8; }
 
+    /**
+     * Returns the BridgeServer API version (2+ supports admin PUK lock), 1 for an outdated
+     * server that predates the lock endpoint, or -1 when no server is reachable.
+     */
+    public int fetchBridgeApiVersion() {
+        String respText = getJsonSilently("/api/status");
+        if (respText == null || respText.isEmpty()) return -1;
+        try {
+            JsonObject obj = JsonParser.parseString(respText).getAsJsonObject();
+            return obj.has("apiVersion") ? obj.get("apiVersion").getAsInt() : 1;
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
     private long lastSeenTapEventId = -1L;
 
     /**
@@ -501,6 +533,7 @@ public class ApduClient {
         final String adminPuk = "88888888";
         int pinTriesRemaining = 3;
         boolean pinValidated = false;
+        boolean adminLocked = false;
 
         byte[] encryptedInfo = new byte[0];
         int plainInfoLen = 0;
@@ -531,12 +564,16 @@ public class ApduClient {
         }
 
         void loadSnapshot(String cardId, String infoUtf8, String pin) {
+            boolean sameCard = cardId != null && cardId.equalsIgnoreCase(this.activeCardId);
             this.activeCardId = cardId;
             this.activeInfoUtf8 = infoUtf8;
-            this.avatarLength = 0;
+            if (!sameCard) {
+                this.avatarLength = 0;
+            }
             this.currentPin = (pin != null && !pin.isEmpty()) ? pin : "123456";
             this.pinTriesRemaining = 3;
             this.pinValidated = true;
+            this.adminLocked = false;
             encryptAndStoreInfo(infoUtf8.getBytes(StandardCharsets.UTF_8));
         }
 
@@ -574,7 +611,7 @@ public class ApduClient {
             try {
                 switch (ins) {
                     case 0x10: {
-                        if (pinTriesRemaining == 0) return swOnly(0x6983);
+                        if (adminLocked || pinTriesRemaining == 0) return swOnly(0x6983);
                         String inputPin = new String(cdata, StandardCharsets.UTF_8);
                         if (currentPin.equals(inputPin)) {
                             pinTriesRemaining = 3;
@@ -601,9 +638,18 @@ public class ApduClient {
                     case 0x12: {
                         String puk = new String(cdata, StandardCharsets.UTF_8);
                         if (!adminPuk.equals(puk)) return swOnly(0x6300);
-                        pinTriesRemaining = 3;
-                        currentPin = "123456";
-                        pinValidated = true;
+                        if (p1 == 0x01) {
+                            // P1=01: Admin PUK locks the card (all PIN operations rejected)
+                            adminLocked = true;
+                            pinTriesRemaining = 0;
+                            pinValidated = false;
+                        } else {
+                            // P1=00: Admin PUK unblocks and restores the default PIN
+                            adminLocked = false;
+                            pinTriesRemaining = 3;
+                            currentPin = "123456";
+                            pinValidated = true;
+                        }
                         return swOnly(0x9000);
                     }
                     case 0x13: {

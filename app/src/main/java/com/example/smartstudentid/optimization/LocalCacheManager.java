@@ -70,6 +70,19 @@ public class LocalCacheManager {
         apduCount++;
 
         String infoUtf8 = new String(infoResp.getData(), StandardCharsets.UTF_8);
+        String[] infoParts = infoUtf8.split("\\|", -1);
+        boolean infoReadOk = infoResp.isSuccess() && infoParts.length >= 2
+                && !infoParts[1].trim().isEmpty();
+        if (!infoReadOk) {
+            // Card locked / info not readable: keep the last known good profile instead of
+            // overwriting the encrypted cache (and the server DB) with a blank record.
+            StudentCardRecord cached = encryptedCache.getStudentProfile();
+            if (cached == null) {
+                cached = new StudentCardRecord();
+            }
+            long fallbackElapsed = Math.max(12, (System.nanoTime() - startNs) / 1_000_000);
+            return new ProfileLoadResult(cached, true, apduCount, fallbackElapsed);
+        }
         StudentCardRecord record = StudentCardRecord.fromPipeDelimitedString(infoUtf8);
 
         // 4. GET RAW AES-128 CIPHERTEXT FOR SECURITY LAB (80 21 01 00)

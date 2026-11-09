@@ -5,6 +5,9 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="10dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
     app:cardBackgroundColor="@color/slate_50"
     app:cardCornerRadius="16dp"
     app:cardElevation="0dp"
@@ -74,15 +77,12 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnActivateVirtualCard"
-            style="@style/Widget.SmartID.Button.Soft"
-            android:layout_width="wrap_content"
-            android:layout_height="38dp"
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
             android:layout_marginStart="8dp"
-            android:minWidth="76dp"
-            android:text="Gắn thẻ"
-            android:textSize="12sp"
-            app:cornerRadius="12dp" />
+            android:contentDescription="Chạm để sửa thông tin, mở hoặc khóa thẻ"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="@color/slate_400" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -346,6 +346,12 @@ public class LoginPinActivity extends BaseSecureActivity {
                 return new LoginAttemptOutcome(false, pinResp, null);
             }
             LocalCacheManager.ProfileLoadResult loadResult = localCacheManager.fetchStudentProfileFromCard(pin);
+
+            // Fetch the portrait stored on THIS card so a previously cached student's photo never lingers.
+            byte[] avatarBytes = ApduClient.getInstance().downloadAvatarInChunks(true);
+            if (avatarBytes != null && avatarBytes.length > 0) {
+                encryptedCacheManager.saveAvatarBytes(avatarBytes);
+            }
             return new LoginAttemptOutcome(true, pinResp, loadResult);
         }, (outcome, mainBlockedMs, totalMs) -> {
             if (outcome.success && outcome.profileLoadResult != null) {

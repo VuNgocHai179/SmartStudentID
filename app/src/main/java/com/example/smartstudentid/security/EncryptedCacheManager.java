@@ -27,6 +27,7 @@ public class EncryptedCacheManager {
 
     private static final String KEY_STUDENT_PROFILE_SESSION = "student_profile_session";
     private static final String KEY_AVATAR_WEBP_BASE64 = "avatar_webp_base64";
+    private static final String KEY_AVATAR_OWNER_STUDENT_ID = "avatar_owner_student_id";
 
     private static EncryptedCacheManager instance;
     private final SharedPreferences securePrefs;
@@ -71,6 +72,12 @@ public class EncryptedCacheManager {
      */
     public void saveStudentProfile(StudentCardRecord record) {
         if (record == null) return;
+        // Never persist/sync a blank or partial record: locking a card makes GET INFO fail,
+        // and an empty payload must not overwrite the owner profile in cache or SQLite.
+        if (record.getStudentId() == null || record.getStudentId().trim().isEmpty()
+                || record.getFullName() == null || record.getFullName().trim().isEmpty()) {
+            return;
+        }
         securePrefs.edit().putString(KEY_STUDENT_PROFILE_SESSION, gson.toJson(record)).apply();
         ApduThreadPool.getInstance().execute(() -> {
             ApduClient.getInstance().syncCardToServerDb(record);
@@ -83,16 +90,35 @@ public class EncryptedCacheManager {
         if (raw == null || raw.isEmpty()) {
             return null;
         }
-        return gson.fromJson(raw, StudentCardRecord.class);
+        StudentCardRecord record = gson.fromJson(raw, StudentCardRecord.class);
+        // Ignore a blank/partial record left behind by a failed read while the card was locked.
+        if (record == null || record.getStudentId() == null || record.getStudentId().trim().isEmpty()
+                || record.getFullName() == null || record.getFullName().trim().isEmpty()) {
+            return null;
+        }
+        return record;
     }
 
     public void saveAvatarBytes(byte[] webpBytes) {
         if (webpBytes == null || webpBytes.length == 0) return;
         String b64 = Base64.encodeToString(webpBytes, Base64.NO_WRAP);
-        securePrefs.edit().putString(KEY_AVATAR_WEBP_BASE64, b64).apply();
+        SharedPreferences.Editor editor = securePrefs.edit().putString(KEY_AVATAR_WEBP_BASE64, b64);
+        StudentCardRecord profile = getStudentProfile();
+        if (profile != null && profile.getStudentId() != null && !profile.getStudentId().isEmpty()) {
+            editor.putString(KEY_AVATAR_OWNER_STUDENT_ID, profile.getStudentId());
+        }
+        editor.apply();
     }
 
     public byte[] getAvatarBytes() {
+        // Never show a portrait cached for a different card/student.
+        String ownerId = securePrefs.getString(KEY_AVATAR_OWNER_STUDENT_ID, null);
+        StudentCardRecord profile = getStudentProfile();
+        if (ownerId != null && profile != null && profile.getStudentId() != null
+                && !ownerId.equalsIgnoreCase(profile.getStudentId())) {
+            return null;
+        }
+
         String b64 = securePrefs.getString(KEY_AVATAR_WEBP_BASE64, null);
         if (b64 == null || b64.isEmpty()) {
             return null;
@@ -107,6 +133,7 @@ public class EncryptedCacheManager {
         securePrefs.edit()
                 .remove(KEY_STUDENT_PROFILE_SESSION)
                 .remove(KEY_AVATAR_WEBP_BASE64)
+                .remove(KEY_AVATAR_OWNER_STUDENT_ID)
                 .apply();
     }
 }

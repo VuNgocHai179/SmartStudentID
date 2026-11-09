@@ -209,110 +209,21 @@
                             android:layout_marginTop="12dp"
                             android:nestedScrollingEnabled="false"
                             android:overScrollMode="never" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- PUK UNBLOCK + ACADEMIC STATS -->
-                <com.google.android.material.card.MaterialCardView
-                    style="@style/Widget.SmartID.Card"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    app:cardCornerRadius="20dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-
-                            <LinearLayout
-                                android:layout_width="38dp"
-                                android:layout_height="38dp"
-                                android:background="@drawable/bg_icon_tile_amber"
-                                android:gravity="center">
-
-                                <ImageView
-                                    android:layout_width="19dp"
-                                    android:layout_height="19dp"
-                                    android:contentDescription="Mở khóa thẻ"
-                                    android:src="@drawable/ic_lock"
-                                    app:tint="@color/amber_600" />
-                            </LinearLayout>
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="12dp"
-                                android:layout_weight="1"
-                                android:text="Mở khóa thẻ bị khóa PIN"
-                                android:textColor="@color/slate_900"
-                                android:textSize="15sp"
-                                android:textStyle="bold" />
-                        </LinearLayout>
 
                         <TextView
-                            android:id="@+id/tvTargetUnblockCard"
+                            android:id="@+id/tvCardActionStatus"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:text="Thẻ đang chọn: Trần Thu Hà (CT070322)"
-                            android:textColor="@color/slate_600"
-                            android:textSize="12sp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="14dp"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-
-                            <com.google.android.material.textfield.TextInputLayout
-                                style="@style/Widget.SmartID.TextInputLayout"
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:hint="Mã PUK quản trị (88888888)"
-                                app:endIconMode="password_toggle">
-
-                                <com.google.android.material.textfield.TextInputEditText
-                                    android:id="@+id/etAdminPuk"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:inputType="numberPassword"
-                                    android:maxLength="8"
-                                    android:maxLines="1"
-                                    android:textColor="@color/slate_900"
-                                    android:textSize="14sp" />
-                            </com.google.android.material.textfield.TextInputLayout>
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnUnblockByPuk"
-                                style="@style/Widget.SmartID.Button.Primary"
-                                android:layout_width="wrap_content"
-                                android:layout_height="50dp"
-                                android:layout_marginStart="10dp"
-                                android:backgroundTint="@color/emerald_600"
-                                android:minWidth="96dp"
-                                android:text="Mở khóa"
-                                app:icon="@drawable/ic_lock" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:id="@+id/tvPukStatus"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="6dp"
+                            android:layout_marginTop="10dp"
+                            android:background="@drawable/bg_soft_panel"
+                            android:lineSpacingExtra="2dp"
+                            android:padding="10dp"
                             android:textAppearance="@style/TextAppearance.SmartID.Micro"
                             android:visibility="gone" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
+
+                <!-- Card actions are opened by tapping any card in the list above -->
 
             </LinearLayout>
         </ScrollView>
@@ -378,6 +289,69 @@
                                 android:textColor="@color/slate_900"
                                 android:textSize="16sp"
                                 android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <!-- Admin-picked portrait (gallery or camera) before writing to the card -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.card.MaterialCardView
+                                android:layout_width="76dp"
+                                android:layout_height="94dp"
+                                app:cardBackgroundColor="@color/slate_100"
+                                app:cardCornerRadius="14dp"
+                                app:cardElevation="0dp"
+                                app:strokeColor="@color/slate_200"
+                                app:strokeWidth="1dp">
+
+                                <ImageView
+                                    android:id="@+id/ivIssueAvatarPreview"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent"
+                                    android:contentDescription="Ảnh chân dung thẻ sinh viên"
+                                    android:padding="18dp"
+                                    android:scaleType="centerInside"
+                                    android:src="@drawable/ic_person"
+                                    app:tint="@color/slate_400" />
+                            </com.google.android.material.card.MaterialCardView>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="12dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Ảnh chân dung thẻ"
+                                    android:textColor="@color/slate_900"
+                                    android:textSize="13sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/tvIssueAvatarHint"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:text="Tự động Resize 150×150 → WebP 75% (~3.5 KB)"
+                                    android:textColor="@color/slate_500"
+                                    android:textSize="10sp" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnPickIssueAvatar"
+                                    style="@style/Widget.SmartID.Button.Soft"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="40dp"
+                                    android:layout_marginTop="8dp"
+                                    android:text="Chọn / Chụp ảnh"
+                                    app:icon="@drawable/ic_image" />
+                            </LinearLayout>
                         </LinearLayout>
 
                         <LinearLayout

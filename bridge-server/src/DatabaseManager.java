@@ -331,11 +331,11 @@ public class DatabaseManager {
                 + "public_key_modulus_hex, public_key_exponent_hex, raw_aes_ciphertext_hex, updated_at) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, CURRENT_TIMESTAMP) "
                 + "ON CONFLICT(student_id) DO UPDATE SET "
-                + "full_name = excluded.full_name, "
-                + "dob = excluded.dob, "
-                + "class_name = excluded.class_name, "
-                + "department = excluded.department, "
-                + "default_pin = excluded.default_pin, "
+                + "full_name = CASE WHEN excluded.full_name != '' THEN excluded.full_name ELSE cards.full_name END, "
+                + "dob = CASE WHEN excluded.dob != '' THEN excluded.dob ELSE cards.dob END, "
+                + "class_name = CASE WHEN excluded.class_name != '' THEN excluded.class_name ELSE cards.class_name END, "
+                + "department = CASE WHEN excluded.department != '' THEN excluded.department ELSE cards.department END, "
+                + "default_pin = CASE WHEN excluded.default_pin != '' THEN excluded.default_pin ELSE cards.default_pin END, "
                 + "card_locked = excluded.card_locked, "
                 + "training_score = excluded.training_score, "
                 + "attendance_count = excluded.attendance_count, "
@@ -368,6 +368,24 @@ public class DatabaseManager {
             return true;
         } catch (Exception e) {
             System.err.println("[SQLite DB] Error upserting card: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Checks whether a card is currently locked by the admin PUK or by 3 failed PIN attempts.
+     */
+    public static synchronized boolean isCardLocked(String studentId) {
+        if (studentId == null || studentId.trim().isEmpty()) return false;
+        String sql = "SELECT card_locked FROM cards WHERE student_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt("card_locked") != 0;
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error reading card lock state: " + e.getMessage());
             return false;
         }
     }

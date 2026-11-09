@@ -1,8 +1,10 @@
 package com.example.smartstudentid.ui.student;
 
 import android.app.AlertDialog;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.LayoutInflater;
@@ -14,8 +16,12 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.PickVisualMediaRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.FileProvider;
 import androidx.fragment.app.Fragment;
 
 import com.example.smartstudentid.R;
@@ -31,6 +37,7 @@ import com.example.smartstudentid.security.EncryptedCacheManager;
 import com.example.smartstudentid.security.PinSessionManager;
 import com.google.android.material.button.MaterialButton;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
@@ -39,6 +46,8 @@ import java.util.Locale;
  * WebP portrait avatar, academic status metrics, and dialogs for updating profile or PIN.
  */
 public class CardProfileFragment extends Fragment {
+
+    private static final String CAMERA_CAPTURE_FILE = "avatar_capture.jpg";
 
     private ImageView ivStudentAvatar;
     private TextView tvCardFullName;
@@ -53,6 +62,29 @@ public class CardProfileFragment extends Fragment {
     private LocalCacheManager localCacheManager;
     private EncryptedCacheManager encryptedCacheManager;
     private PinSessionManager pinSessionManager;
+
+    private ActivityResultLauncher<PickVisualMediaRequest> pickAvatarLauncher;
+    private ActivityResultLauncher<Uri> takePhotoLauncher;
+    private Uri pendingCameraUri;
+    private boolean avatarUploadInProgress;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // Android Photo Picker: no storage permission required on any supported API level.
+        pickAvatarLauncher = registerForActivityResult(
+                new ActivityResultContracts.PickVisualMedia(),
+                uri -> {
+                    if (uri != null) applyPickedAvatar(uri);
+                });
+        takePhotoLauncher = registerForActivityResult(
+                new ActivityResultContracts.TakePicture(),
+                success -> {
+                    if (Boolean.TRUE.equals(success) && pendingCameraUri != null) {
+                        applyPickedAvatar(pendingCameraUri);
+                    }
+                });
+    }
 
     @Nullable
     @Override
@@ -74,6 +106,7 @@ public class CardProfileFragment extends Fragment {
         tvCardStudentId = view.findViewById(R.id.tvCardStudentId);
         tvCardDepartment = view.findViewById(R.id.tvCardDepartment);
         tvAvatarMetaBadge = view.findViewById(R.id.tvAvatarMetaBadge);
+        if (tvAvatarMetaBadge != null) tvAvatarMetaBadge.setVisibility(View.GONE);
         tvMetricScore = view.findViewById(R.id.tvMetricScore);
         tvMetricAttendance = view.findViewById(R.id.tvMetricAttendance);
         tvMetricLabAccess = view.findViewById(R.id.tvMetricLabAccess);
@@ -86,6 +119,16 @@ public class CardProfileFragment extends Fragment {
         btnReloadFromChip.setOnClickListener(v -> reloadProfileAndAvatarFromCard());
         btnOpenEditProfileDialog.setOnClickListener(v -> showEditProfileDialog());
         btnOpenChangePinDialog.setOnClickListener(v -> showChangePinDialog());
+
+        View cardAvatarContainer = view.findViewById(R.id.cardAvatarContainer);
+        if (cardAvatarContainer != null) {
+            cardAvatarContainer.setOnClickListener(v -> showAvatarSourceDialog());
+        }
+        View btnChangeAvatarRow = view.findViewById(R.id.btnChangeAvatarRow);
+        if (btnChangeAvatarRow != null) {
+            btnChangeAvatarRow.setOnClickListener(v -> showAvatarSourceDialog());
+        }
+
         View btnLogoutCard = view.findViewById(R.id.btnLogoutCard);
         if (btnLogoutCard != null) {
             btnLogoutCard.setOnClickListener(v -> {
@@ -136,21 +179,133 @@ public class CardProfileFragment extends Fragment {
 
     private void renderAvatarFromCacheOrGenerate(String fullName) {
         byte[] cachedBytes = encryptedCacheManager.getAvatarBytes();
-        if (cachedBytes != null && cachedBytes.length > 0) {
-            Bitmap bmp = BitmapFactory.decodeByteArray(cachedBytes, 0, cachedBytes.length);
-            if (bmp != null) {
-                ivStudentAvatar.setImageBitmap(bmp);
-                double kb = cachedBytes.length / 1024.0;
-                tvAvatarMetaBadge.setText(String.format(Locale.US, "WebP %.1f KB", kb));
-                return;
-            }
+        if (renderAvatarBytes(cachedBytes)) {
+            return;
         }
         String initials = extractInitials(fullName);
         Bitmap defaultAvatar = ImageOptimizer.generateSampleStudentAvatar(initials, 150);
         byte[] webp = ImageOptimizer.compressToOptimizedWebP(defaultAvatar);
         encryptedCacheManager.saveAvatarBytes(webp);
         ivStudentAvatar.setImageBitmap(defaultAvatar);
-        tvAvatarMetaBadge.setText(String.format(Locale.US, "WebP %.1f KB", webp.length / 1024.0));
+        tvAvatarMetaBadge.setVisibility(View.GONE);
+    }
+
+    /**
+     * Renders the cached WebP avatar and updates the compression badge.
+     * Returns false when there is no decodable avatar yet.
+     */
+    private boolean renderAvatarBytes(byte[] webpBytes) {
+        if (ivStudentAvatar == null || webpBytes == null || webpBytes.length == 0) {
+            return false;
+        }
+        Bitmap bmp = BitmapFactory.decodeByteArray(webpBytes, 0, webpBytes.length);
+        if (bmp == null) {
+            return false;
+        }
+        ivStudentAvatar.setImageBitmap(bmp);
+        tvAvatarMetaBadge.setVisibility(View.GONE);
+        return true;
+    }
+
+    /**
+     * Asks whether the new portrait comes from the gallery or from the camera.
+     */
+    private void showAvatarSourceDialog() {
+        String[] options = new String[]{"Chọn ảnh từ thư viện", "Chụp ảnh mới"};
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Cập nhật ảnh chân dung")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        pickAvatarLauncher.launch(new PickVisualMediaRequest.Builder()
+                                .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
+                                .build());
+                    } else {
+                        launchCameraCapture();
+                    }
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+
+    private void launchCameraCapture() {
+        try {
+            File captureFile = new File(requireContext().getCacheDir(), CAMERA_CAPTURE_FILE);
+            if (captureFile.exists() && !captureFile.delete()) {
+                Toast.makeText(requireContext(), "Không thể tạo tệp ảnh tạm!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            pendingCameraUri = FileProvider.getUriForFile(requireContext(),
+                    requireContext().getPackageName() + ".fileprovider", captureFile);
+            takePhotoLauncher.launch(pendingCameraUri);
+        } catch (Exception e) {
+            Toast.makeText(requireContext(), "Không mở được camera: " + e.getMessage(),
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Downsamples the picked portrait to 150x150, compresses it to WebP 75%, uploads it to the
+     * card in 240-byte APDU chunks (INS 0x22) and refreshes the encrypted local cache.
+     */
+    private void applyPickedAvatar(Uri uri) {
+        if (uri == null || !isAdded()) return;
+        if (avatarUploadInProgress) {
+            Toast.makeText(requireContext(), "Ảnh trước đang được ghi lên thẻ, vui lòng đợi!",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        avatarUploadInProgress = true;
+        tvProfileSyncStatus.setText("Đang xử lý ảnh: Resize 150×150 → WebP 75% → ghi thẻ...");
+        Context appContext = requireContext().getApplicationContext();
+
+        ApduThreadPool.getInstance().execute(() -> {
+            byte[] webpBytes = ImageOptimizer.decodeAndCompressAvatar(appContext, uri);
+            if (webpBytes == null) {
+                return new AvatarUpdateResult(null, 0);
+            }
+            // Re-assert the card PIN state before writing to EEPROM (INS 0x22 requires a verified PIN).
+            String verifiedPin = pinSessionManager.getTransientVerifiedPin();
+            if (verifiedPin != null && !verifiedPin.isEmpty()) {
+                ApduClient.getInstance().sendApdu(ApduCommands.CLA_SMART_STUDENT,
+                        ApduCommands.INS_VERIFY_PIN, (byte) 0x00, (byte) 0x00,
+                        verifiedPin.getBytes(StandardCharsets.UTF_8));
+            }
+            int packets = ApduClient.getInstance().uploadAvatarInChunks(webpBytes);
+            return new AvatarUpdateResult(webpBytes, packets);
+        }, (result, mainBlockedMs, totalMs) -> {
+            avatarUploadInProgress = false;
+            if (!isAdded()) return;
+            if (result.webpBytes == null) {
+                tvProfileSyncStatus.setText("❌ Không đọc được ảnh đã chọn. Vui lòng thử ảnh khác.");
+                Toast.makeText(requireContext(), "Không thể giải mã ảnh đã chọn!",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (result.packets < 0) {
+                tvProfileSyncStatus.setText("❌ Thẻ từ chối gói ảnh (kiểm tra PIN/session).");
+                Toast.makeText(requireContext(), "Ghi ảnh lên thẻ thất bại!",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            encryptedCacheManager.saveAvatarBytes(result.webpBytes);
+            renderAvatarBytes(result.webpBytes);
+            tvProfileSyncStatus.setText(String.format(Locale.US,
+                    "✓ Đã cập nhật ảnh WebP %.1f KB → %d gói APDU (INS 0x22) trong %d ms.",
+                    result.webpBytes.length / 1024.0, result.packets, totalMs));
+            Toast.makeText(requireContext(), "Đã cập nhật ảnh chân dung lên thẻ!",
+                    Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    private static class AvatarUpdateResult {
+        final byte[] webpBytes;
+        final int packets;
+
+        AvatarUpdateResult(byte[] webpBytes, int packets) {
+            this.webpBytes = webpBytes;
+            this.packets = packets;
+        }
     }
 
     /**
@@ -159,7 +314,9 @@ public class CardProfileFragment extends Fragment {
     private void reloadProfileAndAvatarFromCard() {
         tvProfileSyncStatus.setText("Đang đồng bộ...");
         ApduThreadPool.getInstance().execute(() -> {
-            LocalCacheManager.ProfileLoadResult res = localCacheManager.fetchStudentProfileFromCard("123456");
+            String sessionPin = pinSessionManager.getTransientVerifiedPin();
+            String verifiedPin = (sessionPin != null && !sessionPin.isEmpty()) ? sessionPin : "123456";
+            LocalCacheManager.ProfileLoadResult res = localCacheManager.fetchStudentProfileFromCard(verifiedPin);
             byte[] downloadedAvatar = ApduClient.getInstance().downloadAvatarInChunks(
                     OptimizationConfig.isOptimizedModeEnabled()
             );
@@ -180,7 +337,7 @@ public class CardProfileFragment extends Fragment {
                 ivStudentAvatar.setImageBitmap(bmp);
             }
             double kb = payload.avatarBytes.length / 1024.0;
-            tvAvatarMetaBadge.setText(String.format(Locale.US, "WebP %.1f KB", kb));
+            tvAvatarMetaBadge.setVisibility(View.GONE);
             tvProfileSyncStatus.setText(String.format(Locale.US,
                     "✓ Đọc APDU + AES-128 + " + ImageOptimizer.calculateApduPacketCount(payload.avatarBytes.length) + " gói WebP (%d ms • 60 FPS)", totalMs));
         });
@@ -201,10 +358,17 @@ public class CardProfileFragment extends Fragment {
         int pad = (int) (20 * getResources().getDisplayMetrics().density);
         container.setPadding(pad, pad / 2, pad, 0);
 
-        EditText etName = createDialogInput("Họ và tên", current.getFullName());
-        EditText etDob = createDialogInput("Ngày sinh (DD/MM/YYYY)", current.getDob());
-        EditText etClass = createDialogInput("Lớp", current.getClassName());
-        EditText etDept = createDialogInput("Khoa", current.getDepartment());
+        TextView tvNotice = new TextView(requireContext());
+        tvNotice.setText("ℹ️ Lớp và Khoa do Học viện quản lý cố định.");
+        tvNotice.setTextSize(12f);
+        tvNotice.setTextColor(0xFF64748B);
+        tvNotice.setPadding(0, 0, 0, (int) (8 * getResources().getDisplayMetrics().density));
+        container.addView(tvNotice);
+
+        EditText etName = createDialogInput("Họ và tên", current.getFullName(), true);
+        EditText etDob = createDialogInput("Ngày sinh (DD/MM/YYYY)", current.getDob(), true);
+        EditText etClass = createDialogInput("Lớp (Cố định)", current.getClassName(), false);
+        EditText etDept = createDialogInput("Khoa (Cố định)", current.getDepartment(), false);
 
         container.addView(etName);
         container.addView(etDob);
@@ -213,13 +377,17 @@ public class CardProfileFragment extends Fragment {
 
         StudentCardRecord finalCurrent = current;
         new AlertDialog.Builder(requireContext())
-                .setTitle("Cập nhật Hồ sơ & Ảnh WebP (INS 0x20 / 0x22)")
+                .setTitle("Cập nhật Hồ sơ cá nhân")
                 .setView(container)
-                .setPositiveButton("Mã hóa AES-128 & Ghi Thẻ", (dialog, which) -> {
-                    finalCurrent.setFullName(etName.getText().toString().trim());
-                    finalCurrent.setDob(etDob.getText().toString().trim());
-                    finalCurrent.setClassName(etClass.getText().toString().trim());
-                    finalCurrent.setDepartment(etDept.getText().toString().trim());
+                .setPositiveButton("Ghi thẻ", (dialog, which) -> {
+                    String inputName = etName.getText().toString().trim();
+                    if (!inputName.isEmpty()) {
+                        finalCurrent.setFullName(inputName);
+                    }
+                    String inputDob = etDob.getText().toString().trim();
+                    if (!inputDob.isEmpty()) {
+                        finalCurrent.setDob(inputDob);
+                    }
                     saveUpdatedProfileToCard(finalCurrent);
                 })
                 .setNegativeButton("Hủy", null)
@@ -234,13 +402,16 @@ public class CardProfileFragment extends Fragment {
             client.sendApdu(ApduCommands.CLA_SMART_STUDENT, ApduCommands.INS_SET_STUDENT_INFO,
                     (byte) 0x00, (byte) 0x00, utf8);
 
-            // Generate and compress portrait according to OptimizationConfig
-            Bitmap rawBmp = ImageOptimizer.generateSampleStudentAvatar(extractInitials(updated.getFullName()), 600);
-            byte[] imageBytes = OptimizationConfig.isOptimizedModeEnabled()
-                    ? ImageOptimizer.compressToOptimizedWebP(rawBmp)
-                    : ImageOptimizer.compressToOptimizedWebP(rawBmp); // Always store safe WebP size on 8KB EEPROM
-            int packets = client.uploadAvatarInChunks(imageBytes);
-            rawBmp.recycle();
+            // Keep the portrait the user already chose; only create the default one when none exists.
+            byte[] imageBytes = encryptedCacheManager.getAvatarBytes();
+            int packets = 0;
+            if (imageBytes == null || imageBytes.length == 0) {
+                Bitmap rawBmp = ImageOptimizer.generateSampleStudentAvatar(
+                        extractInitials(updated.getFullName()), 150);
+                imageBytes = ImageOptimizer.compressToOptimizedWebP(rawBmp);
+                rawBmp.recycle();
+                packets = client.uploadAvatarInChunks(imageBytes);
+            }
 
             encryptedCacheManager.saveStudentProfile(updated);
             encryptedCacheManager.saveAvatarBytes(imageBytes);
@@ -263,17 +434,17 @@ public class CardProfileFragment extends Fragment {
         int pad = (int) (20 * getResources().getDisplayMetrics().density);
         container.setPadding(pad, pad / 2, pad, 0);
 
-        EditText etOldPin = createDialogInput("Mã PIN hiện tại (6 số)", "");
+        EditText etOldPin = createDialogInput("Mã PIN hiện tại (6 số)", "", true);
         etOldPin.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
 
-        EditText etNewPin = createDialogInput("Mã PIN mới (6 số)", "");
+        EditText etNewPin = createDialogInput("Mã PIN mới (6 số)", "", true);
         etNewPin.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
 
         container.addView(etOldPin);
         container.addView(etNewPin);
 
         new AlertDialog.Builder(requireContext())
-                .setTitle("Đổi Mã PIN Thẻ Sinh Viên (INS 0x11)")
+                .setTitle("Đổi mã PIN thẻ sinh viên")
                 .setView(container)
                 .setPositiveButton("Đổi PIN", (dialog, which) -> {
                     String oldPin = etOldPin.getText().toString().trim();
@@ -323,11 +494,16 @@ public class CardProfileFragment extends Fragment {
         });
     }
 
-    private EditText createDialogInput(String hint, String initialValue) {
+    private EditText createDialogInput(String hint, String initialValue, boolean editable) {
         EditText et = new EditText(requireContext());
         et.setHint(hint);
         et.setText(initialValue);
         et.setTextSize(14f);
+        if (!editable) {
+            et.setEnabled(false);
+            et.setFocusable(false);
+            et.setTextColor(0xFF64748B);
+        }
         return et;
     }
 

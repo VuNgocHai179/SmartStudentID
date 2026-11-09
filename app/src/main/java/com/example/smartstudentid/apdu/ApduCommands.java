@@ -29,6 +29,8 @@ public final class ApduCommands {
     public static final byte INS_VERIFY_PIN = (byte) 0x10;
     public static final byte INS_CHANGE_PIN = (byte) 0x11;
     public static final byte INS_UNBLOCK_CARD_PUK = (byte) 0x12;
+    public static final byte P1_PUK_UNBLOCK = (byte) 0x00;
+    public static final byte P1_PUK_LOCK = (byte) 0x01;
 
     // 3. RSA-1024 Asymmetric Cryptography - SC-04 & SEC-03
     public static final byte INS_GET_PUBLIC_KEY = (byte) 0x13;

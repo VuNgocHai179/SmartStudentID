@@ -1,18 +1,23 @@
 package com.example.smartstudentid.optimization;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Shader;
+import android.media.ExifInterface;
+import android.net.Uri;
 import android.os.Build;
 
 import com.example.smartstudentid.apdu.ApduCommands;
 
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.Random;
 
 /**
@@ -26,6 +31,8 @@ public final class ImageOptimizer {
     public static final int TARGET_AVATAR_WIDTH = 150;
     public static final int TARGET_AVATAR_HEIGHT = 150;
     public static final int WEBP_QUALITY = 75;
+    /** Matches the smart card applet's avatarBuffer[8192] EEPROM allocation. */
+    public static final int MAX_AVATAR_BYTES = 8192;
 
     private ImageOptimizer() {
     }
@@ -72,21 +79,200 @@ public final class ImageOptimizer {
     }
 
     /**
+     * Decodes a user-picked photo (gallery or camera capture) from its content Uri, applies EXIF
+     * rotation, downsamples it and center-crops it to the requested card portrait size.
+     */
+    public static Bitmap decodeAndDownsampleFromUri(Context context, Uri uri, int reqWidth, int reqHeight) {
+        if (context == null || uri == null) {
+            return null;
+        }
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            try (InputStream is = context.getContentResolver().openInputStream(uri)) {
+                if (is == null) return null;
+                BitmapFactory.decodeStream(is, null, bounds);
+            }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return null;
+            }
+
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, reqWidth, reqHeight);
+            options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+
+            Bitmap decoded;
+            try (InputStream is = context.getContentResolver().openInputStream(uri)) {
+                if (is == null) return null;
+                decoded = BitmapFactory.decodeStream(is, null, options);
+            }
+            if (decoded == null) {
+                return null;
+            }
+
+            Bitmap oriented = applyExifOrientation(context, uri, decoded);
+            if (oriented != decoded) {
+                decoded.recycle();
+            }
+            Bitmap cropped = centerCropToSize(oriented, reqWidth, reqHeight);
+            if (cropped != oriented) {
+                oriented.recycle();
+            }
+            return cropped;
+        } catch (Exception | OutOfMemoryError e) {
+            return null;
+        }
+    }
+
+    /**
+     * Decodes, downsamples, center-crops and compresses a picked photo into a card-ready WebP.
+     * Returns null when the Uri cannot be decoded.
+     */
+    public static byte[] decodeAndCompressAvatar(Context context, Uri uri) {
+        Bitmap avatar = decodeAndDownsampleFromUri(context, uri, TARGET_AVATAR_WIDTH, TARGET_AVATAR_HEIGHT);
+        if (avatar == null) {
+            return null;
+        }
+        byte[] webp = compressAvatarForCard(avatar);
+        avatar.recycle();
+        return webp;
+    }
+
+    /**
+     * Rotates/flips a portrait according to its EXIF orientation tag (camera photos are often sideways).
+     */
+    public static Bitmap applyExifOrientation(Context context, Uri uri, Bitmap source) {
+        if (context == null || uri == null || source == null) {
+            return source;
+        }
+        int orientation = ExifInterface.ORIENTATION_NORMAL;
+        try (InputStream is = context.getContentResolver().openInputStream(uri)) {
+            if (is != null) {
+                orientation = new ExifInterface(is).getAttributeInt(
+                        ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+            }
+        } catch (Exception ignored) {
+        }
+
+        Matrix matrix = new Matrix();
+        switch (orientation) {
+            case ExifInterface.ORIENTATION_ROTATE_90:
+                matrix.postRotate(90);
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_180:
+                matrix.postRotate(180);
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_270:
+                matrix.postRotate(270);
+                break;
+            case ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
+                matrix.postScale(-1, 1);
+                break;
+            case ExifInterface.ORIENTATION_FLIP_VERTICAL:
+                matrix.postScale(1, -1);
+                break;
+            case ExifInterface.ORIENTATION_TRANSPOSE:
+                matrix.postRotate(90);
+                matrix.postScale(-1, 1);
+                break;
+            case ExifInterface.ORIENTATION_TRANSVERSE:
+                matrix.postRotate(270);
+                matrix.postScale(-1, 1);
+                break;
+            default:
+                return source;
+        }
+
+        try {
+            Bitmap transformed = Bitmap.createBitmap(source, 0, 0, source.getWidth(),
+                    source.getHeight(), matrix, true);
+            return transformed != null ? transformed : source;
+        } catch (OutOfMemoryError e) {
+            return source;
+        }
+    }
+
+    /**
+     * Scales a bitmap so it covers the requested size, then center-crops it (no portrait distortion).
+     */
+    public static Bitmap centerCropToSize(Bitmap source, int reqWidth, int reqHeight) {
+        if (source == null) {
+            return null;
+        }
+        int width = source.getWidth();
+        int height = source.getHeight();
+        if (width == reqWidth && height == reqHeight) {
+            return source;
+        }
+
+        float scale = Math.max((float) reqWidth / width, (float) reqHeight / height);
+        int scaledWidth = Math.max(reqWidth, Math.round(width * scale));
+        int scaledHeight = Math.max(reqHeight, Math.round(height * scale));
+        Bitmap scaled = Bitmap.createScaledBitmap(source, scaledWidth, scaledHeight, true);
+
+        int cropX = Math.max(0, (scaledWidth - reqWidth) / 2);
+        int cropY = Math.max(0, (scaledHeight - reqHeight) / 2);
+        Bitmap cropped = Bitmap.createBitmap(scaled, cropX, cropY, reqWidth, reqHeight);
+        if (scaled != source && scaled != cropped) {
+            scaled.recycle();
+        }
+        return cropped;
+    }
+
+    /**
      * Compresses a Bitmap into WebP format (75% quality) after resizing to 150x150px (Optimized After Mode).
      */
-    @SuppressWarnings("deprecation")
     public static byte[] compressToOptimizedWebP(Bitmap source) {
-        Bitmap scaled = (source.getWidth() == TARGET_AVATAR_WIDTH && source.getHeight() == TARGET_AVATAR_HEIGHT)
-                ? source
-                : Bitmap.createScaledBitmap(source, TARGET_AVATAR_WIDTH, TARGET_AVATAR_HEIGHT, true);
+        return compressToWebP(source, WEBP_QUALITY);
+    }
 
-        ByteArrayOutputStream bos = new ByteArrayOutputStream(4096);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            scaled.compress(Bitmap.CompressFormat.WEBP_LOSSY, WEBP_QUALITY, bos);
-        } else {
-            scaled.compress(Bitmap.CompressFormat.WEBP, WEBP_QUALITY, bos);
+    /**
+     * Compresses a portrait so it always fits the on-card 8KB avatar buffer: starts at WebP 75%
+     * and lowers quality / resolution only when the encoded bytes exceed the EEPROM budget.
+     */
+    public static byte[] compressAvatarForCard(Bitmap source) {
+        byte[] bytes = compressToWebP(source, WEBP_QUALITY);
+        int quality = WEBP_QUALITY;
+        while (bytes.length > MAX_AVATAR_BYTES && quality > 30) {
+            quality -= 15;
+            bytes = compressToWebP(source, quality);
         }
-        return bos.toByteArray();
+        if (bytes.length > MAX_AVATAR_BYTES) {
+            Bitmap smaller = Bitmap.createScaledBitmap(source, 120, 120, true);
+            bytes = compressBitmapToWebP(smaller, 50, 120, 120);
+            if (smaller != source) {
+                smaller.recycle();
+            }
+        }
+        return bytes;
+    }
+
+    /**
+     * Compresses a Bitmap into lossy WebP at the requested quality (150x150 target size).
+     */
+    public static byte[] compressToWebP(Bitmap source, int quality) {
+        return compressBitmapToWebP(source, quality, TARGET_AVATAR_WIDTH, TARGET_AVATAR_HEIGHT);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static byte[] compressBitmapToWebP(Bitmap source, int quality, int targetWidth, int targetHeight) {
+        Bitmap scaled = (source.getWidth() == targetWidth && source.getHeight() == targetHeight)
+                ? source
+                : Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true);
+
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream(4096);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                scaled.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality, bos);
+            } else {
+                scaled.compress(Bitmap.CompressFormat.WEBP, quality, bos);
+            }
+            return bos.toByteArray();
+        } finally {
+            if (scaled != source) {
+                scaled.recycle();
+            }
+        }
     }
 
     /**

@@ -58,19 +58,13 @@
                         android:textSize="10sp"
                         android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/tvCardRsaBadge"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_glass_pill"
-                        android:paddingStart="9dp"
-                        android:paddingTop="4dp"
-                        android:paddingEnd="9dp"
-                        android:paddingBottom="4dp"
-                        android:text="✓ RSA-1024"
-                        android:textColor="@color/white"
-                        android:textSize="10sp"
-                        android:textStyle="bold" />
+                    <ImageView
+                        android:id="@+id/ivAcademyLogo"
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:contentDescription="Học viện Kỹ thuật Mật mã"
+                        android:src="@drawable/ic_academy_logo"
+                        android:scaleType="fitCenter" />
                 </LinearLayout>
 
                 <!-- Avatar + Core Student Identity -->
@@ -82,8 +76,11 @@
                     android:orientation="horizontal">
 
                     <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/cardAvatarContainer"
                         android:layout_width="74dp"
                         android:layout_height="90dp"
+                        android:clickable="true"
+                        android:focusable="true"
                         app:cardBackgroundColor="#1E40AF"
                         app:cardCornerRadius="14dp"
                         app:cardElevation="0dp"
@@ -94,7 +91,7 @@
                             android:id="@+id/ivStudentAvatar"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
-                            android:contentDescription="Ảnh chân dung sinh viên"
+                            android:contentDescription="Ảnh chân dung sinh viên (chạm để đổi ảnh)"
                             android:scaleType="centerCrop" />
                     </com.google.android.material.card.MaterialCardView>
 
@@ -151,14 +148,16 @@
                     android:layout_height="1dp"
                     android:layout_marginTop="16dp"
                     android:layout_marginBottom="12dp"
-                    android:background="@color/glass_white" />
+                    android:background="@color/glass_white"
+                    android:visibility="gone" />
 
                 <!-- Bottom Metadata Strip inside Smart Card -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="end|center_vertical"
-                    android:orientation="horizontal">
+                    android:orientation="horizontal"
+                    android:visibility="gone">
 
                     <TextView
                         android:id="@+id/tvAvatarMetaBadge"
@@ -353,7 +352,8 @@
             android:background="@drawable/bg_soft_panel"
             android:gravity="top"
             android:orientation="horizontal"
-            android:padding="12dp">
+            android:padding="12dp"
+            android:visibility="gone">
 
             <ImageView
                 android:layout_width="16dp"
@@ -410,6 +410,65 @@
                     android:background="@color/slate_100" />
 
                 <LinearLayout
+                    android:id="@+id/btnChangeAvatarRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="4dp"
+                    android:paddingTop="12dp"
+                    android:paddingEnd="4dp"
+                    android:paddingBottom="12dp">
+
+                    <LinearLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_icon_tile_green"
+                        android:gravity="center">
+
+                        <ImageView
+                            android:layout_width="19dp"
+                            android:layout_height="19dp"
+                            android:contentDescription="Đổi ảnh chân dung"
+                            android:src="@drawable/ic_image"
+                            app:tint="@color/emerald_600" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Đổi ảnh chân dung (thư viện / camera)"
+                            android:textColor="@color/slate_900"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:contentDescription="Mở"
+                        android:src="@drawable/ic_chevron_right"
+                        app:tint="@color/slate_400" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="50dp"
+                    android:background="@color/slate_100" />
+
+                <LinearLayout
                     android:id="@+id/btnOpenEditProfileDialog"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -447,7 +506,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Cập nhật hồ sơ &amp; ảnh thẻ"
+                            android:text="Cập nhật hồ sơ cá nhân"
                             android:textColor="@color/slate_900"
                             android:textSize="14sp"
                             android:textStyle="bold" />

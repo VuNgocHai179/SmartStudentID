@@ -102,7 +102,7 @@ flowchart TB
 | :---: | :--- | :--- | :--- | :--- |
 | `0x10` | `INS_VERIFY_PIN` | `0x00`, `0x00` | Mã PIN (4–8 bytes) | Kiểm tra PIN (tối đa 3 lần sai), dẫn xuất khóa AES từ PIN. Trả về `9000`, `63CX` hoặc `6983`. |
 | `0x11` | `INS_CHANGE_PIN` | `0x00`, `0x00` | `[LenOld][OldPIN][LenNew][NewPIN]` | Giải mã dữ liệu bằng khóa AES từ PIN cũ $\rightarrow$ Đổi PIN & tạo khóa AES từ PIN mới $\rightarrow$ Tái mã hóa dữ liệu (Atomic). |
-| `0x12` | `INS_UNBLOCK_CARD_PUK` | `0x00`, `0x00` | Mã PUK Admin (8 bytes) | Mở khóa thẻ, khôi phục PIN mặc định và tái mã hóa dữ liệu theo PIN mặc định. |
+| `0x12` | `INS_UNBLOCK_CARD_PUK` | `P1=00`: Mở khóa & khôi phục PIN mặc định<br>`P1=01`: Khóa thẻ bằng PUK | Mã PUK Admin (8 bytes) | Mở khóa thẻ / khóa thẻ, khôi phục PIN mặc định và tái mã hóa dữ liệu theo PIN mặc định. |
 | `0x13` | `INS_GET_PUBLIC_KEY` | `P1=00`: Gen mới + Lấy N<br>`P1=01`: Lấy Modulus N<br>`P1=02`: Lấy Exponent E | Rỗng | Sinh cặp khóa `RSA-1024` trên thẻ và xuất khóa công khai `(N, E)`. |
 | `0x14` | `INS_SIGN_CHALLENGE` | `0x00`, `0x00` | Chuỗi `Challenge Nonce` | Ký số `SHA1withRSA` bằng `Private Key` trên thẻ để xác thực thẻ thật. |
 | `0x20` | `INS_SET_STUDENT_INFO` | `0x00`, `0x00` | Chuỗi UTF-8 thông tin chủ thẻ | Yêu cầu đã xác thực PIN. Đệm `PKCS#7` và mã hóa `AES-128 CBC` bằng khóa sinh từ PIN lưu vào EEPROM. |

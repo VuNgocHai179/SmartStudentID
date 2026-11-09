@@ -77,6 +77,9 @@ public class SmartCampusApplet extends Applet {
     private final byte[] adminPuk;
     private final byte[] defaultPin;
 
+    // Persistent admin PUK lock flag: blocks all PIN operations until a P1=00 PUK unblock
+    private boolean adminLocked;
+
     // On-card cryptographic objects (AES-128 & RSA-1024)
     private final AESKey aesKey;
     private final Cipher aesCipher;
@@ -117,6 +120,7 @@ public class SmartCampusApplet extends Applet {
         // 1. Initialize default PIN ("123456") and Admin PUK ("88888888")
         defaultPin = new byte[]{'1', '2', '3', '4', '5', '6'};
         adminPuk = new byte[]{'8', '8', '8', '8', '8', '8', '8', '8'};
+        adminLocked = false;
         pin = new OwnerPIN(PIN_TRY_LIMIT, MAX_PIN_SIZE);
         pin.update(defaultPin, (short) 0, (byte) defaultPin.length);
 
@@ -181,7 +185,7 @@ public class SmartCampusApplet extends Applet {
 
         if (selectingApplet()) {
             // Return card status upon SELECT AID: [0]=Remaining PIN tries, [1]=Initialized flag
-            buffer[0] = pin.getTriesRemaining();
+            buffer[0] = adminLocked ? (byte) 0 : pin.getTriesRemaining();
             buffer[1] = (plainInfoLength > 0) ? (byte) 1 : (byte) 0;
             apdu.setOutgoingAndSend((short) 0, (short) 2);
             return;
@@ -245,7 +249,7 @@ public class SmartCampusApplet extends Applet {
         byte[] buffer = apdu.getBuffer();
         byte len = (byte) apdu.setIncomingAndReceive();
 
-        if (pin.getTriesRemaining() == 0) {
+        if (adminLocked || pin.getTriesRemaining() == 0) {
             ISOException.throwIt(ISO7816.SW_FILE_INVALID); // 0x6983: Card is locked
         }
 
@@ -285,6 +289,7 @@ public class SmartCampusApplet extends Applet {
 
     private void handleUnblockByPuk(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
+        byte p1 = buffer[ISO7816.OFFSET_P1];
         short len = apdu.setIncomingAndReceive();
         if (len != PUK_SIZE) {
             ISOException.throwIt((short) 0x6300);
@@ -295,8 +300,15 @@ public class SmartCampusApplet extends Applet {
         }
 
         JCSystem.beginTransaction();
-        pin.resetAndUnblock();
-        pin.update(defaultPin, (short) 0, (byte) defaultPin.length);
+        if (p1 == (byte) 0x01) {
+            // Admin PUK lock: reject every PIN-based operation until a P1=00 unblock
+            adminLocked = true;
+        } else {
+            // Admin PUK unblock: clear the admin lock and restore the default PIN
+            adminLocked = false;
+            pin.resetAndUnblock();
+            pin.update(defaultPin, (short) 0, (byte) defaultPin.length);
+        }
         JCSystem.commitTransaction();
     }
 
@@ -559,7 +571,7 @@ public class SmartCampusApplet extends Applet {
     }
 
     private void requirePinValidated() {
-        if (!pin.isValidated()) {
+        if (adminLocked || !pin.isValidated()) {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
     }
