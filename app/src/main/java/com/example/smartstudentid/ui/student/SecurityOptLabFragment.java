@@ -46,9 +46,15 @@ public class SecurityOptLabFragment extends Fragment {
     private TextView tvImageValue;
     private TextView tvCacheValue;
     private TextView tvFpsValue;
+    private TextView tvCompareImageValues;
+    private TextView tvCompareCacheValues;
+    private TextView tvCompareUiValues;
     private ProgressBar pbImageOpt;
     private ProgressBar pbCacheOpt;
     private ProgressBar pbFpsOpt;
+    private ProgressBar pbCompareImageAfter;
+    private ProgressBar pbCompareCacheAfter;
+    private ProgressBar pbCompareUiAfter;
 
     private LocalCacheManager localCacheManager;
     private PinSessionManager pinSessionManager;
@@ -78,12 +84,22 @@ public class SecurityOptLabFragment extends Fragment {
         tvImageValue = view.findViewById(R.id.tvImageValue);
         tvCacheValue = view.findViewById(R.id.tvCacheValue);
         tvFpsValue = view.findViewById(R.id.tvFpsValue);
+        tvCompareImageValues = view.findViewById(R.id.tvCompareImageValues);
+        tvCompareCacheValues = view.findViewById(R.id.tvCompareCacheValues);
+        tvCompareUiValues = view.findViewById(R.id.tvCompareUiValues);
         pbImageOpt = view.findViewById(R.id.pbImageOpt);
         pbCacheOpt = view.findViewById(R.id.pbCacheOpt);
         pbFpsOpt = view.findViewById(R.id.pbFpsOpt);
+        pbCompareImageAfter = view.findViewById(R.id.pbCompareImageAfter);
+        pbCompareCacheAfter = view.findViewById(R.id.pbCompareCacheAfter);
+        pbCompareUiAfter = view.findViewById(R.id.pbCompareUiAfter);
 
         MaterialButton btnRunFullBenchmark = view.findViewById(R.id.btnRunFullBenchmark);
         MaterialButton btnInspectCipherAndApdu = view.findViewById(R.id.btnInspectCipherAndApdu);
+        View btnOpenTopicDemo = view.findViewById(R.id.btnOpenTopicDemo);
+        btnOpenTopicDemo.setOnClickListener(v -> startActivity(
+                new android.content.Intent(requireContext(),
+                        com.example.smartstudentid.ui.demo.TopicDemoActivity.class)));
 
         switchOptimizationMode.setChecked(OptimizationConfig.isOptimizedModeEnabled());
         updateOptimizationSwitchSummary(OptimizationConfig.isOptimizedModeEnabled());
@@ -103,10 +119,11 @@ public class SecurityOptLabFragment extends Fragment {
     }
 
     private void updateOptimizationSwitchSummary(boolean optimized) {
+        // The switch only changes execution strategy: Main Thread vs pool + buffer reuse.
         if (optimized) {
-            tvOptModeDescription.setText("Đang bật: WebP, Cache, ThreadPool.");
+            tvOptModeDescription.setText("Đang bật: tác vụ nền (ThreadPool), đệm AES-GCM, WebP + buffer 8 KB.");
         } else {
-            tvOptModeDescription.setText("Đang tắt: PNG gốc, không cache.");
+            tvOptModeDescription.setText("Đang tắt: tác vụ chạy trên Main Thread, cấp phát mới mỗi gói ảnh.");
         }
     }
 
@@ -120,6 +137,9 @@ public class SecurityOptLabFragment extends Fragment {
                 (report, mainBlockedMs, totalMs) -> {
                     if (!isAdded()) return;
                     updateOptimizationSwitchSummary(OptimizationConfig.isOptimizedModeEnabled());
+                    // §2/§6: real measured cost of handing the work to the pool (or of blocking the UI in Before mode).
+                    String mainThreadCost = mainBlockedMs <= 0 ? "< 1 ms" : mainBlockedMs + " ms";
+                    int droppedFrames = Math.round(mainBlockedMs / 16.6667f);
 
                     double bwSavedPct = 100.0 * (1.0 - (report.optimizedWebpKb / Math.max(1.0, report.unoptimizedImageKb)));
                     tvMetricImageComparison.setText(String.format(Locale.US,
@@ -132,16 +152,39 @@ public class SecurityOptLabFragment extends Fragment {
                             report.optimizedCacheLoadMs, report.unoptimizedColdLoadMs));
 
                     tvMetricThreadMemory.setText(String.format(Locale.US,
-                            "Main Thread < 1 ms (60 FPS) • Buffer Reuse 8KB • RAM %d MB",
-                            report.currentRamMb));
+                            "§6 UI thread giữ %s • rớt ~%d khung • Buffer 8 KB • RAM %d MB",
+                            mainThreadCost, droppedFrames, report.currentRamMb));
 
                     int savedPct = Math.max(0, Math.min(100, (int) Math.round(bwSavedPct)));
                     tvImageValue.setText("-" + savedPct + "%");
                     pbImageOpt.setProgress(savedPct);
                     tvCacheValue.setText(report.optimizedCacheLoadMs + " ms");
                     pbCacheOpt.setProgress(100);
-                    tvFpsValue.setText("60 FPS");
-                    pbFpsOpt.setProgress(100);
+                    tvFpsValue.setText(droppedFrames == 0 ? "60 FPS" : "JANK");
+                    pbFpsOpt.setProgress(droppedFrames == 0 ? 100 : Math.max(5, 100 - droppedFrames * 5));
+
+                    // Before/After bars: red = Before (100%), green = After (relative cost).
+                    int imagePct = Math.max(2, (int) Math.round(
+                            100.0 * report.optimizedWebpKb / Math.max(1.0, report.unoptimizedImageKb)));
+                    int cachePct = Math.max(2, (int) Math.round(
+                            100.0 * report.optimizedCacheLoadMs / Math.max(1L, report.unoptimizedColdLoadMs)));
+                    int uiPct = Math.max(2, (int) Math.round(
+                            100.0 * Math.max(0, mainBlockedMs) / Math.max(1L, totalMs)));
+                    pbCompareImageAfter.setProgress(imagePct);
+                    pbCompareCacheAfter.setProgress(cachePct);
+                    pbCompareUiAfter.setProgress(uiPct);
+                    tvCompareImageValues.setText(String.format(Locale.US,
+                            "Ảnh thẻ: PNG %d KB → WebP %.1f KB • −%d%% • %d → %d gói",
+                            report.unoptimizedImageKb, report.optimizedWebpKb, savedPct,
+                            report.unoptimizedApduPackets, report.optimizedApduPackets));
+                    tvCompareCacheValues.setText(String.format(Locale.US,
+                            "Hồ sơ: 5 APDU %d ms → cache AES-GCM %d ms • nhanh %d×",
+                            report.unoptimizedColdLoadMs, report.optimizedCacheLoadMs,
+                            Math.max(1, report.unoptimizedColdLoadMs
+                                    / Math.max(1, report.optimizedCacheLoadMs))));
+                    tvCompareUiValues.setText(String.format(Locale.US,
+                            "Main Thread: chặn %d ms → dispatch %s • Before rớt ~%d khung",
+                            totalMs, mainThreadCost, droppedFrames));
 
                     Toast.makeText(requireContext(),
                             "Hoàn tất đo kiểm Benchmark trong " + totalMs + " ms!",

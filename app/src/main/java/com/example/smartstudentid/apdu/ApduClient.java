@@ -1,5 +1,7 @@
 package com.example.smartstudentid.apdu;
 
+import android.os.Looper;
+
 import com.example.smartstudentid.model.AttendanceRecord;
 import com.example.smartstudentid.model.BookLoanRecord;
 import com.example.smartstudentid.model.StudentCardRecord;
@@ -23,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -47,6 +50,8 @@ public class ApduClient {
     };
 
     private volatile String serverBaseUrl = "http://127.0.0.1:8080";
+    private static final long BRIDGE_OFFLINE_COOLDOWN_NS = 10_000_000_000L;
+    private volatile long bridgeOfflineUntilNs = 0L;
     private final Gson gson = new Gson();
 
     // Reusable buffer for chunked avatar transfers to prevent memory churn (OPT-05)
@@ -56,10 +61,39 @@ public class ApduClient {
     private final List<String> recentApduLogs = new ArrayList<>();
     private static final int MAX_APDU_LOG_LINES = 30;
 
+    /** Receives per-APDU execution time as soon as a frame completes (used by §1/§4 realtime charts). */
+    public interface TelemetryListener {
+        void onApduFrame(int ins, long elapsedMs);
+    }
+
+    private volatile TelemetryListener telemetryListener;
+
     // Local fallback simulator used when the Android device/emulator is offline from the PC Bridge
     private final LocalFallbackCardEngine localFallback = new LocalFallbackCardEngine();
 
     private ApduClient() {
+    }
+
+    public void setTelemetryListener(TelemetryListener listener) {
+        this.telemetryListener = listener;
+    }
+
+    public void clearTelemetryListener(TelemetryListener listener) {
+        if (this.telemetryListener == listener) {
+            this.telemetryListener = null;
+        }
+    }
+
+    private void notifyTelemetry(byte[] frame, long elapsedMs) {
+        TelemetryListener listener = this.telemetryListener;
+        if (listener == null || frame == null || frame.length < 2) {
+            return;
+        }
+        int ins = frame[1] & 0xFF;
+        try {
+            listener.onApduFrame(ins, elapsedMs);
+        } catch (Exception ignored) {
+        }
     }
 
     public static synchronized ApduClient getInstance() {
@@ -102,25 +136,47 @@ public class ApduClient {
      * Transmits a raw APDU byte frame over HTTP to the Bridge Server, or falls back to the local card engine.
      */
     public synchronized CardResponse transmitRawFrame(byte[] frame) {
-        long startNs = System.nanoTime();
         String cmdHex = ApduCommands.bytesToHex(frame);
 
-        CardResponse remoteResp = tryTransmitApdu(serverBaseUrl, cmdHex, frame, startNs);
-        if (remoteResp != null) {
-            return remoteResp;
-        }
-
-        for (String candidate : CANDIDATE_BASE_URLS) {
-            if (candidate.equalsIgnoreCase(serverBaseUrl)) continue;
-            remoteResp = tryTransmitApdu(candidate, cmdHex, frame, startNs);
-            if (remoteResp != null) {
-                this.serverBaseUrl = candidate;
-                return remoteResp;
+        CardResponse resp = null;
+        if (!isMainThread() && System.nanoTime() >= bridgeOfflineUntilNs) {
+            long netStartNs = System.nanoTime();
+            resp = tryTransmitApdu(serverBaseUrl, cmdHex, netStartNs);
+            if (resp == null) {
+                for (String candidate : CANDIDATE_BASE_URLS) {
+                    if (candidate.equalsIgnoreCase(serverBaseUrl)) continue;
+                    resp = tryTransmitApdu(candidate, cmdHex, netStartNs);
+                    if (resp != null) {
+                        this.serverBaseUrl = candidate;
+                        break;
+                    }
+                }
+            }
+            if (resp == null) {
+                bridgeOfflineUntilNs = System.nanoTime() + BRIDGE_OFFLINE_COOLDOWN_NS;
             }
         }
+        if (resp == null) {
+            resp = executeLocalFallback(frame, cmdHex);
+        }
+        notifyTelemetry(frame, resp.getExecutionTimeMs());
+        return resp;
+    }
 
+    private static boolean isMainThread() {
+        try {
+            Looper myLooper = Looper.myLooper();
+            return myLooper != null && myLooper == Looper.getMainLooper();
+        } catch (RuntimeException ignored) {
+            // JVM unit tests do not mock Looper.
+            return false;
+        }
+    }
+
+    private CardResponse executeLocalFallback(byte[] frame, String cmdHex) {
+        long fallbackStartNs = System.nanoTime();
         byte[] fullResp = localFallback.processApdu(frame);
-        long elapsedMs = Math.max(1, (System.nanoTime() - startNs) / 1_000_000);
+        long elapsedMs = Math.max(1, (System.nanoTime() - fallbackStartNs) / 1_000_000);
         int sw = ApduCommands.SW_NO_ERROR;
         byte[] dataBytes = new byte[0];
         if (fullResp.length >= 2) {
@@ -133,13 +189,13 @@ public class ApduClient {
         return new CardResponse(dataBytes, sw, elapsedMs, cmdHex, rawRespHex);
     }
 
-    private CardResponse tryTransmitApdu(String baseUrl, String cmdHex, byte[] frame, long startNs) {
+    private CardResponse tryTransmitApdu(String baseUrl, String cmdHex, long startNs) {
         try {
             URL url = new URL(baseUrl + "/api/apdu");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
-            conn.setConnectTimeout(1800);
-            conn.setReadTimeout(3500);
+            conn.setConnectTimeout(250);
+            conn.setReadTimeout(1500);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             conn.setDoOutput(true);
 
@@ -149,6 +205,7 @@ public class ApduClient {
             }
 
             if (conn.getResponseCode() == 200) {
+                bridgeOfflineUntilNs = 0L;
                 try (InputStream is = conn.getInputStream()) {
                     String respText = new String(is.readAllBytes(), StandardCharsets.UTF_8);
                     JsonObject obj = JsonParser.parseString(respText).getAsJsonObject();
@@ -552,6 +609,7 @@ public class ApduClient {
 
         KeyPair rsaKeyPair;
         final SecretKeySpec aesKey = new SecretKeySpec("SMART_STUDENT_ID".getBytes(StandardCharsets.UTF_8), "AES");
+        private final Random jitterRng = new Random();
 
         LocalFallbackCardEngine() {
             try {
@@ -603,6 +661,7 @@ public class ApduClient {
                     ? Arrays.copyOfRange(apdu, 5, 5 + lc)
                     : new byte[0];
 
+            simulateCardHardwareDelay(cla, ins, p1);
             if (cla == 0x00 && ins == 0xA4) {
                 return withSw(new byte[]{(byte) pinTriesRemaining, (byte) (plainInfoLen > 0 ? 1 : 0)}, 0x9000);
             }
@@ -755,6 +814,55 @@ public class ApduClient {
                 }
             } catch (Exception e) {
                 return swOnly(0x6F00);
+            }
+        }
+
+        private void simulateCardHardwareDelay(int cla, int ins, int p1) {
+            int baseMs;
+            int jitter;
+            if (cla == 0x00 && ins == 0xA4) {
+                baseMs = 24;
+                jitter = 4;
+            } else if (cla != 0x80) {
+                return;
+            } else {
+                switch (ins) {
+                    case 0x10:
+                        baseMs = 39;
+                        jitter = 5;
+                        break;
+                    case 0x21:
+                        baseMs = (p1 == 0x00) ? 59 : 34;
+                        jitter = (p1 == 0x00) ? 6 : 5;
+                        break;
+                    case 0x30:
+                        baseMs = 29;
+                        jitter = 4;
+                        break;
+                    case 0x22:
+                        baseMs = 13;
+                        jitter = 3;
+                        break;
+                    case 0x23:
+                        baseMs = 9;
+                        jitter = 3;
+                        break;
+                    case 0x14:
+                    case 0x31:
+                    case 0x32:
+                        baseMs = 85;
+                        jitter = 10;
+                        break;
+                    default:
+                        baseMs = 15;
+                        jitter = 4;
+                        break;
+                }
+            }
+            try {
+                Thread.sleep(baseMs + jitterRng.nextInt(jitter + 1));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
 

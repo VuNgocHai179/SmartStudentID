@@ -6,6 +6,7 @@ import android.os.Looper;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Multi-threading manager implementing OPT-03 (60 FPS UI rendering):
@@ -53,10 +54,13 @@ public final class ApduThreadPool {
     }
 
     /**
-     * Optimized path: Runs the heavy operation on the 4-thread background pool (< 2ms on UI thread).
+     * Optimized path: Runs the heavy operation on the 4-thread background pool.
+     * The reported main-thread cost is the measured cost of handing the task to the pool
+     * (for the UI it is normally below 1 ms, so the UI shows "&lt;1 ms").
      */
     public <T> void executeAsyncOnPool(Callable<T> task, TaskCallback<T> callback) {
         long mainStartNs = System.nanoTime();
+        AtomicLong dispatchMicros = new AtomicLong(0);
         backgroundExecutor.submit(() -> {
             long bgStartNs = System.nanoTime();
             try {
@@ -64,7 +68,7 @@ public final class ApduThreadPool {
                 long totalMs = Math.max(1, (System.nanoTime() - bgStartNs) / 1_000_000);
                 mainThreadHandler.post(() -> {
                     if (callback != null) {
-                        callback.onComplete(result, 1L, totalMs);
+                        callback.onComplete(result, dispatchMicros.get() / 1_000, totalMs);
                     }
                 });
             } catch (Exception e) {
@@ -75,8 +79,8 @@ public final class ApduThreadPool {
                 });
             }
         });
-        long mainDispatchMs = (System.nanoTime() - mainStartNs) / 1_000_000;
-        // Dispatch overhead on the UI thread is typically < 1ms
+        // Time the Main Thread actually spent queuing the job (submit + lazy worker start).
+        dispatchMicros.set((System.nanoTime() - mainStartNs) / 1_000);
     }
 
     /**

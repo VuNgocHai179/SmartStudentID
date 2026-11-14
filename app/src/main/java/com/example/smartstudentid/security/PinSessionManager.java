@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Base64;
 
+import java.util.Arrays;
+
 /**
  * Manages the PIN-protected session lifecycle (SEC-02 / MASVS-AUTH):
  * 1. First-time login requires Smart Card scan + RSA Challenge-Response + PIN entry.
@@ -11,6 +13,9 @@ import android.util.Base64;
  *    (verified against a PBKDF2WithHmacSHA256 salted hash stored inside EncryptedSharedPreferences).
  * 3. Entering an incorrect PIN 3 consecutive times on the device automatically wipes the local
  *    session cache (Auto-Wipe) and forces a fresh card scan.
+ *
+ * <p>§5.2: the PIN is passed in as char[] and the PBKDF2 derivation zero-fills it, so no String
+ * copy is created for the verifier path; the transient on-card PIN is kept as char[] too.</p>
  */
 public class PinSessionManager {
 
@@ -27,7 +32,7 @@ public class PinSessionManager {
     private final SharedPreferences prefs;
 
     // Transient in-memory copy of the verified PIN for silent background card verification
-    private static String transientVerifiedPin = null;
+    private static char[] transientVerifiedPin = null;
 
     public PinSessionManager(Context context) {
         this.cacheManager = EncryptedCacheManager.getInstance(context);
@@ -36,10 +41,12 @@ public class PinSessionManager {
 
     /**
      * Registers a new authenticated card session after successful first-time card scan + RSA + PIN check.
+     * The supplied char[] is copied to the transient buffer and then zero-filled by PBKDF2.
      */
-    public void createPinSession(String studentId, String studentName, String pin) {
+    public void createPinSession(String studentId, String studentName, char[] pin) {
         byte[] salt = CryptoManager.generateRandomBytes(16);
         String saltB64 = Base64.encodeToString(salt, Base64.NO_WRAP);
+        setTransientPin(pin);
         String verifierHash = CryptoManager.computePinVerifierHash(pin, salt);
 
         prefs.edit()
@@ -50,15 +57,14 @@ public class PinSessionManager {
                 .putString(KEY_PIN_HASH_B64, verifierHash)
                 .putInt(KEY_FAILED_UNLOCK_COUNT, 0)
                 .apply();
-
-        transientVerifiedPin = pin;
     }
 
     /**
      * Verifies the user's PIN during subsequent app launches without requiring a new card scan.
      * Automatically wipes the session if 3 consecutive attempts fail.
+     * The supplied char[] is zero-filled by PBKDF2 on every attempt.
      */
-    public boolean verifyLocalSessionPin(String inputPin) {
+    public boolean verifyLocalSessionPin(char[] inputPin) {
         if (!hasActiveSession()) {
             return false;
         }
@@ -69,14 +75,16 @@ public class PinSessionManager {
             return false;
         }
 
+        char[] verifiedCopy = inputPin != null ? inputPin.clone() : new char[0];
         byte[] salt = Base64.decode(saltB64, Base64.NO_WRAP);
         String actualHash = CryptoManager.computePinVerifierHash(inputPin, salt);
 
         if (CryptoManager.constantTimeEquals(expectedHash, actualHash)) {
             prefs.edit().putInt(KEY_FAILED_UNLOCK_COUNT, 0).apply();
-            transientVerifiedPin = inputPin;
+            setTransientPin(verifiedCopy);
             return true;
         } else {
+            Arrays.fill(verifiedCopy, '\0');
             int fails = getFailedUnlockCount() + 1;
             if (fails >= MAX_LOCAL_UNLOCK_ATTEMPTS) {
                 // Physical security defence: Auto-wipe session & encrypted cache after 3 failed PIN attempts
@@ -91,7 +99,7 @@ public class PinSessionManager {
     /**
      * Updates the PBKDF2 verifier hash when the student changes their card PIN (INS 0x11).
      */
-    public void updateSessionPin(String newPin) {
+    public void updateSessionPin(char[] newPin) {
         if (!hasActiveSession()) return;
         createPinSession(getActiveStudentId(), getActiveStudentName(), newPin);
     }
@@ -116,15 +124,33 @@ public class PinSessionManager {
         return Math.max(0, MAX_LOCAL_UNLOCK_ATTEMPTS - getFailedUnlockCount());
     }
 
-    public String getTransientVerifiedPin() {
-        return transientVerifiedPin;
+    /**
+     * Returns a copy of the transient PIN as char[] so callers can build APDU bytes and then
+     * wipe it; the session's own copy is never handed out directly.
+     */
+    public char[] getTransientVerifiedPinChars() {
+        return transientVerifiedPin != null ? transientVerifiedPin.clone() : null;
+    }
+
+    private static void setTransientPin(char[] pin) {
+        clearTransientPin();
+        if (pin != null) {
+            transientVerifiedPin = pin.clone();
+        }
+    }
+
+    private static void clearTransientPin() {
+        if (transientVerifiedPin != null) {
+            Arrays.fill(transientVerifiedPin, '\0');
+            transientVerifiedPin = null;
+        }
     }
 
     /**
      * Completely wipes the active PIN session and cached student profile ("Switch Card" or Auto-Wipe).
      */
     public void clearSession() {
-        transientVerifiedPin = null;
+        clearTransientPin();
         prefs.edit()
                 .remove(KEY_HAS_ACTIVE_SESSION)
                 .remove(KEY_ACTIVE_STUDENT_ID)

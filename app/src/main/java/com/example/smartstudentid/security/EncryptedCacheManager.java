@@ -79,7 +79,9 @@ public class EncryptedCacheManager {
             return;
         }
         securePrefs.edit().putString(KEY_STUDENT_PROFILE_SESSION, gson.toJson(record)).apply();
-        ApduThreadPool.getInstance().execute(() -> {
+        // Server DB sync is a side effect, never part of the measured card work: always background it
+        // so Before-mode (Main Thread) demos cannot block on HTTP timeouts and ANR.
+        ApduThreadPool.getInstance().executeAsyncOnPool(() -> {
             ApduClient.getInstance().syncCardToServerDb(record);
             return true;
         }, null);

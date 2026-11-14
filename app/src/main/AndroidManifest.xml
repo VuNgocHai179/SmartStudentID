@@ -54,6 +54,10 @@
             android:name=".ui.student.StudentMainActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ui.demo.TopicDemoActivity"
+            android:exported="false" />
+
     </application>
 
 </manifest>

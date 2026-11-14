@@ -24,6 +24,16 @@
             android:text="Bảo mật &amp; Tối ưu"
             android:textAppearance="@style/TextAppearance.SmartID.ScreenTitle" />
 
+        <!-- One isolated demo page per optimization topic (§1–§5) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnOpenTopicDemo"
+            style="@style/Widget.SmartID.Button.Outline"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:text="Mở Demo theo từng chuyên đề (§1–§5)"
+            app:icon="@drawable/ic_lab" />
+
         <!-- Security hero -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
@@ -191,6 +201,20 @@
                     android:padding="12dp"
                     android:text="Đang bật: WebP, Cache, ThreadPool."
                     android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+
+                <!-- §2 live demo: blocks stop moving while the Main Thread is blocked -->
+                <com.example.smartstudentid.ui.widget.UiHeartbeatView
+                    android:id="@+id/heartbeatLab"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="10dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Nhịp UI chạy trên Main Thread: bấm đo ở Before Mode sẽ thấy nó đứng hình."
+                    android:textAppearance="@style/TextAppearance.SmartID.Micro"
+                    android:layout_marginTop="2dp" />
 
                 <!-- Metric 1 -->
                 <LinearLayout
@@ -418,6 +442,126 @@
                     android:layout_marginTop="16dp"
                     android:text="Chạy đo kiểm Benchmark"
                     app:icon="@drawable/ic_bolt" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Before / After visual comparison filled by the benchmark run -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.SmartID.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SO SÁNH TRƯỚC / SAU"
+                    android:textAppearance="@style/TextAppearance.SmartID.Label"
+                    android:textColor="@color/brand_600" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Đỏ = Before • Xanh = After (thanh càng ngắn càng tốt)"
+                    android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+
+                <TextView
+                    android:id="@+id/tvCompareImageValues"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="Ảnh thẻ: chưa đo — bấm Chạy đo kiểm Benchmark"
+                    android:textColor="@color/slate_900"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <ProgressBar
+                    android:id="@+id/pbCompareImageBefore"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="5dp"
+                    android:layout_marginTop="6dp"
+                    android:max="100"
+                    android:progress="100"
+                    android:progressDrawable="@drawable/progress_metric_red" />
+
+                <ProgressBar
+                    android:id="@+id/pbCompareImageAfter"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="5dp"
+                    android:layout_marginTop="3dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/progress_metric_green" />
+
+                <TextView
+                    android:id="@+id/tvCompareCacheValues"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="Hồ sơ: chưa đo"
+                    android:textColor="@color/slate_900"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <ProgressBar
+                    android:id="@+id/pbCompareCacheBefore"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="5dp"
+                    android:layout_marginTop="6dp"
+                    android:max="100"
+                    android:progress="100"
+                    android:progressDrawable="@drawable/progress_metric_red" />
+
+                <ProgressBar
+                    android:id="@+id/pbCompareCacheAfter"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="5dp"
+                    android:layout_marginTop="3dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/progress_metric_green" />
+
+                <TextView
+                    android:id="@+id/tvCompareUiValues"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="Main Thread: chưa đo"
+                    android:textColor="@color/slate_900"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <ProgressBar
+                    android:id="@+id/pbCompareUiBefore"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="5dp"
+                    android:layout_marginTop="6dp"
+                    android:max="100"
+                    android:progress="100"
+                    android:progressDrawable="@drawable/progress_metric_red" />
+
+                <ProgressBar
+                    android:id="@+id/pbCompareUiAfter"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="5dp"
+                    android:layout_marginTop="3dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/progress_metric_green" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

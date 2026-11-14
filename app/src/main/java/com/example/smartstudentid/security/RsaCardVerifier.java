@@ -65,13 +65,16 @@ public class RsaCardVerifier {
             return new VerificationResult(false, "", "", "", "Card failed to sign challenge nonce");
         }
 
+        long verifyStartNs = System.nanoTime();
         boolean valid = verifySignature(modResp.getData(), expResp.getData(), nonce, sigResp.getData());
+        long verifyMicros = Math.max(1, (System.nanoTime() - verifyStartNs) / 1_000);
         return new VerificationResult(
                 valid,
                 ApduCommands.bytesToHex(modResp.getData()),
                 ApduCommands.bytesToHex(expResp.getData()),
                 ApduCommands.bytesToHex(sigResp.getData()),
-                valid ? "RSA-1024 Challenge-Response Authenticated" : "Signature Verification Failed"
+                valid ? "RSA-1024 Challenge-Response Authenticated" : "Signature Verification Failed",
+                verifyMicros
         );
     }
 
@@ -101,14 +104,21 @@ public class RsaCardVerifier {
         private final String exponentHex;
         private final String signatureHex;
         private final String message;
+        private final long verifyMicros;
 
         public VerificationResult(boolean verified, String modulusHex, String exponentHex,
                                   String signatureHex, String message) {
+            this(verified, modulusHex, exponentHex, signatureHex, message, 0);
+        }
+
+        public VerificationResult(boolean verified, String modulusHex, String exponentHex,
+                                  String signatureHex, String message, long verifyMicros) {
             this.verified = verified;
             this.modulusHex = modulusHex;
             this.exponentHex = exponentHex;
             this.signatureHex = signatureHex;
             this.message = message;
+            this.verifyMicros = verifyMicros;
         }
 
         public boolean isVerified() {
@@ -129,6 +139,11 @@ public class RsaCardVerifier {
 
         public String getMessage() {
             return message;
+        }
+
+        /** Time spent in the on-device SHA1withRSA verification (microseconds). */
+        public long getVerifyMicros() {
+            return verifyMicros;
         }
     }
 }

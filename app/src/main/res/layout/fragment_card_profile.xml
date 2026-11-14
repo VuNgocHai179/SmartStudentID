@@ -344,7 +344,7 @@
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
-        <!-- Sync status -->
+        <!-- Sync status: live §1–§4 demo output for the card tab -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -352,8 +352,7 @@
             android:background="@drawable/bg_soft_panel"
             android:gravity="top"
             android:orientation="horizontal"
-            android:padding="12dp"
-            android:visibility="gone">
+            android:padding="12dp">
 
             <ImageView
                 android:layout_width="16dp"
@@ -373,6 +372,13 @@
                 android:text="Đồng bộ từ chip."
                 android:textAppearance="@style/TextAppearance.SmartID.Micro" />
         </LinearLayout>
+
+        <!-- §2 live demo: keeps moving while the UI thread is free, freezes in Before mode -->
+        <com.example.smartstudentid.ui.widget.UiHeartbeatView
+            android:id="@+id/heartbeatCardTab"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:layout_marginTop="8dp" />
 
         <TextView
             android:layout_width="wrap_content"

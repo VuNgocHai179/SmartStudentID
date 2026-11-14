@@ -39,6 +39,7 @@ import com.google.android.material.button.MaterialButton;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Locale;
 
 /**
@@ -154,10 +155,17 @@ public class CardProfileFragment extends Fragment {
     }
 
     private void loadInitialProfileState() {
+        long cacheStartNs = System.nanoTime();
         StudentCardRecord cached = encryptedCacheManager.getStudentProfile();
         if (cached != null && cached.getStudentId() != null && !cached.getStudentId().isEmpty()) {
             bindRecordToUi(cached);
             renderAvatarFromCacheOrGenerate(cached.getFullName());
+            long cacheMs = Math.max(1, (System.nanoTime() - cacheStartNs) / 1_000_000);
+            // §3 demo: read-only screens reuse the encrypted cache, so no APDU is sent.
+            tvProfileSyncStatus.setText(String.format(Locale.US,
+                    "§3 Cache offline-first: 0 APDU • EncryptedSharedPreferences (AES-GCM) %d ms\n"
+                            + "Đổi tab rồi quay lại vẫn 0 APDU; bấm \"Đồng bộ\" mới đọc thẻ.",
+                    cacheMs));
         } else {
             reloadProfileAndAvatarFromCard();
         }
@@ -259,23 +267,30 @@ public class CardProfileFragment extends Fragment {
         Context appContext = requireContext().getApplicationContext();
 
         ApduThreadPool.getInstance().execute(() -> {
-            byte[] webpBytes = ImageOptimizer.decodeAndCompressAvatar(appContext, uri);
-            if (webpBytes == null) {
+            ImageOptimizer.AvatarOptimizationReport report =
+                    ImageOptimizer.decodeAndCompressAvatarReport(appContext, uri);
+            if (report == null) {
                 return new AvatarUpdateResult(null, 0);
             }
             // Re-assert the card PIN state before writing to EEPROM (INS 0x22 requires a verified PIN).
-            String verifiedPin = pinSessionManager.getTransientVerifiedPin();
-            if (verifiedPin != null && !verifiedPin.isEmpty()) {
-                ApduClient.getInstance().sendApdu(ApduCommands.CLA_SMART_STUDENT,
-                        ApduCommands.INS_VERIFY_PIN, (byte) 0x00, (byte) 0x00,
-                        verifiedPin.getBytes(StandardCharsets.UTF_8));
+            char[] verifiedPin = sessionPinChars();
+            try {
+                byte[] pinBytes = pinToBytes(verifiedPin);
+                try {
+                    ApduClient.getInstance().sendApdu(ApduCommands.CLA_SMART_STUDENT,
+                            ApduCommands.INS_VERIFY_PIN, (byte) 0x00, (byte) 0x00, pinBytes);
+                } finally {
+                    Arrays.fill(pinBytes, (byte) 0);
+                }
+            } finally {
+                Arrays.fill(verifiedPin, '\0');
             }
-            int packets = ApduClient.getInstance().uploadAvatarInChunks(webpBytes);
-            return new AvatarUpdateResult(webpBytes, packets);
+            int packets = ApduClient.getInstance().uploadAvatarInChunks(report.webpBytes);
+            return new AvatarUpdateResult(report, packets);
         }, (result, mainBlockedMs, totalMs) -> {
             avatarUploadInProgress = false;
             if (!isAdded()) return;
-            if (result.webpBytes == null) {
+            if (result.report == null) {
                 tvProfileSyncStatus.setText("❌ Không đọc được ảnh đã chọn. Vui lòng thử ảnh khác.");
                 Toast.makeText(requireContext(), "Không thể giải mã ảnh đã chọn!",
                         Toast.LENGTH_SHORT).show();
@@ -288,47 +303,62 @@ public class CardProfileFragment extends Fragment {
                 return;
             }
 
-            encryptedCacheManager.saveAvatarBytes(result.webpBytes);
-            renderAvatarBytes(result.webpBytes);
+            ImageOptimizer.AvatarOptimizationReport report = result.report;
+            encryptedCacheManager.saveAvatarBytes(report.webpBytes);
+            renderAvatarBytes(report.webpBytes);
+
+            double webpKb = report.webpBytes.length / 1024.0;
+            double pngKb = report.pngBaselineBytes / 1024.0;
+            int savedPct = (int) Math.round(100.0 * (1.0 - (double) report.webpBytes.length
+                    / Math.max(1, report.pngBaselineBytes)));
+            double avoidedMb = report.sourceWidth * (double) report.sourceHeight * 4 / (1024 * 1024);
             tvProfileSyncStatus.setText(String.format(Locale.US,
-                    "✓ Đã cập nhật ảnh WebP %.1f KB → %d gói APDU (INS 0x22) trong %d ms.",
-                    result.webpBytes.length / 1024.0, result.packets, totalMs));
+                    "§4 Two-pass: %d×%d px → inSampleSize=%d → 150×150 (%d ms)\n"
+                            + "WebP 75%%: %.1f KB (%d gói) vs PNG cùng cỡ %.1f KB • −%d%% • tránh full-decode ~%.0f MB\n"
+                            + "§3 Đã lưu WebP vào cache AES-GCM.",
+                    report.sourceWidth, report.sourceHeight, report.sampleSize, report.decodeMs,
+                    webpKb, result.packets, pngKb, Math.max(0, savedPct), avoidedMb));
             Toast.makeText(requireContext(), "Đã cập nhật ảnh chân dung lên thẻ!",
                     Toast.LENGTH_SHORT).show();
         });
     }
 
     private static class AvatarUpdateResult {
-        final byte[] webpBytes;
+        final ImageOptimizer.AvatarOptimizationReport report;
         final int packets;
 
-        AvatarUpdateResult(byte[] webpBytes, int packets) {
-            this.webpBytes = webpBytes;
+        AvatarUpdateResult(ImageOptimizer.AvatarOptimizationReport report, int packets) {
+            this.report = report;
             this.packets = packets;
         }
     }
 
     /**
      * Reads the student profile and WebP avatar chunks from the smart card asynchronously on ApduThreadPool.
+     * The result line is the live §1/§2/§3/§4 demo for the card tab.
      */
     private void reloadProfileAndAvatarFromCard() {
         tvProfileSyncStatus.setText("Đang đồng bộ...");
         ApduThreadPool.getInstance().execute(() -> {
-            String sessionPin = pinSessionManager.getTransientVerifiedPin();
-            String verifiedPin = (sessionPin != null && !sessionPin.isEmpty()) ? sessionPin : "123456";
-            LocalCacheManager.ProfileLoadResult res = localCacheManager.fetchStudentProfileFromCard(verifiedPin);
-            byte[] downloadedAvatar = ApduClient.getInstance().downloadAvatarInChunks(
-                    OptimizationConfig.isOptimizedModeEnabled()
-            );
-            if (downloadedAvatar == null || downloadedAvatar.length == 0) {
-                Bitmap generated = ImageOptimizer.generateSampleStudentAvatar(
-                        extractInitials(res.getRecord().getFullName()), 150);
-                downloadedAvatar = ImageOptimizer.compressToOptimizedWebP(generated);
-                ApduClient.getInstance().uploadAvatarInChunks(downloadedAvatar);
-                generated.recycle();
+            char[] verifiedPin = sessionPinChars();
+            try {
+                LocalCacheManager.ProfileLoadResult res =
+                        localCacheManager.fetchStudentProfileFromCard(verifiedPin);
+                byte[] downloadedAvatar = ApduClient.getInstance().downloadAvatarInChunks(
+                        OptimizationConfig.isOptimizedModeEnabled()
+                );
+                if (downloadedAvatar == null || downloadedAvatar.length == 0) {
+                    Bitmap generated = ImageOptimizer.generateSampleStudentAvatar(
+                            extractInitials(res.getRecord().getFullName()), 150);
+                    downloadedAvatar = ImageOptimizer.compressToOptimizedWebP(generated);
+                    ApduClient.getInstance().uploadAvatarInChunks(downloadedAvatar);
+                    generated.recycle();
+                }
+                encryptedCacheManager.saveAvatarBytes(downloadedAvatar);
+                return new CardReloadPayload(res, downloadedAvatar);
+            } finally {
+                Arrays.fill(verifiedPin, '\0');
             }
-            encryptedCacheManager.saveAvatarBytes(downloadedAvatar);
-            return new CardReloadPayload(res, downloadedAvatar);
         }, (payload, mainBlockedMs, totalMs) -> {
             if (!isAdded()) return;
             bindRecordToUi(payload.profileResult.getRecord());
@@ -336,11 +366,41 @@ public class CardProfileFragment extends Fragment {
             if (bmp != null) {
                 ivStudentAvatar.setImageBitmap(bmp);
             }
-            double kb = payload.avatarBytes.length / 1024.0;
+            long[] stepMs = payload.profileResult.getStepMs();
+            int droppedFrames = Math.round(totalMs / 16.6667f);
+            String uiCost = mainBlockedMs <= 0 ? "<1 ms" : mainBlockedMs + " ms";
+            String bufferMode = OptimizationConfig.isOptimizedModeEnabled()
+                    ? "buffer 8 KB reuse" : "cấp phát mới mỗi gói";
+            String threadLine = OptimizationConfig.isOptimizedModeEnabled()
+                    ? "Main Thread giữ " + uiCost + " • nếu chạy Main Thread: " + totalMs + " ms ≈ rớt " + droppedFrames + " khung"
+                    : "đang chạy trên Main Thread — UI khóa " + totalMs + " ms ≈ rớt " + droppedFrames + " khung";
             tvAvatarMetaBadge.setVisibility(View.GONE);
             tvProfileSyncStatus.setText(String.format(Locale.US,
-                    "✓ Đọc APDU + AES-128 + " + ImageOptimizer.calculateApduPacketCount(payload.avatarBytes.length) + " gói WebP (%d ms • 60 FPS)", totalMs));
+                    "§1 Điểm nghẽn: %d lệnh = %d ms (SELECT %d · VERIFY %d · INFO %d · CIPHER %d · ACADEMIC %d ms)\n"
+                            + "§2 Đa luồng: %s\n"
+                            + "§3 Cache: đã ghi AES-GCM • lần sau 0 APDU\n"
+                            + "§4 Ảnh: WebP %.1f KB / %d gói (240B) • %s",
+                    payload.profileResult.getApduCommandsSent(), payload.profileResult.getElapsedMs(),
+                    stepMs[0], stepMs[1], stepMs[2], stepMs[3], stepMs[4],
+                    threadLine,
+                    payload.avatarBytes.length / 1024.0,
+                    ImageOptimizer.calculateApduPacketCount(payload.avatarBytes.length),
+                    bufferMode));
         });
+    }
+
+    /** Session PIN as char[] for card commands; callers must wipe it after use. */
+    private char[] sessionPinChars() {
+        char[] pin = pinSessionManager.getTransientVerifiedPinChars();
+        return (pin != null && pin.length > 0) ? pin : "123456".toCharArray();
+    }
+
+    private static byte[] pinToBytes(char[] pin) {
+        byte[] bytes = new byte[pin.length];
+        for (int i = 0; i < pin.length; i++) {
+            bytes[i] = (byte) pin[i];
+        }
+        return bytes;
     }
 
     /**
@@ -483,7 +543,8 @@ public class CardProfileFragment extends Fragment {
                 if (rec != null) {
                     rec.setDefaultPin(newPin);
                     encryptedCacheManager.saveStudentProfile(rec);
-                    pinSessionManager.createPinSession(rec.getStudentId(), rec.getFullName(), newPin);
+                    pinSessionManager.createPinSession(rec.getStudentId(), rec.getFullName(),
+                            newPin.toCharArray());
                 }
                 tvProfileSyncStatus.setText("✓ Đã đổi mã PIN.");
                 Toast.makeText(requireContext(), "Đổi mã PIN thành công!", Toast.LENGTH_SHORT).show();

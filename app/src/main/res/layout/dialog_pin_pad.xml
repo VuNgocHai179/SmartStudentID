@@ -93,6 +93,17 @@
             android:textSize="12sp"
             android:textStyle="bold" />
 
+        <!-- §1.2 / §5.2 demo: PBKDF2 cost + PIN zeroization readout -->
+        <TextView
+            android:id="@+id/tvPinCryptoInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center"
+            android:text=""
+            android:textColor="@color/slate_500"
+            android:textSize="10sp" />
+
         <!-- Numeric Keypad -->
         <LinearLayout
             android:layout_width="match_parent"

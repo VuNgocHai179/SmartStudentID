@@ -10,6 +10,7 @@ import com.example.smartstudentid.model.StudentCardRecord;
 import com.example.smartstudentid.security.EncryptedCacheManager;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /**
  * Implements the Offline-First Local Cache architecture (OPT-04) and the comprehensive
@@ -26,47 +27,41 @@ public class LocalCacheManager {
     }
 
     /**
-     * Loads the student profile according to the active OptimizationConfig mode:
-     * - Optimized Mode (ON): Reads immediately from EncryptedSharedPreferences cache (~15ms)
-     *   and avoids redundant APDU round-trips.
-     * - Unoptimized Mode (OFF): Forces a full multi-command APDU sequence against the smart card
-     *   (SELECT + GET INFO + GET ACADEMIC STATUS + GET RAW CIPHERTEXT).
+     * Queries the smart card directly via 5 sequential APDU commands, records each command's
+     * round-trip cost (§1 cost breakdown) and updates the local encrypted cache.
+     * The caller owns {@code pin} and is responsible for zero-filling it.
      */
-    public ProfileLoadResult loadStudentProfile(String verifiedPin) {
-        long startNs = System.nanoTime();
-
-        if (OptimizationConfig.isOptimizedModeEnabled()) {
-            StudentCardRecord cached = encryptedCache.getStudentProfile();
-            if (cached != null && cached.getStudentId() != null && !cached.getStudentId().isEmpty()) {
-                long elapsedMs = Math.max(1, (System.nanoTime() - startNs) / 1_000_000);
-                return new ProfileLoadResult(cached, true, 0, elapsedMs);
-            }
-        }
-
-        return fetchStudentProfileFromCard(verifiedPin);
-    }
-
-    /**
-     * Queries the smart card directly via 5 sequential APDU commands and updates the local encrypted cache.
-     */
-    public ProfileLoadResult fetchStudentProfileFromCard(String pin) {
+    public ProfileLoadResult fetchStudentProfileFromCard(char[] pin) {
         long startNs = System.nanoTime();
         int apduCount = 0;
+        long[] stepMs = new long[5];
 
         // 1. SELECT APPLET (00 A4 04 00)
-        apduClient.sendApdu(ApduCommands.CLA_ISO, ApduCommands.INS_SELECT,
-                (byte) 0x04, (byte) 0x00, ApduCommands.APPLET_AID);
+        stepMs[0] = apduClient.sendApdu(ApduCommands.CLA_ISO, ApduCommands.INS_SELECT,
+                (byte) 0x04, (byte) 0x00, ApduCommands.APPLET_AID).getExecutionTimeMs();
         apduCount++;
 
         // 2. VERIFY PIN (80 10 00 00)
-        String safePin = (pin != null && !pin.isEmpty()) ? pin : "123456";
-        apduClient.sendApdu(ApduCommands.CLA_SMART_STUDENT, ApduCommands.INS_VERIFY_PIN,
-                (byte) 0x00, (byte) 0x00, safePin.getBytes(StandardCharsets.UTF_8));
+        char[] safePin = (pin != null && pin.length > 0) ? pin : "123456".toCharArray();
+        byte[] pinBytes = new byte[safePin.length];
+        try {
+            for (int i = 0; i < safePin.length; i++) {
+                pinBytes[i] = (byte) safePin[i];
+            }
+            stepMs[1] = apduClient.sendApdu(ApduCommands.CLA_SMART_STUDENT, ApduCommands.INS_VERIFY_PIN,
+                    (byte) 0x00, (byte) 0x00, pinBytes).getExecutionTimeMs();
+        } finally {
+            Arrays.fill(pinBytes, (byte) 0);
+            if (safePin != pin) {
+                Arrays.fill(safePin, '\0');
+            }
+        }
         apduCount++;
 
         // 3. GET DECRYPTED STUDENT INFO (80 21 00 00)
         CardResponse infoResp = apduClient.sendApdu(ApduCommands.CLA_SMART_STUDENT,
                 ApduCommands.INS_GET_STUDENT_INFO, ApduCommands.P1_INFO_DECRYPTED, (byte) 0x00, null);
+        stepMs[2] = infoResp.getExecutionTimeMs();
         apduCount++;
 
         String infoUtf8 = new String(infoResp.getData(), StandardCharsets.UTF_8);
@@ -81,19 +76,21 @@ public class LocalCacheManager {
                 cached = new StudentCardRecord();
             }
             long fallbackElapsed = Math.max(12, (System.nanoTime() - startNs) / 1_000_000);
-            return new ProfileLoadResult(cached, true, apduCount, fallbackElapsed);
+            return new ProfileLoadResult(cached, true, apduCount, fallbackElapsed, stepMs);
         }
         StudentCardRecord record = StudentCardRecord.fromPipeDelimitedString(infoUtf8);
 
         // 4. GET RAW AES-128 CIPHERTEXT FOR SECURITY LAB (80 21 01 00)
         CardResponse cipherResp = apduClient.sendApdu(ApduCommands.CLA_SMART_STUDENT,
                 ApduCommands.INS_GET_STUDENT_INFO, ApduCommands.P1_INFO_RAW_CIPHERTEXT, (byte) 0x00, null);
+        stepMs[3] = cipherResp.getExecutionTimeMs();
         apduCount++;
         record.setRawAesCiphertextHex(ApduCommands.bytesToHex(cipherResp.getData()));
 
         // 5. GET ACADEMIC & LIBRARY STATUS (80 30 00 00)
         CardResponse acadResp = apduClient.sendApdu(ApduCommands.CLA_SMART_STUDENT,
                 ApduCommands.INS_GET_ACADEMIC_LIBRARY_STATUS, (byte) 0x00, (byte) 0x00, null);
+        stepMs[4] = acadResp.getExecutionTimeMs();
         apduCount++;
         byte[] acadData = acadResp.getData();
         if (acadData.length >= 5) {
@@ -109,7 +106,7 @@ public class LocalCacheManager {
         encryptedCache.saveStudentProfile(record);
 
         long elapsedMs = Math.max(12, (System.nanoTime() - startNs) / 1_000_000);
-        return new ProfileLoadResult(record, false, apduCount, elapsedMs);
+        return new ProfileLoadResult(record, false, apduCount, elapsedMs, stepMs);
     }
 
     /**
@@ -137,7 +134,7 @@ public class LocalCacheManager {
         long pngUploadMs = Math.max(webpUploadMs * (pngPackets / Math.max(1, webpPackets)), 2800);
 
         // 2. Profile Loading Latency Benchmark: Direct APDU Round-Trip vs Encrypted Local Cache
-        ProfileLoadResult directApduResult = fetchStudentProfileFromCard("123456");
+        ProfileLoadResult directApduResult = fetchStudentProfileFromCard("123456".toCharArray());
         long unoptLoadMs = Math.max(directApduResult.getElapsedMs(), 180);
 
         long cacheStartNs = System.nanoTime();
@@ -165,13 +162,15 @@ public class LocalCacheManager {
         private final boolean fromLocalCache;
         private final int apduCommandsSent;
         private final long elapsedMs;
+        private final long[] stepMs;
 
         public ProfileLoadResult(StudentCardRecord record, boolean fromLocalCache,
-                                 int apduCommandsSent, long elapsedMs) {
+                                 int apduCommandsSent, long elapsedMs, long[] stepMs) {
             this.record = record;
             this.fromLocalCache = fromLocalCache;
             this.apduCommandsSent = apduCommandsSent;
             this.elapsedMs = elapsedMs;
+            this.stepMs = stepMs != null ? stepMs : new long[5];
         }
 
         public StudentCardRecord getRecord() {
@@ -188,6 +187,11 @@ public class LocalCacheManager {
 
         public long getElapsedMs() {
             return elapsedMs;
+        }
+
+        /** Per-command round-trip times in ms: SELECT, VERIFY, GET INFO, GET CIPHER, GET ACADEMIC. */
+        public long[] getStepMs() {
+            return stepMs;
         }
     }
 

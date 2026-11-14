@@ -83,9 +83,51 @@ public final class ImageOptimizer {
      * rotation, downsamples it and center-crops it to the requested card portrait size.
      */
     public static Bitmap decodeAndDownsampleFromUri(Context context, Uri uri, int reqWidth, int reqHeight) {
+        DecodedPortrait decoded = decodePortraitFromUri(context, uri, reqWidth, reqHeight);
+        return decoded != null ? decoded.bitmap : null;
+    }
+
+    /**
+     * §4 demo data: decodes the picked portrait with two-pass downsampling and reports the source
+     * size, the chosen inSampleSize and the WebP vs same-size PNG cost of the card portrait.
+     */
+    public static AvatarOptimizationReport decodeAndCompressAvatarReport(Context context, Uri uri) {
+        DecodedPortrait decoded = decodePortraitFromUri(context, uri,
+                TARGET_AVATAR_WIDTH, TARGET_AVATAR_HEIGHT);
+        if (decoded == null) {
+            return null;
+        }
+        try {
+            byte[] pngBaseline = compressToUnoptimizedPng(decoded.bitmap);
+            byte[] webp = compressAvatarForCard(decoded.bitmap);
+            return new AvatarOptimizationReport(webp, decoded.sourceWidth, decoded.sourceHeight,
+                    decoded.sampleSize, decoded.elapsedMs, pngBaseline.length);
+        } finally {
+            decoded.bitmap.recycle();
+        }
+    }
+
+    private static final class DecodedPortrait {
+        final Bitmap bitmap;
+        final int sourceWidth;
+        final int sourceHeight;
+        final int sampleSize;
+        final long elapsedMs;
+
+        DecodedPortrait(Bitmap bitmap, int sourceWidth, int sourceHeight, int sampleSize, long elapsedMs) {
+            this.bitmap = bitmap;
+            this.sourceWidth = sourceWidth;
+            this.sourceHeight = sourceHeight;
+            this.sampleSize = sampleSize;
+            this.elapsedMs = elapsedMs;
+        }
+    }
+
+    private static DecodedPortrait decodePortraitFromUri(Context context, Uri uri, int reqWidth, int reqHeight) {
         if (context == null || uri == null) {
             return null;
         }
+        long startNs = System.nanoTime();
         try {
             BitmapFactory.Options bounds = new BitmapFactory.Options();
             bounds.inJustDecodeBounds = true;
@@ -118,7 +160,9 @@ public final class ImageOptimizer {
             if (cropped != oriented) {
                 oriented.recycle();
             }
-            return cropped;
+            long elapsedMs = Math.max(1, (System.nanoTime() - startNs) / 1_000_000);
+            return new DecodedPortrait(cropped, bounds.outWidth, bounds.outHeight,
+                    options.inSampleSize, elapsedMs);
         } catch (Exception | OutOfMemoryError e) {
             return null;
         }
@@ -129,13 +173,8 @@ public final class ImageOptimizer {
      * Returns null when the Uri cannot be decoded.
      */
     public static byte[] decodeAndCompressAvatar(Context context, Uri uri) {
-        Bitmap avatar = decodeAndDownsampleFromUri(context, uri, TARGET_AVATAR_WIDTH, TARGET_AVATAR_HEIGHT);
-        if (avatar == null) {
-            return null;
-        }
-        byte[] webp = compressAvatarForCard(avatar);
-        avatar.recycle();
-        return webp;
+        AvatarOptimizationReport report = decodeAndCompressAvatarReport(context, uri);
+        return report != null ? report.webpBytes : null;
     }
 
     /**
@@ -346,5 +385,27 @@ public final class ImageOptimizer {
     public static int calculateApduPacketCount(int byteLength) {
         if (byteLength <= 0) return 0;
         return (byteLength + ApduCommands.MAX_AVATAR_CHUNK_SIZE - 1) / ApduCommands.MAX_AVATAR_CHUNK_SIZE;
+    }
+
+    /**
+     * Result of the two-pass portrait pipeline, used by the §4 demo on the card tab.
+     */
+    public static final class AvatarOptimizationReport {
+        public final byte[] webpBytes;
+        public final int sourceWidth;
+        public final int sourceHeight;
+        public final int sampleSize;
+        public final long decodeMs;
+        public final int pngBaselineBytes;
+
+        AvatarOptimizationReport(byte[] webpBytes, int sourceWidth, int sourceHeight,
+                                 int sampleSize, long decodeMs, int pngBaselineBytes) {
+            this.webpBytes = webpBytes;
+            this.sourceWidth = sourceWidth;
+            this.sourceHeight = sourceHeight;
+            this.sampleSize = sampleSize;
+            this.decodeMs = decodeMs;
+            this.pngBaselineBytes = pngBaselineBytes;
+        }
     }
 }

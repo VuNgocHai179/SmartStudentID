@@ -5,9 +5,12 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.os.Process;
+import android.os.SystemClock;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -20,6 +23,7 @@ import com.example.smartstudentid.apdu.ApduCommands;
 import com.example.smartstudentid.apdu.CardResponse;
 import com.example.smartstudentid.model.StudentCardRecord;
 import com.example.smartstudentid.optimization.ApduThreadPool;
+import com.example.smartstudentid.optimization.DemoMetrics;
 import com.example.smartstudentid.optimization.LocalCacheManager;
 import com.example.smartstudentid.security.BaseSecureActivity;
 import com.example.smartstudentid.security.EncryptedCacheManager;
@@ -29,8 +33,8 @@ import com.example.smartstudentid.ui.admin.AdminDashboardActivity;
 import com.example.smartstudentid.ui.admin.AdminLoginActivity;
 import com.example.smartstudentid.ui.student.StudentMainActivity;
 
-import java.nio.charset.StandardCharsets;
-import java.util.List;
+import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * NFC Smart Student Card Login Screen:
@@ -63,7 +67,12 @@ public class LoginPinActivity extends BaseSecureActivity {
     private boolean rsaChallengePassed = false;
 
     private Dialog activePinDialog;
-    private final StringBuilder currentPinInput = new StringBuilder();
+    private final char[] pinBuffer = new char[MAX_PIN_LENGTH];
+    private int pinLength = 0;
+    private TextView tvPerfFooter;
+    private long coldStartMs = 0;
+    private Long lastPbkdf2Ms = null;
+    private boolean pinSubmitInProgress = false;
     private final android.os.Handler nfcPollHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private boolean isPollingActive = false;
 
@@ -103,6 +112,7 @@ public class LoginPinActivity extends BaseSecureActivity {
         rsaCardVerifier = new RsaCardVerifier();
 
         bindViews();
+        measureColdStart();
         refreshSessionUiState();
     }
 
@@ -133,7 +143,8 @@ public class LoginPinActivity extends BaseSecureActivity {
         tvLoginFeedback = findViewById(R.id.tvLoginFeedback);
         btnPrimaryLogin = findViewById(R.id.btnPrimaryLogin);
         btnLogoutSavedCard = findViewById(R.id.btnLogoutSavedCard);
-        Button btnOpenAdminDashboard = findViewById(R.id.btnOpenAdminDashboard);
+        View btnOpenAdminDashboard = findViewById(R.id.btnOpenAdminDashboard);
+        tvPerfFooter = findViewById(R.id.tvPerfFooter);
 
         btnPrimaryLogin.setOnClickListener(v -> showPinEntryPopup());
 
@@ -146,6 +157,58 @@ public class LoginPinActivity extends BaseSecureActivity {
 
         btnOpenAdminDashboard.setOnClickListener(v ->
                 startActivity(new Intent(this, AdminLoginActivity.class)));
+    }
+
+    /**
+     * §5 demo: measures cold start from process start (Process.getStartElapsedRealtime) until the
+     * PIN screen has been laid out and is ready to accept taps.
+     */
+    private void measureColdStart() {
+        View root = findViewById(R.id.loginRoot);
+        if (root == null) return;
+        root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                if (!root.getViewTreeObserver().isAlive()) return true;
+                root.getViewTreeObserver().removeOnPreDrawListener(this);
+                coldStartMs = Math.max(1,
+                        SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime());
+                DemoMetrics.setColdStartMs(coldStartMs);
+                updatePerfFooter();
+                return true;
+            }
+        });
+        updatePerfFooter();
+    }
+
+    /**
+     * §5 footer: cold start, last PBKDF2 cost (§1.2) and the zeroization guarantee.
+     */
+    private void updatePerfFooter() {
+        if (tvPerfFooter == null) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("§5 Khởi động nguội: ")
+                .append(coldStartMs > 0 ? coldStartMs + " ms" : "đang đo...")
+                .append(" (process → màn PIN sẵn sàng)");
+        if (lastPbkdf2Ms != null) {
+            sb.append(" • §1 PBKDF2 10.000 vòng: ").append(lastPbkdf2Ms).append(" ms");
+        }
+        sb.append("\n§5 Zeroize: PIN giữ ở char[], xóa bằng PBEKeySpec.clearPassword() + Arrays.fill");
+        tvPerfFooter.setText(sb.toString());
+    }
+
+    private static void showPinCryptoInfo(TextView tv, String text) {
+        if (tv != null) {
+            tv.setText(text);
+        }
+    }
+
+    private static byte[] pinToBytes(char[] pin) {
+        byte[] bytes = new byte[pin.length];
+        for (int i = 0; i < pin.length; i++) {
+            bytes[i] = (byte) pin[i];
+        }
+        return bytes;
     }
 
     private StudentCardRecord getActiveInsertedCardRecord() {
@@ -197,13 +260,16 @@ public class LoginPinActivity extends BaseSecureActivity {
             return;
         }
 
-        currentPinInput.setLength(0);
+        pinLength = 0;
+        Arrays.fill(pinBuffer, '\0');
         View popupView = LayoutInflater.from(this).inflate(R.layout.dialog_pin_pad, null, false);
 
         Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(popupView);
         dialog.setCancelable(true);
+        // Never leave the keypad locked if the dialog is closed while a card check is in flight.
+        dialog.setOnDismissListener(d -> pinSubmitInProgress = false);
 
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -213,6 +279,7 @@ public class LoginPinActivity extends BaseSecureActivity {
 
         TextView tvSubtitle = popupView.findViewById(R.id.tvPinPopupSubtitle);
         TextView tvError = popupView.findViewById(R.id.tvPinPopupError);
+        TextView tvPinCryptoInfo = popupView.findViewById(R.id.tvPinCryptoInfo);
         LinearLayout dotsContainer = popupView.findViewById(R.id.pinDotsContainer);
         View btnClose = popupView.findViewById(R.id.btnClosePinPopup);
         Button btnConfirm = popupView.findViewById(R.id.btnConfirmPinPopup);
@@ -237,34 +304,42 @@ public class LoginPinActivity extends BaseSecureActivity {
             final char digitChar = (char) ('0' + i);
             View keyBtn = popupView.findViewById(digitIds[i]);
             keyBtn.setOnClickListener(v -> {
-                if (currentPinInput.length() >= MAX_PIN_LENGTH) {
+                if (pinSubmitInProgress || pinLength >= MAX_PIN_LENGTH) {
                     return;
                 }
-                currentPinInput.append(digitChar);
+                pinBuffer[pinLength++] = digitChar;
                 tvError.setText("");
-                renderPinDots(dotsContainer, currentPinInput.length());
+                renderPinDots(dotsContainer, pinLength);
 
                 // Automatically submit when reaching 6 digits for fast, seamless UX
-                if (currentPinInput.length() == STANDARD_PIN_LENGTH) {
-                    submitPinFromPopup(currentPinInput.toString(), dialog, dotsContainer, tvError);
+                if (pinLength == STANDARD_PIN_LENGTH) {
+                    submitPinFromPopup(Arrays.copyOf(pinBuffer, pinLength), dialog, dotsContainer,
+                            tvError, tvPinCryptoInfo);
                 }
             });
         }
 
         View btnBackspace = popupView.findViewById(R.id.btnPinBackspace);
         btnBackspace.setOnClickListener(v -> {
-            if (currentPinInput.length() > 0) {
-                currentPinInput.deleteCharAt(currentPinInput.length() - 1);
-                renderPinDots(dotsContainer, currentPinInput.length());
+            if (pinSubmitInProgress) {
+                return;
+            }
+            if (pinLength > 0) {
+                pinBuffer[--pinLength] = '\0';
+                renderPinDots(dotsContainer, pinLength);
             }
         });
 
         btnConfirm.setOnClickListener(v -> {
-            if (currentPinInput.length() < 4) {
+            if (pinSubmitInProgress) {
+                return;
+            }
+            if (pinLength < 4) {
                 tvError.setText("Vui lòng nhập từ 4 đến 8 chữ số");
                 return;
             }
-            submitPinFromPopup(currentPinInput.toString(), dialog, dotsContainer, tvError);
+            submitPinFromPopup(Arrays.copyOf(pinBuffer, pinLength), dialog, dotsContainer,
+                    tvError, tvPinCryptoInfo);
         });
 
         btnClose.setOnClickListener(v -> dialog.dismiss());
@@ -292,37 +367,55 @@ public class LoginPinActivity extends BaseSecureActivity {
         }
     }
 
-    private void submitPinFromPopup(String pin, Dialog dialog, LinearLayout dotsContainer, TextView tvError) {
+    private void submitPinFromPopup(char[] pin, Dialog dialog, LinearLayout dotsContainer,
+                                    TextView tvError, TextView tvPinCryptoInfo) {
+        pinSubmitInProgress = true;
+        pinLength = 0;
+        Arrays.fill(pinBuffer, '\0');
+
         // Mode B: Fast PIN Session Unlock from Encrypted Cache (~9-15ms)
         if (pinSessionManager.hasActiveSession()) {
+            byte[] pinBytes = pinToBytes(pin);
             long startNs = System.nanoTime();
+            // verifyLocalSessionPin zero-fills the char[] PIN after PBKDF2 (§5.2 zeroization).
             boolean unlocked = pinSessionManager.verifyLocalSessionPin(pin);
             long unlockMs = Math.max(1, (System.nanoTime() - startNs) / 1_000_000);
+            lastPbkdf2Ms = unlockMs;
+            updatePerfFooter();
+            showPinCryptoInfo(tvPinCryptoInfo, String.format(Locale.US,
+                    "§1 PBKDF2 10.000 vòng: %d ms • §5 PIN đã zeroize (char[])", unlockMs));
 
             if (unlocked) {
-                ApduThreadPool.getInstance().executeAsyncOnPool(() ->
-                        ApduClient.getInstance().sendApdu(
+                ApduThreadPool.getInstance().executeAsyncOnPool(() -> {
+                    try {
+                        return ApduClient.getInstance().sendApdu(
                                 ApduCommands.CLA_SMART_STUDENT,
                                 ApduCommands.INS_VERIFY_PIN,
                                 (byte) 0x00,
                                 (byte) 0x00,
-                                pin.getBytes(StandardCharsets.UTF_8)
-                        ), null);
+                                pinBytes
+                        );
+                    } finally {
+                        Arrays.fill(pinBytes, (byte) 0);
+                    }
+                }, null);
 
+                pinSubmitInProgress = false;
                 dialog.dismiss();
                 openStudentMainScreen(unlockMs, true);
             } else {
-                currentPinInput.setLength(0);
+                Arrays.fill(pinBytes, (byte) 0);
+                pinSubmitInProgress = false;
                 renderPinDots(dotsContainer, 0);
                 if (!pinSessionManager.hasActiveSession()) {
                     // Auto-Wipe triggered after 3 failed attempts
                     rsaChallengePassed = false;
                     dialog.dismiss();
                     refreshSessionUiState();
-                    showMainFeedback("Đã nhập sai mã PIN 3 lần. Dữ liệu đệm đã tự động xóa bảo vệ.");
+                    showMainFeedback("§3 Auto-Wipe: sai PIN 3 lần — session + cache AES-GCM đã bị xóa.");
                 } else {
                     int remaining = pinSessionManager.getRemainingUnlockAttempts();
-                    tvError.setText("Mã PIN không đúng • Còn " + remaining + " lần thử");
+                    tvError.setText("Mã PIN không đúng • §3 còn " + remaining + "/3 lần thử");
                 }
             }
             return;
@@ -331,44 +424,70 @@ public class LoginPinActivity extends BaseSecureActivity {
         // Mode A: First-Time Card Login
         tvError.setText("Đang kiểm tra mã PIN...");
         ApduThreadPool.getInstance().execute(() -> {
-            if (!rsaChallengePassed) {
-                RsaCardVerifier.VerificationResult vr = rsaCardVerifier.performChallengeResponse();
-                rsaChallengePassed = vr.isVerified();
-            }
-            CardResponse pinResp = ApduClient.getInstance().sendApdu(
-                    ApduCommands.CLA_SMART_STUDENT,
-                    ApduCommands.INS_VERIFY_PIN,
-                    (byte) 0x00,
-                    (byte) 0x00,
-                    pin.getBytes(StandardCharsets.UTF_8)
-            );
-            if (!pinResp.isSuccess()) {
-                return new LoginAttemptOutcome(false, pinResp, null);
-            }
-            LocalCacheManager.ProfileLoadResult loadResult = localCacheManager.fetchStudentProfileFromCard(pin);
+            long rsaMicros = 0;
+            try {
+                if (!rsaChallengePassed) {
+                    RsaCardVerifier.VerificationResult vr = rsaCardVerifier.performChallengeResponse();
+                    rsaChallengePassed = vr.isVerified();
+                    rsaMicros = vr.getVerifyMicros();
+                }
+                byte[] pinBytes = pinToBytes(pin);
+                CardResponse pinResp;
+                try {
+                    pinResp = ApduClient.getInstance().sendApdu(
+                            ApduCommands.CLA_SMART_STUDENT,
+                            ApduCommands.INS_VERIFY_PIN,
+                            (byte) 0x00,
+                            (byte) 0x00,
+                            pinBytes
+                    );
+                } finally {
+                    Arrays.fill(pinBytes, (byte) 0);
+                }
+                if (!pinResp.isSuccess()) {
+                    return new LoginAttemptOutcome(false, pinResp, null, rsaMicros, 0);
+                }
+                LocalCacheManager.ProfileLoadResult loadResult =
+                        localCacheManager.fetchStudentProfileFromCard(pin);
 
-            // Fetch the portrait stored on THIS card so a previously cached student's photo never lingers.
-            byte[] avatarBytes = ApduClient.getInstance().downloadAvatarInChunks(true);
-            if (avatarBytes != null && avatarBytes.length > 0) {
-                encryptedCacheManager.saveAvatarBytes(avatarBytes);
-            }
-            return new LoginAttemptOutcome(true, pinResp, loadResult);
-        }, (outcome, mainBlockedMs, totalMs) -> {
-            if (outcome.success && outcome.profileLoadResult != null) {
-                StudentCardRecord record = outcome.profileLoadResult.getRecord();
+                // Fetch the portrait stored on THIS card so a previously cached student's photo never lingers.
+                byte[] avatarBytes = ApduClient.getInstance().downloadAvatarInChunks(true);
+                if (avatarBytes != null && avatarBytes.length > 0) {
+                    encryptedCacheManager.saveAvatarBytes(avatarBytes);
+                }
+
+                // PBKDF2 verifier for the local session; also zero-fills the PIN char[].
+                long pbkdf2StartNs = System.nanoTime();
+                StudentCardRecord record = loadResult.getRecord();
                 pinSessionManager.createPinSession(record.getStudentId(), record.getFullName(), pin);
+                long pbkdf2Ms = Math.max(1, (System.nanoTime() - pbkdf2StartNs) / 1_000_000);
+                return new LoginAttemptOutcome(true, pinResp, loadResult, rsaMicros, pbkdf2Ms);
+            } finally {
+                Arrays.fill(pin, '\0');
+            }
+        }, (outcome, mainBlockedMs, totalMs) -> {
+            pinSubmitInProgress = false;
+            if (outcome.success && outcome.profileLoadResult != null) {
+                lastPbkdf2Ms = outcome.pbkdf2Ms;
+                updatePerfFooter();
                 dialog.dismiss();
                 openStudentMainScreen(totalMs, false);
             } else {
                 CardResponse resp = outcome.pinResponse;
-                currentPinInput.setLength(0);
                 renderPinDots(dotsContainer, 0);
-                if (resp.isCardLocked()) {
+                showPinCryptoInfo(tvPinCryptoInfo, outcome.rsaVerifyMicros > 0
+                        ? String.format(Locale.US,
+                                "§1 RSA-1024 verify: %.2f ms • §5 PIN đã zeroize",
+                                outcome.rsaVerifyMicros / 1000.0)
+                        : "§5 PIN đã zeroize (char[])");
+                if (resp != null && resp.isCardLocked()) {
                     dialog.dismiss();
                     showMainFeedback("Thẻ đã bị khóa do nhập sai PIN 3 lần. Vui lòng mở khóa bằng PUK ở mục Quản trị.");
-                } else {
+                } else if (resp != null) {
                     int tries = resp.getRemainingPinTries();
                     tvError.setText("Mã PIN không đúng • Còn " + tries + " lần thử");
+                } else {
+                    tvError.setText("Không đọc được phản hồi từ thẻ.");
                 }
             }
         });
@@ -401,12 +520,17 @@ public class LoginPinActivity extends BaseSecureActivity {
         final boolean success;
         final CardResponse pinResponse;
         final LocalCacheManager.ProfileLoadResult profileLoadResult;
+        final long rsaVerifyMicros;
+        final long pbkdf2Ms;
 
         LoginAttemptOutcome(boolean success, CardResponse pinResponse,
-                            LocalCacheManager.ProfileLoadResult profileLoadResult) {
+                            LocalCacheManager.ProfileLoadResult profileLoadResult,
+                            long rsaVerifyMicros, long pbkdf2Ms) {
             this.success = success;
             this.pinResponse = pinResponse;
             this.profileLoadResult = profileLoadResult;
+            this.rsaVerifyMicros = rsaVerifyMicros;
+            this.pbkdf2Ms = pbkdf2Ms;
         }
     }
 }
