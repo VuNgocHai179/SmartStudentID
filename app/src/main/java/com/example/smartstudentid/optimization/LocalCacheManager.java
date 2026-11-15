@@ -104,6 +104,17 @@ public class LocalCacheManager {
             record.setAttendanceCount(attCount);
             record.setLabAccessGranted(labOk);
         }
+        if (acadData.length >= 6) {
+            int borrowedCount = acadData[5] & 0xFF;
+            int walletOffset = 6 + borrowedCount * 2;
+            if (acadData.length >= walletOffset + 4) {
+                int balance = ((acadData[walletOffset] & 0xFF) << 24)
+                        | ((acadData[walletOffset + 1] & 0xFF) << 16)
+                        | ((acadData[walletOffset + 2] & 0xFF) << 8)
+                        | (acadData[walletOffset + 3] & 0xFF);
+                record.setWalletBalance(balance);
+            }
+        }
 
         // Save into EncryptedSharedPreferences for subsequent fast loads
         encryptedCache.saveStudentProfile(record);

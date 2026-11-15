@@ -64,12 +64,41 @@ public final class ApduCommands {
 
     public static final byte INS_GET_ACTIVITY_LOG = (byte) 0x33;
 
+    // 7. E-Wallet Subsystem (Atomic Balance + PIN + RSA-1024) - SC-13..SC-16
+    public static final byte INS_WALLET_CREDIT = (byte) 0x40;
+    public static final byte INS_WALLET_DEBIT = (byte) 0x41;
+    public static final byte INS_WALLET_GET_BALANCE = (byte) 0x42;
+
     // Status Words (SW1-SW2)
     public static final int SW_NO_ERROR = 0x9000;
     public static final int SW_SECURITY_STATUS_NOT_SATISFIED = 0x6982;
     public static final int SW_AUTHENTICATION_METHOD_BLOCKED = 0x6983; // Card blocked after 3 failed PIN attempts
+    public static final int SW_CONDITIONS_NOT_SATISFIED = 0x6985; // Insufficient wallet balance
+    public static final int SW_FILE_FULL = 0x6A84; // Wallet balance cap exceeded (50,000,000 VND)
     public static final int SW_WRONG_PUK = 0x6300;
     public static final int SW_PIN_TRIES_PREFIX = 0x63C0; // 63CX: X remaining PIN attempts
+
+    /**
+     * Builds the canonical 13-byte EMV e-Purse receipt payload signed by RSA-1024 on the chip:
+     * [INS (1B)][Amount (4B)][NewBalance (4B)][TimestampSeconds (4B)].
+     */
+    public static byte[] buildCanonicalWalletReceipt(byte ins, int amount, int newBalance, int timestampSeconds) {
+        return new byte[]{
+                ins,
+                (byte) ((amount >> 24) & 0xFF),
+                (byte) ((amount >> 16) & 0xFF),
+                (byte) ((amount >> 8) & 0xFF),
+                (byte) (amount & 0xFF),
+                (byte) ((newBalance >> 24) & 0xFF),
+                (byte) ((newBalance >> 16) & 0xFF),
+                (byte) ((newBalance >> 8) & 0xFF),
+                (byte) (newBalance & 0xFF),
+                (byte) ((timestampSeconds >> 24) & 0xFF),
+                (byte) ((timestampSeconds >> 16) & 0xFF),
+                (byte) ((timestampSeconds >> 8) & 0xFF),
+                (byte) (timestampSeconds & 0xFF)
+        };
+    }
 
     /**
      * Converts a byte array into a space-separated uppercase hex string.

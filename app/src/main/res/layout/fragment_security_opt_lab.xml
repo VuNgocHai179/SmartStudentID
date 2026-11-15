@@ -1,37 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Tab 4: Performance Optimization Lab (Course 3) & OWASP MASVS Security Status (Course 2) in spacious Light Mode -->
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/slate_50"
-    android:fillViewport="true"
-    android:overScrollMode="never"
-    android:scrollbars="none">
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingStart="20dp"
-        android:paddingTop="18dp"
-        android:paddingEnd="20dp"
-        android:paddingBottom="24dp">
+        android:padding="20dp">
 
+        <!-- Screen Title -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Bảo mật &amp; Tối ưu"
+            android:text="Ví điện tử"
             android:textAppearance="@style/TextAppearance.SmartID.ScreenTitle" />
 
-        <!-- Security hero -->
+        <!-- 1. Banking Account Hero Card -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            app:cardBackgroundColor="@color/transparent"
             app:cardCornerRadius="22dp"
-            app:cardElevation="5dp"
+            app:cardElevation="3dp"
             app:strokeWidth="0dp">
 
             <LinearLayout
@@ -39,111 +33,262 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_gradient_green"
                 android:orientation="vertical"
-                android:padding="18dp">
+                android:padding="20dp">
 
+                <!-- Header Row -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <LinearLayout
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:background="@drawable/bg_glass_pill"
-                        android:gravity="center">
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:contentDescription="Ví Smart Campus"
+                        android:src="@drawable/ic_nav_wallet"
+                        app:tint="@color/white" />
 
-                        <ImageView
-                            android:layout_width="26dp"
-                            android:layout_height="26dp"
-                            android:contentDescription="Bảo mật"
-                            android:src="@drawable/ic_nav_security"
-                            app:tint="@color/white" />
-                    </LinearLayout>
+                    <TextView
+                        android:id="@+id/tvWalletAccountNumber"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="Số tài khoản: CT070315"
+                        android:textColor="#D1FAE5"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvWalletSyncBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_glass_pill"
+                        android:paddingStart="10dp"
+                        android:paddingTop="4dp"
+                        android:paddingEnd="10dp"
+                        android:paddingBottom="4dp"
+                        android:text="● Đang hoạt động"
+                        android:textColor="@color/white"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- Balance + Mask Toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="14dp"
                         android:layout_weight="1"
                         android:orientation="vertical">
 
                         <TextView
-                            android:id="@+id/tvSecurityHeroStatus"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Thiết bị an toàn"
+                            android:text="Số dư khả dụng"
+                            android:textColor="#ECFDF5"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/tvWalletBalance"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="500.000 đ"
                             android:textColor="@color/white"
-                            android:textSize="17sp"
+                            android:textSize="30sp"
                             android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnToggleBalanceMask"
+                        style="@style/Widget.SmartID.Button.Pill"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:text="Ẩn số dư"
+                        android:textColor="@color/white"
+                        android:textSize="11sp"
+                        app:backgroundTint="@color/glass_white" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvWalletOwnerInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Chủ ví: Vũ Ngọc Hải"
+                    android:textColor="#D1FAE5"
+                    android:textSize="12sp" />
+
+                <!-- Cashflow Summary Strip -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_glass_pill"
+                    android:orientation="horizontal"
+                    android:paddingStart="14dp"
+                    android:paddingTop="10dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="10dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="MASVS 5/5"
+                            android:text="Tổng tiền vào (+)"
                             android:textColor="#D1FAE5"
-                            android:textSize="11sp" />
+                            android:textSize="10sp" />
+
+                        <TextView
+                            android:id="@+id/tvWalletTotalCredit"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="+550.000 đ"
+                            android:textColor="@color/white"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginStart="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="#55FFFFFF" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tổng tiền ra (-)"
+                            android:textColor="#D1FAE5"
+                            android:textSize="10sp" />
+
+                        <TextView
+                            android:id="@+id/tvWalletTotalDebit"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="-50.000 đ"
+                            android:textColor="@color/white"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
                     </LinearLayout>
                 </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSyncWalletBalance"
+                    style="@style/Widget.SmartID.Button.Pill"
+                    android:layout_width="match_parent"
+                    android:layout_height="42dp"
+                    android:layout_marginTop="14dp"
+                    android:text="Làm mới số dư"
+                    android:textColor="@color/emerald_700"
+                    app:backgroundTint="@color/white"
+                    app:icon="@drawable/ic_refresh"
+                    app:iconTint="@color/emerald_700" />
+
+                <TextView
+                    android:id="@+id/tvWalletStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text=""
+                    android:textColor="#ECFDF5"
+                    android:textSize="11sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Latest Receipt / RSA Proof Banner (tap for full bank receipt) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardWalletLastReceipt"
+            style="@style/Widget.SmartID.Card.Tinted"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_glass_pill"
-                        android:paddingStart="10dp"
-                        android:paddingTop="4dp"
-                        android:paddingEnd="10dp"
-                        android:paddingBottom="4dp"
-                        android:text="AES-128"
-                        android:textColor="@color/white"
-                        android:textSize="10sp"
-                        android:textStyle="bold" />
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:contentDescription="Xác thực RSA"
+                        android:src="@drawable/ic_verified"
+                        app:tint="@color/emerald_600" />
 
                     <TextView
-                        android:layout_width="wrap_content"
+                        android:id="@+id/tvWalletLastReceiptTitle"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:background="@drawable/bg_glass_pill"
-                        android:paddingStart="10dp"
-                        android:paddingTop="4dp"
-                        android:paddingEnd="10dp"
-                        android:paddingBottom="4dp"
-                        android:text="RSA-1024"
-                        android:textColor="@color/white"
-                        android:textSize="10sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:background="@drawable/bg_glass_pill"
-                        android:paddingStart="10dp"
-                        android:paddingTop="4dp"
-                        android:paddingEnd="10dp"
-                        android:paddingBottom="4dp"
-                        android:text="PBKDF2"
-                        android:textColor="@color/white"
-                        android:textSize="10sp"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="Giao dịch gần nhất"
+                        android:textColor="@color/slate_900"
+                        android:textSize="13sp"
                         android:textStyle="bold" />
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvWalletLastReceiptDetail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@color/slate_700"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tvWalletLastReceiptSig"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/emerald_700"
+                    android:textSize="11sp"
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Optimization mode -->
+        <!-- 2. Top-Up Card (INS 0x40) -->
         <com.google.android.material.card.MaterialCardView
             style="@style/Widget.SmartID.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardCornerRadius="22dp">
+            android:layout_marginTop="16dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -151,283 +296,376 @@
                 android:orientation="vertical"
                 android:padding="18dp">
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_icon_tile_green"
+                        android:gravity="center">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="Nạp tiền"
+                            android:src="@drawable/ic_add"
+                            app:tint="@color/emerald_600" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Nạp tiền vào ví"
+                            android:textAppearance="@style/TextAppearance.SmartID.SectionTitle" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Funding Source Selector -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="MÔN 3 • TỐI ƯU"
-                    android:textAppearance="@style/TextAppearance.SmartID.Label"
-                    android:textColor="@color/brand_600" />
+                    android:layout_marginTop="14dp"
+                    android:text="CHỌN NGUỒN TIỀN LIÊN KẾT"
+                    android:textAppearance="@style/TextAppearance.SmartID.Label" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp"
                     android:orientation="horizontal">
 
-                    <TextView
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSourceVcb"
+                        style="@style/Widget.SmartID.Button.Outline"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="38dp"
                         android:layout_weight="1"
-                        android:text="Chế độ tối ưu hiệu năng"
-                        android:textColor="@color/slate_900"
-                        android:textSize="17sp"
-                        android:textStyle="bold" />
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="VCB *8829"
+                        android:textSize="11sp" />
 
-                    <androidx.appcompat.widget.SwitchCompat
-                        android:id="@+id/switchOptimizationMode"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checked="true" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSourceBidv"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="BIDV *4510"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSourceMb"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="MB *1902"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSourceCounter"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="Tài vụ"
+                        android:textSize="11sp" />
                 </LinearLayout>
 
                 <TextView
-                    android:id="@+id/tvOptModeDescription"
+                    android:id="@+id/tvSelectedFundingSource"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_soft_panel"
+                    android:paddingStart="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="8dp"
+                    android:text="Nguồn tiền: Vietcombank • *8829 • Miễn phí"
+                    android:textColor="@color/slate_700"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <!-- Quick Credit Presets -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnQuickCredit50k"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_weight="1"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="+50K"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnQuickCredit100k"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="+100K"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnQuickCredit200k"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="+200K"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnQuickCredit500k"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="+500K"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <EditText
+                    android:id="@+id/etWalletCreditAmount"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_input"
+                    android:hint="Nhập số tiền nạp"
+                    android:inputType="number"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:textColor="@color/slate_900"
+                    android:textColorHint="@color/slate_400"
+                    android:textSize="14sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnWalletCredit"
+                    style="@style/Widget.SmartID.Button.Primary"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="12dp"
+                    android:text="Nạp tiền"
+                    app:backgroundTint="@color/emerald_600"
+                    app:icon="@drawable/ic_lock" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 3. Payment Card (INS 0x41) -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.SmartID.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_icon_tile_amber"
+                        android:gravity="center">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="Thanh toán dịch vụ"
+                            android:src="@drawable/ic_bolt"
+                            app:tint="@color/amber_600" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Thanh toán dịch vụ"
+                            android:textAppearance="@style/TextAppearance.SmartID.SectionTitle" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Quick Service / Beneficiary Presets -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="CHỌN DỊCH VỤ"
+                    android:textAppearance="@style/TextAppearance.SmartID.Label" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnQuickPayCanteen"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="42dp"
+                        android:layout_weight="1"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:text="Căng-tin • 35K"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnQuickPayParking"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="42dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:text="Gửi xe • 50K"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnQuickPayPrint"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="42dp"
+                        android:layout_weight="1"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:text="In ấn • 15K"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnQuickPayClub"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="0dp"
+                        android:layout_height="42dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:text="Học vụ • 100K"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvSelectedMerchant"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:background="@drawable/bg_soft_panel"
-                    android:lineSpacingExtra="2dp"
-                    android:padding="12dp"
-                    android:text="Đang bật: WebP, Cache, ThreadPool."
-                    android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+                    android:paddingStart="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="8dp"
+                    android:text="Đơn vị nhận: Căng-tin Học viện Khu A"
+                    android:textColor="@color/slate_700"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
 
-                <!-- Metric 1 -->
-                <LinearLayout
+                <EditText
+                    android:id="@+id/etWalletDebitAmount"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:orientation="vertical">
+                    android:layout_height="48dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_input"
+                    android:hint="Nhập số tiền thanh toán"
+                    android:inputType="number"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:textColor="@color/slate_900"
+                    android:textColorHint="@color/slate_400"
+                    android:textSize="14sp" />
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <LinearLayout
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
-                            android:background="@drawable/bg_icon_tile_blue"
-                            android:gravity="center">
-
-                            <ImageView
-                                android:layout_width="17dp"
-                                android:layout_height="17dp"
-                                android:contentDescription="Ảnh WebP"
-                                android:src="@drawable/ic_image"
-                                app:tint="@color/brand_600" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
-                            android:layout_weight="1"
-                            android:text="Ảnh chân dung WebP"
-                            android:textColor="@color/slate_900"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvImageValue"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:background="@drawable/bg_pill_green"
-                            android:paddingStart="9dp"
-                            android:paddingTop="3dp"
-                            android:paddingEnd="9dp"
-                            android:paddingBottom="3dp"
-                            android:text="−95%"
-                            android:textColor="@color/emerald_600"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-
-                    <ProgressBar
-                        android:id="@+id/pbImageOpt"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="6dp"
-                        android:layout_marginTop="8dp"
-                        android:max="100"
-                        android:progress="95"
-                        android:progressDrawable="@drawable/progress_metric_green" />
-
-                    <TextView
-                        android:id="@+id/tvMetricImageComparison"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:lineSpacingExtra="2dp"
-                        android:text="WebP 3.4 KB • PNG 182 KB"
-                        android:textColor="@color/emerald_600"
-                        android:textSize="11sp" />
-                </LinearLayout>
-
-                <!-- Metric 2 -->
-                <LinearLayout
+                <EditText
+                    android:id="@+id/etWalletDebitNote"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:orientation="vertical">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <LinearLayout
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
-                            android:background="@drawable/bg_icon_tile_green"
-                            android:gravity="center">
-
-                            <ImageView
-                                android:layout_width="17dp"
-                                android:layout_height="17dp"
-                                android:contentDescription="Bộ đệm"
-                                android:src="@drawable/ic_cached"
-                                app:tint="@color/emerald_600" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
-                            android:layout_weight="1"
-                            android:text="Tốc độ mở hồ sơ"
-                            android:textColor="@color/slate_900"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvCacheValue"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:background="@drawable/bg_pill_blue"
-                            android:paddingStart="9dp"
-                            android:paddingTop="3dp"
-                            android:paddingEnd="9dp"
-                            android:paddingBottom="3dp"
-                            android:text="14 ms"
-                            android:textColor="@color/brand_600"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-
-                    <ProgressBar
-                        android:id="@+id/pbCacheOpt"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="6dp"
-                        android:layout_marginTop="8dp"
-                        android:max="100"
-                        android:progress="92"
-                        android:progressDrawable="@drawable/progress_metric_blue" />
-
-                    <TextView
-                        android:id="@+id/tvMetricCacheComparison"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:lineSpacingExtra="2dp"
-                        android:text="14 ms • trước 1.420 ms"
-                        android:textColor="@color/brand_600"
-                        android:textSize="11sp" />
-                </LinearLayout>
-
-                <!-- Metric 3 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:orientation="vertical">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <LinearLayout
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
-                            android:background="@drawable/bg_icon_tile_amber"
-                            android:gravity="center">
-
-                            <ImageView
-                                android:layout_width="17dp"
-                                android:layout_height="17dp"
-                                android:contentDescription="Đa luồng"
-                                android:src="@drawable/ic_speed"
-                                app:tint="@color/amber_600" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
-                            android:layout_weight="1"
-                            android:text="Độ mượt giao diện"
-                            android:textColor="@color/slate_900"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFpsValue"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:background="@drawable/bg_pill_amber"
-                            android:paddingStart="9dp"
-                            android:paddingTop="3dp"
-                            android:paddingEnd="9dp"
-                            android:paddingBottom="3dp"
-                            android:text="60 FPS"
-                            android:textColor="@color/amber_600"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-
-                    <ProgressBar
-                        android:id="@+id/pbFpsOpt"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="6dp"
-                        android:layout_marginTop="8dp"
-                        android:max="100"
-                        android:progress="100"
-                        android:progressDrawable="@drawable/progress_metric_amber" />
-
-                    <TextView
-                        android:id="@+id/tvMetricThreadMemory"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:lineSpacingExtra="2dp"
-                        android:text="60 FPS • UI không chặn"
-                        android:textAppearance="@style/TextAppearance.SmartID.Micro" />
-                </LinearLayout>
+                    android:layout_height="48dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_input"
+                    android:hint="Nội dung thanh toán (không bắt buộc)"
+                    android:inputType="textCapSentences"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:textColor="@color/slate_900"
+                    android:textColorHint="@color/slate_400"
+                    android:textSize="14sp" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnRunFullBenchmark"
+                    android:id="@+id/btnWalletDebit"
                     style="@style/Widget.SmartID.Button.Primary"
                     android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="16dp"
-                    android:text="Chạy đo kiểm Benchmark"
-                    app:icon="@drawable/ic_bolt" />
+                    android:layout_height="48dp"
+                    android:layout_marginTop="12dp"
+                    android:text="Thanh toán"
+                    app:icon="@drawable/ic_lock" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- OWASP MASVS audit -->
+        <!-- 4. Bank Statement / Ledger History Card -->
         <com.google.android.material.card.MaterialCardView
             style="@style/Widget.SmartID.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardCornerRadius="20dp">
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="16dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -435,42 +673,104 @@
                 android:orientation="vertical"
                 android:padding="18dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="MÔN 2 • MASVS"
-                    android:textAppearance="@style/TextAppearance.SmartID.Label"
-                    android:textColor="@color/emerald_600" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="Kiểm toán bảo mật"
-                    android:textColor="@color/slate_900"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
+                    <LinearLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_icon_tile_blue"
+                        android:gravity="center">
 
-                <TextView
-                    android:id="@+id/tvSecurityAuditSummary"
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="Sổ phụ giao dịch"
+                            android:src="@drawable/ic_history"
+                            app:tint="@color/brand_600" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Lịch sử giao dịch"
+                            android:textAppearance="@style/TextAppearance.SmartID.SectionTitle" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRefreshWalletHistory"
+                        style="@style/Widget.SmartID.Button.Pill"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Làm mới"
+                        app:icon="@drawable/ic_refresh" />
+                </LinearLayout>
+
+                <!-- Filter Bar -->
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterAll"
+                        style="@style/Widget.SmartID.Button.Pill"
+                        android:layout_width="0dp"
+                        android:layout_height="36dp"
+                        android:layout_weight="1"
+                        android:text="Tất cả"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterCredit"
+                        style="@style/Widget.SmartID.Button.Pill"
+                        android:layout_width="0dp"
+                        android:layout_height="36dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:text="Tiền vào (+)"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFilterDebit"
+                        style="@style/Widget.SmartID.Button.Pill"
+                        android:layout_width="0dp"
+                        android:layout_height="36dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:text="Tiền ra (-)"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvWalletTxEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
                     android:background="@drawable/bg_soft_panel"
-                    android:lineSpacingExtra="4dp"
-                    android:padding="14dp"
-                    android:textColor="@color/slate_700"
-                    android:textSize="11sp" />
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:text="Chưa có giao dịch nào."
+                    android:textAppearance="@style/TextAppearance.SmartID.Caption" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnInspectCipherAndApdu"
-                    style="@style/Widget.SmartID.Button.Outline"
+                <LinearLayout
+                    android:id="@+id/llWalletTransactions"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="12dp"
-                    android:text="So sánh bản mã AES &amp; nhật ký APDU"
-                    app:icon="@drawable/ic_lock" />
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="vertical" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
-</ScrollView>
+</androidx.core.widget.NestedScrollView>

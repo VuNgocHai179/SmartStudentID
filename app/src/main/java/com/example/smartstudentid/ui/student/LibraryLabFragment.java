@@ -153,12 +153,12 @@ public class LibraryLabFragment extends Fragment {
 
                 String actionText = isReturning ? "Đã trả sách" : "Đã mượn sách";
                 Toast.makeText(requireContext(),
-                        actionText + " [0x" + String.format("%04X", book.getBookCode()) + "] (" + totalMs + " ms)",
+                        actionText + ": " + book.getBookTitle(),
                         Toast.LENGTH_SHORT).show();
                 readCircularLogsFromChip();
             } else {
                 Toast.makeText(requireContext(),
-                        "Giao dịch từ chối bởi thẻ (SW=" + resp.getSwHex() + ")",
+                        "Không thể thực hiện giao dịch, vui lòng thử lại.",
                         Toast.LENGTH_SHORT).show();
             }
         });
@@ -187,14 +187,14 @@ public class LibraryLabFragment extends Fragment {
         }, (resp, mainBlockedMs, totalMs) -> {
             if (!isAdded()) return;
             if (resp.isSuccess()) {
-                tvLabStatusPill.setText("✓ Đã mở cửa (" + totalMs + "ms)");
+                tvLabStatusPill.setText("✓ Đã mở cửa");
                 Toast.makeText(requireContext(),
-                        "Mở cửa Phòng Lab ATTT thành công! Đã ghi log vào bộ nhớ vòng trên chip.",
+                        "Mở cửa Phòng Lab ATTT thành công!",
                         Toast.LENGTH_SHORT).show();
                 readCircularLogsFromChip();
             } else {
                 Toast.makeText(requireContext(),
-                        "Không có quyền mở cửa Lab (SW=" + resp.getSwHex() + ")",
+                        "Thẻ chưa được cấp quyền mở cửa Lab.",
                         Toast.LENGTH_SHORT).show();
             }
         });
@@ -241,10 +241,9 @@ public class LibraryLabFragment extends Fragment {
                 OnCardActivityLog log = logs.get(i);
                 String timeStr = log.getTimestampSeconds() > 1_000_000_000L
                         ? sdf.format(new Date(log.getTimestampSeconds() * 1000L))
-                        : "On-Chip";
+                        : "Gần đây";
                 sb.append(i + 1).append(". [").append(timeStr).append("] ")
-                        .append(log.getActionTitle())
-                        .append(" (Mã: 0x").append(String.format("%04X", log.getItemCode())).append(")\n");
+                        .append(log.getActionTitle()).append("\n");
             }
             tvOnCardActivityLogs.setText(sb.toString().trim());
         });
@@ -268,7 +267,7 @@ public class LibraryLabFragment extends Fragment {
         public void onBindViewHolder(@NonNull BookViewHolder holder, int position) {
             BookLoanRecord item = bookList.get(position);
             holder.tvTitle.setText(item.getBookTitle());
-            holder.tvSubtitle.setText(String.format(Locale.US, "Mã 0x%04X • %s", item.getBookCode(), item.getAuthor()));
+            holder.tvSubtitle.setText(item.getAuthor());
             holder.bookCover.setBackgroundTintList(
                     ColorStateList.valueOf(coverColors[Math.abs(position) % coverColors.length]));
 

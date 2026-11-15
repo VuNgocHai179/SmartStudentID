@@ -57,6 +57,13 @@ public class SmartCampusApplet extends Applet {
     private static final byte INS_RETURN_OR_LAB_ACCESS = (byte) 0x32;
     private static final byte INS_GET_ACTIVITY_LOG = (byte) 0x33;
 
+    private static final byte INS_WALLET_CREDIT = (byte) 0x40;
+    private static final byte INS_WALLET_DEBIT = (byte) 0x41;
+    private static final byte INS_WALLET_GET_BALANCE = (byte) 0x42;
+    private static final byte[] MAX_WALLET_BALANCE = new byte[]{
+            (byte) 0x02, (byte) 0xFA, (byte) 0xF0, (byte) 0x80
+    }; // 50,000,000 VND cap for identified e-wallet
+
     // PIN and PUK configuration
     private static final byte PIN_TRY_LIMIT = (byte) 3;
     private static final byte MAX_PIN_SIZE = (byte) 8;
@@ -103,6 +110,7 @@ public class SmartCampusApplet extends Applet {
     private byte labAccessPermission; // 1 = Lab access granted, 0 = Revoked
     private final short[] borrowedBooks; // Up to 5 borrowed book IDs
     private byte borrowedBookCount;
+    private final byte[] walletBalance; // 4-byte big-endian VND balance in EEPROM
 
     // Circular buffer storing the 10 most recent on-card activities
     private final byte[] activityLogBuffer;
@@ -150,12 +158,13 @@ public class SmartCampusApplet extends Applet {
         avatarBuffer = new byte[MAX_AVATAR_SIZE];
         avatarLength = 0;
 
-        // 5. Initialize default academic and library state
+        // 5. Initialize default academic, library and e-wallet state (500,000 VND)
         trainingScore = (short) 85;
         attendanceCount = (short) 0;
         labAccessPermission = (byte) 1;
         borrowedBooks = new short[MAX_BORROWED_BOOKS];
         borrowedBookCount = (byte) 0;
+        walletBalance = new byte[]{(byte) 0x00, (byte) 0x07, (byte) 0xA1, (byte) 0x20};
 
         // 6. Allocate circular buffer for the 10 latest activities
         activityLogBuffer = new byte[(short) (MAX_LOG_ENTRIES * LOG_ENTRY_SIZE)];
@@ -235,6 +244,15 @@ public class SmartCampusApplet extends Applet {
                 break;
             case INS_GET_ACTIVITY_LOG:
                 handleGetActivityLog(apdu);
+                break;
+            case INS_WALLET_CREDIT:
+                processWalletCredit(apdu);
+                break;
+            case INS_WALLET_DEBIT:
+                processWalletDebit(apdu);
+                break;
+            case INS_WALLET_GET_BALANCE:
+                processWalletGetBalance(apdu);
                 break;
             default:
                 ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
@@ -454,6 +472,9 @@ public class SmartCampusApplet extends Applet {
             pos += 2;
         }
 
+        Util.arrayCopyNonAtomic(walletBalance, (short) 0, buffer, pos, (short) 4);
+        pos += 4;
+
         apdu.setOutgoingAndSend((short) 0, pos);
     }
 
@@ -557,6 +578,135 @@ public class SmartCampusApplet extends Applet {
         }
 
         apdu.setOutgoingAndSend((short) 0, outOffset);
+    }
+
+    // =========================================================================
+    // GROUP 6: E-WALLET SUBSYSTEM (ATOMIC BALANCE + RSA-1024 SIGNATURE)
+    // =========================================================================
+
+    private void processWalletCredit(APDU apdu) {
+        requirePinValidated();
+        byte[] buffer = apdu.getBuffer();
+        short dataLen = apdu.setIncomingAndReceive();
+        if (dataLen < 8) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        if (isNonPositiveAmount(buffer, ISO7816.OFFSET_CDATA)) {
+            ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+        }
+
+        short carry = 0;
+        for (byte i = 3; i >= 0; i--) {
+            short sum = (short) ((walletBalance[i] & 0xFF)
+                    + (buffer[(short) (ISO7816.OFFSET_CDATA + i)] & 0xFF)
+                    + carry);
+            transientBuffer[i] = (byte) (sum & 0xFF);
+            carry = (short) ((sum >> 8) & 0x01);
+        }
+        if (carry != 0 || (transientBuffer[0] & (byte) 0x80) != 0 || exceedsMaxWalletBalance(transientBuffer)) {
+            ISOException.throwIt(ISO7816.SW_FILE_FULL);
+        }
+
+        transientBuffer[16] = (byte) 0x00;
+        transientBuffer[17] = (byte) 0x40;
+        Util.arrayCopyNonAtomic(buffer, (short) (ISO7816.OFFSET_CDATA + 4), transientBuffer, (short) 18, (short) 4);
+
+        JCSystem.beginTransaction();
+        Util.arrayCopy(transientBuffer, (short) 0, walletBalance, (short) 0, (short) 4);
+        appendActivityLog((byte) 0x05, transientBuffer, (short) 16);
+        JCSystem.commitTransaction();
+
+        signCanonicalWalletReceipt(apdu, INS_WALLET_CREDIT, buffer);
+    }
+
+    private void processWalletDebit(APDU apdu) {
+        requirePinValidated();
+        byte[] buffer = apdu.getBuffer();
+        short dataLen = apdu.setIncomingAndReceive();
+        if (dataLen < 8) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        if (isNonPositiveAmount(buffer, ISO7816.OFFSET_CDATA)) {
+            ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+        }
+
+        for (byte i = 0; i < 4; i++) {
+            short balByte = (short) (walletBalance[i] & 0xFF);
+            short amtByte = (short) (buffer[(short) (ISO7816.OFFSET_CDATA + i)] & 0xFF);
+            if (balByte < amtByte) {
+                ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+            } else if (balByte > amtByte) {
+                break;
+            }
+        }
+
+        short borrow = 0;
+        for (byte i = 3; i >= 0; i--) {
+            short diff = (short) ((walletBalance[i] & 0xFF)
+                    - (buffer[(short) (ISO7816.OFFSET_CDATA + i)] & 0xFF)
+                    - borrow);
+            if (diff < 0) {
+                diff += (short) 256;
+                borrow = 1;
+            } else {
+                borrow = 0;
+            }
+            transientBuffer[i] = (byte) (diff & 0xFF);
+        }
+
+        transientBuffer[16] = (byte) 0x00;
+        transientBuffer[17] = (byte) 0x41;
+        Util.arrayCopyNonAtomic(buffer, (short) (ISO7816.OFFSET_CDATA + 4), transientBuffer, (short) 18, (short) 4);
+
+        JCSystem.beginTransaction();
+        Util.arrayCopy(transientBuffer, (short) 0, walletBalance, (short) 0, (short) 4);
+        appendActivityLog((byte) 0x06, transientBuffer, (short) 16);
+        JCSystem.commitTransaction();
+
+        signCanonicalWalletReceipt(apdu, INS_WALLET_DEBIT, buffer);
+    }
+
+    private void signCanonicalWalletReceipt(APDU apdu, byte insCode, byte[] apduBuffer) {
+        // Canonical 13-byte receipt: [INS 1B][Amount 4B][NewBalance 4B][Timestamp 4B]
+        transientBuffer[32] = insCode;
+        Util.arrayCopyNonAtomic(apduBuffer, ISO7816.OFFSET_CDATA, transientBuffer, (short) 33, (short) 4);
+        Util.arrayCopyNonAtomic(walletBalance, (short) 0, transientBuffer, (short) 37, (short) 4);
+        Util.arrayCopyNonAtomic(apduBuffer, (short) (ISO7816.OFFSET_CDATA + 4), transientBuffer, (short) 41, (short) 4);
+
+        rsaSigner.init(rsaPrivateKey, Signature.MODE_SIGN);
+        short sigLen = rsaSigner.sign(transientBuffer, (short) 32, (short) 13, apduBuffer, (short) 0);
+        apdu.setOutgoingAndSend((short) 0, sigLen);
+    }
+
+    private boolean exceedsMaxWalletBalance(byte[] balBuf) {
+        for (byte i = 0; i < 4; i++) {
+            short val = (short) (balBuf[i] & 0xFF);
+            short cap = (short) (MAX_WALLET_BALANCE[i] & 0xFF);
+            if (val > cap) {
+                return true;
+            }
+            if (val < cap) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private void processWalletGetBalance(APDU apdu) {
+        requirePinValidated();
+        byte[] buffer = apdu.getBuffer();
+        Util.arrayCopyNonAtomic(walletBalance, (short) 0, buffer, (short) 0, (short) 4);
+        apdu.setOutgoingAndSend((short) 0, (short) 4);
+    }
+
+    private boolean isNonPositiveAmount(byte[] buf, short offset) {
+        if ((buf[offset] & (byte) 0x80) != 0) {
+            return true;
+        }
+        return buf[offset] == 0
+                && buf[(short) (offset + 1)] == 0
+                && buf[(short) (offset + 2)] == 0
+                && buf[(short) (offset + 3)] == 0;
     }
 
     private void appendActivityLog(byte actionType, byte[] dataBuf, short dataOffset) {

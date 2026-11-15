@@ -67,6 +67,8 @@ public class DatabaseManager {
                         + "public_key_modulus_hex TEXT, "
                         + "public_key_exponent_hex TEXT, "
                         + "raw_aes_ciphertext_hex TEXT, "
+                        + "avatar_webp_base64 TEXT, "
+                        + "wallet_balance INTEGER DEFAULT 500000, "
                         + "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
                         + "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"
                         + ");");
@@ -119,13 +121,34 @@ public class DatabaseManager {
                         + "last_login DATETIME"
                         + ");");
 
+                // 6. Table: wallet_transactions (RSA-1024 signed E-Wallet top-ups and payments)
+                stmt.execute("CREATE TABLE IF NOT EXISTS wallet_transactions ("
+                        + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        + "student_id VARCHAR(20) NOT NULL, "
+                        + "tx_type VARCHAR(20) NOT NULL, "
+                        + "amount INTEGER NOT NULL, "
+                        + "balance_before INTEGER DEFAULT 0, "
+                        + "balance_after INTEGER NOT NULL, "
+                        + "tx_ref VARCHAR(40) DEFAULT '', "
+                        + "counterparty VARCHAR(120) DEFAULT '', "
+                        + "description VARCHAR(200) NOT NULL, "
+                        + "timestamp_seconds INTEGER NOT NULL, "
+                        + "rsa_signature_hex TEXT NOT NULL, "
+                        + "verified_by_server INTEGER DEFAULT 1, "
+                        + "FOREIGN KEY (student_id) REFERENCES cards(student_id) ON DELETE CASCADE"
+                        + ");");
+
                 // Indexes for fast relational lookup
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance_logs(student_id);");
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_books_student ON book_loans(student_id);");
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_audit_student ON card_audit_logs(student_id);");
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_accounts(username);");
+                stmt.execute("CREATE INDEX IF NOT EXISTS idx_wallet_student ON wallet_transactions(student_id);");
             }
 
+            ensureAvatarColumnExists(conn);
+            ensureWalletColumnExists(conn);
+            ensureWalletTxColumnsExists(conn);
             seedDefaultDataIfEmpty(conn);
             conn.commit();
             System.out.println("[SQLite DB] Initialized relational database at: " + DB_FILE.getAbsolutePath());
@@ -133,6 +156,93 @@ public class DatabaseManager {
             System.err.println("[SQLite DB] Initialization error: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private static void ensureAvatarColumnExists(Connection conn) throws SQLException {
+        boolean hasColumn = false;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(cards)")) {
+            while (rs.next()) {
+                if ("avatar_webp_base64".equalsIgnoreCase(rs.getString("name"))) {
+                    hasColumn = true;
+                    break;
+                }
+            }
+        }
+        if (!hasColumn) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("ALTER TABLE cards ADD COLUMN avatar_webp_base64 TEXT");
+                System.out.println("[SQLite DB] Migrated `cards` table: added column `avatar_webp_base64`.");
+            }
+        }
+    }
+
+    private static void ensureWalletColumnExists(Connection conn) throws SQLException {
+        boolean hasColumn = false;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(cards)")) {
+            while (rs.next()) {
+                if ("wallet_balance".equalsIgnoreCase(rs.getString("name"))) {
+                    hasColumn = true;
+                    break;
+                }
+            }
+        }
+        if (!hasColumn) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("ALTER TABLE cards ADD COLUMN wallet_balance INTEGER DEFAULT 500000");
+                System.out.println("[SQLite DB] Migrated `cards` table: added column `wallet_balance`.");
+            }
+        }
+    }
+
+    private static void ensureWalletTxColumnsExists(Connection conn) throws SQLException {
+        boolean hasTxRef = false;
+        boolean hasBalanceBefore = false;
+        boolean hasCounterparty = false;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(wallet_transactions)")) {
+            while (rs.next()) {
+                String col = rs.getString("name");
+                if ("tx_ref".equalsIgnoreCase(col)) hasTxRef = true;
+                else if ("balance_before".equalsIgnoreCase(col)) hasBalanceBefore = true;
+                else if ("counterparty".equalsIgnoreCase(col)) hasCounterparty = true;
+            }
+        }
+        try (Statement stmt = conn.createStatement()) {
+            if (!hasTxRef) {
+                stmt.execute("ALTER TABLE wallet_transactions ADD COLUMN tx_ref VARCHAR(40) DEFAULT ''");
+                System.out.println("[SQLite DB] Migrated `wallet_transactions`: added column `tx_ref`.");
+            }
+            if (!hasBalanceBefore) {
+                stmt.execute("ALTER TABLE wallet_transactions ADD COLUMN balance_before INTEGER DEFAULT 0");
+                System.out.println("[SQLite DB] Migrated `wallet_transactions`: added column `balance_before`.");
+            }
+            if (!hasCounterparty) {
+                stmt.execute("ALTER TABLE wallet_transactions ADD COLUMN counterparty VARCHAR(120) DEFAULT ''");
+                System.out.println("[SQLite DB] Migrated `wallet_transactions`: added column `counterparty`.");
+            }
+            // Backfill legacy/seed rows that lack banking ledger metadata
+            stmt.executeUpdate("UPDATE wallet_transactions SET "
+                    + "tx_ref = 'FT2631800001', balance_before = 0, "
+                    + "counterparty = 'Vietcombank • *8829 (Napas 247)' "
+                    + "WHERE id = 1 AND (tx_ref IS NULL OR tx_ref = '')");
+            stmt.executeUpdate("UPDATE wallet_transactions SET "
+                    + "tx_ref = 'FT2631850002', balance_before = 550000, "
+                    + "counterparty = 'POS Căng-tin Học viện Khu A' "
+                    + "WHERE id = 2 AND (tx_ref IS NULL OR tx_ref = '')");
+            stmt.executeUpdate("UPDATE wallet_transactions SET "
+                    + "balance_before = CASE WHEN tx_type = 'CREDIT' THEN MAX(0, balance_after - amount) ELSE balance_after + amount END, "
+                    + "tx_ref = 'FT' || printf('%010d', ABS((timestamp_seconds * 100 + (amount / 1000)) % 10000000000)), "
+                    + "counterparty = CASE WHEN tx_type = 'CREDIT' THEN 'Vietcombank • *8829 (Napas 247)' ELSE 'POS Dịch vụ Smart Campus' END "
+                    + "WHERE tx_ref IS NULL OR tx_ref = ''");
+        }
+    }
+
+    public static String generateBankTxRef(long ts, int amount) {
+        long safeTs = ts > 0 ? ts : (System.currentTimeMillis() / 1000L);
+        long val = Math.abs((safeTs * 100L + (amount / 1000L)) % 10_000_000_000L);
+        return "FT" + String.format(java.util.Locale.US, "%010d", val);
     }
 
     private static void seedDefaultDataIfEmpty(Connection conn) throws SQLException {
@@ -245,6 +355,49 @@ public class DatabaseManager {
                 System.out.println("[SQLite DB] Seeded 2 relational admin accounts (admin/admin123, daotao/daotao123) with salted SHA-256");
             }
         }
+
+        int walletTxCount = 0;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM wallet_transactions")) {
+            if (rs.next()) {
+                walletTxCount = rs.getInt(1);
+            }
+        }
+
+        if (walletTxCount == 0) {
+            long now = System.currentTimeMillis() / 1000L;
+            String insertWalletSql = "INSERT INTO wallet_transactions (student_id, tx_type, amount, "
+                    + "balance_before, balance_after, tx_ref, counterparty, description, "
+                    + "timestamp_seconds, rsa_signature_hex, verified_by_server) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            try (PreparedStatement ps = conn.prepareStatement(insertWalletSql)) {
+                ps.setString(1, "CT070315");
+                ps.setString(2, "CREDIT");
+                ps.setInt(3, 550000);
+                ps.setInt(4, 0);
+                ps.setInt(5, 550000);
+                ps.setString(6, "FT2631800001");
+                ps.setString(7, "Vietcombank • *8829 (Napas 247)");
+                ps.setString(8, "Nạp tiền khởi tạo ví sinh viên");
+                ps.setLong(9, now - 172800);
+                ps.setString(10, "8B21F04C91A355E07C12D8B4...");
+                ps.setInt(11, 1);
+                ps.executeUpdate();
+
+                ps.setString(1, "CT070315");
+                ps.setString(2, "DEBIT");
+                ps.setInt(3, 50000);
+                ps.setInt(4, 550000);
+                ps.setInt(5, 500000);
+                ps.setString(6, "FT2631850002");
+                ps.setString(7, "POS Căng-tin Học viện Khu A");
+                ps.setString(8, "Thanh toán cơm trưa Căng-tin");
+                ps.setLong(9, now - 43200);
+                ps.setString(10, "5D94A1E20B7C3891F46A120E...");
+                ps.setInt(11, 1);
+                ps.executeUpdate();
+            }
+        }
     }
 
     private static void insertSeedCard(PreparedStatement ps, String id, String name, String dob,
@@ -286,7 +439,8 @@ public class DatabaseManager {
         StringBuilder sb = new StringBuilder("[");
         String sql = "SELECT student_id, full_name, dob, class_name, department, default_pin, "
                 + "card_locked, training_score, attendance_count, lab_access_granted, "
-                + "public_key_modulus_hex, public_key_exponent_hex, raw_aes_ciphertext_hex "
+                + "public_key_modulus_hex, public_key_exponent_hex, raw_aes_ciphertext_hex, "
+                + "COALESCE(wallet_balance, 500000) AS wallet_balance "
                 + "FROM cards ORDER BY created_at DESC, student_id ASC";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
@@ -308,7 +462,8 @@ public class DatabaseManager {
                         .append("\"labAccessGranted\":").append(rs.getInt("lab_access_granted") != 0).append(",")
                         .append("\"publicKeyModulusHex\":\"").append(esc(rs.getString("public_key_modulus_hex"))).append("\",")
                         .append("\"publicKeyExponentHex\":\"").append(esc(rs.getString("public_key_exponent_hex"))).append("\",")
-                        .append("\"rawAesCiphertextHex\":\"").append(esc(rs.getString("raw_aes_ciphertext_hex"))).append("\"")
+                        .append("\"rawAesCiphertextHex\":\"").append(esc(rs.getString("raw_aes_ciphertext_hex"))).append("\",")
+                        .append("\"walletBalance\":").append(rs.getInt("wallet_balance"))
                         .append("}");
             }
         } catch (Exception e) {
@@ -370,6 +525,50 @@ public class DatabaseManager {
             System.err.println("[SQLite DB] Error upserting card: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Persists a card's WebP avatar (Base64-encoded) in `cards.avatar_webp_base64`.
+     */
+    public static synchronized boolean saveCardAvatarBase64(String studentId, String avatarBase64) {
+        if (studentId == null || studentId.trim().isEmpty()
+                || avatarBase64 == null || avatarBase64.isEmpty()) {
+            return false;
+        }
+        String sql = "UPDATE cards SET avatar_webp_base64 = ?, updated_at = CURRENT_TIMESTAMP WHERE student_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, avatarBase64);
+            ps.setString(2, studentId.trim());
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error saving card avatar: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Reads a card's persisted WebP avatar (Base64-encoded) from `cards.avatar_webp_base64`.
+     */
+    public static synchronized String getCardAvatarBase64(String studentId) {
+        if (studentId == null || studentId.trim().isEmpty()) {
+            return null;
+        }
+        String sql = "SELECT avatar_webp_base64 FROM cards WHERE student_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String b64 = rs.getString("avatar_webp_base64");
+                    if (b64 != null && !b64.trim().isEmpty()) {
+                        return b64.trim();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     /**
@@ -441,6 +640,10 @@ public class DatabaseManager {
             try {
                 // Delete related records first
                 try (PreparedStatement ps = conn.prepareStatement("DELETE FROM attendance_logs WHERE student_id = ?")) {
+                    ps.setString(1, studentId.trim());
+                    ps.executeUpdate();
+                }
+                try (PreparedStatement ps = conn.prepareStatement("DELETE FROM wallet_transactions WHERE student_id = ?")) {
                     ps.setString(1, studentId.trim());
                     ps.executeUpdate();
                 }
@@ -554,6 +757,197 @@ public class DatabaseManager {
             System.err.println("[SQLite DB] Error inserting attendance: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Reads a card's persisted wallet balance from `cards.wallet_balance` (defaults to 500000).
+     */
+    public static synchronized int getCardWalletBalance(String studentId) {
+        if (studentId == null || studentId.trim().isEmpty()) {
+            return 500000;
+        }
+        String sql = "SELECT wallet_balance FROM cards WHERE student_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getObject("wallet_balance") != null) {
+                    return rs.getInt("wallet_balance");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error reading wallet balance: " + e.getMessage());
+        }
+        return 500000;
+    }
+
+    /**
+     * Records an RSA-signed E-Wallet transaction (CREDIT / DEBIT) and atomically updates `cards.wallet_balance`.
+     * If a matching record with the same (student_id, tx_type, amount, timestamp_seconds) was already created
+     * by the APDU handler, updates its description and verification status instead of inserting a duplicate.
+     */
+    public static synchronized boolean recordWalletTransaction(String studentId, String txType, int amount,
+                                                                 int balanceAfter, String description,
+                                                                 long timestampSeconds, String rsaSignatureHex,
+                                                                 boolean verified) {
+        return recordWalletTransaction(studentId, txType, amount, balanceAfter, description,
+                timestampSeconds, rsaSignatureHex, verified, "", 0, "");
+    }
+
+    /**
+     * Records an RSA-signed E-Wallet banking ledger entry (CREDIT / DEBIT) and atomically updates `cards.wallet_balance`.
+     * Enforces accounting consistency (balance_before +/- amount == balance_after) and deduplicates matching APDU/POST pairs.
+     */
+    public static synchronized boolean recordWalletTransaction(String studentId, String txType, int amount,
+                                                                 int balanceAfter, String description,
+                                                                 long timestampSeconds, String rsaSignatureHex,
+                                                                 boolean verified, String txRef,
+                                                                 int balanceBefore, String counterparty) {
+        if (studentId == null || studentId.trim().isEmpty()) return false;
+        String sid = studentId.trim();
+        String type = (txType != null && !txType.trim().isEmpty()) ? txType.trim().toUpperCase() : "CREDIT";
+        boolean isCredit = "CREDIT".equals(type);
+        String desc = (description != null && !description.trim().isEmpty())
+                ? description.trim()
+                : (isCredit ? "Nạp tiền ví điện tử" : "Thanh toán ví điện tử");
+        long ts = timestampSeconds > 0 ? timestampSeconds : (System.currentTimeMillis() / 1000L);
+        String sig = rsaSignatureHex != null ? rsaSignatureHex : "";
+        String ref = (txRef != null && !txRef.trim().isEmpty()) ? txRef.trim() : generateBankTxRef(ts, amount);
+        String party = (counterparty != null && !counterparty.trim().isEmpty())
+                ? counterparty.trim()
+                : (isCredit ? "Vietcombank • *8829 (Napas 247)" : "POS Dịch vụ Smart Campus");
+
+        int resolvedBalanceBefore = balanceBefore;
+        if (resolvedBalanceBefore <= 0) {
+            resolvedBalanceBefore = Math.max(0, isCredit ? (balanceAfter - amount) : (balanceAfter + amount));
+        } else {
+            int expectedAfter = isCredit ? (resolvedBalanceBefore + amount) : (resolvedBalanceBefore - amount);
+            if (expectedAfter != balanceAfter) {
+                resolvedBalanceBefore = Math.max(0, isCredit ? (balanceAfter - amount) : (balanceAfter + amount));
+            }
+        }
+
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            ensureCardExists(conn, sid);
+
+            long existingId = -1L;
+            String findSql = "SELECT id FROM wallet_transactions WHERE student_id = ? AND tx_type = ? "
+                    + "AND amount = ? AND timestamp_seconds = ? ORDER BY id DESC LIMIT 1";
+            try (PreparedStatement ps = conn.prepareStatement(findSql)) {
+                ps.setString(1, sid);
+                ps.setString(2, type);
+                ps.setInt(3, amount);
+                ps.setLong(4, ts);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        existingId = rs.getLong("id");
+                    }
+                }
+            }
+
+            if (existingId > 0) {
+                String updTxSql = "UPDATE wallet_transactions SET description = ?, balance_before = ?, balance_after = ?, "
+                        + "tx_ref = CASE WHEN ? != '' THEN ? ELSE tx_ref END, "
+                        + "counterparty = CASE WHEN ? != '' THEN ? ELSE counterparty END, "
+                        + "rsa_signature_hex = CASE WHEN ? != '' THEN ? ELSE rsa_signature_hex END, "
+                        + "verified_by_server = ? WHERE id = ?";
+                try (PreparedStatement ps = conn.prepareStatement(updTxSql)) {
+                    ps.setString(1, desc);
+                    ps.setInt(2, resolvedBalanceBefore);
+                    ps.setInt(3, balanceAfter);
+                    ps.setString(4, ref);
+                    ps.setString(5, ref);
+                    ps.setString(6, party);
+                    ps.setString(7, party);
+                    ps.setString(8, sig);
+                    ps.setString(9, sig);
+                    ps.setInt(10, verified ? 1 : 0);
+                    ps.setLong(11, existingId);
+                    ps.executeUpdate();
+                }
+            } else {
+                String insertSql = "INSERT INTO wallet_transactions (student_id, tx_type, amount, "
+                        + "balance_before, balance_after, tx_ref, counterparty, description, "
+                        + "timestamp_seconds, rsa_signature_hex, verified_by_server) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setString(1, sid);
+                    ps.setString(2, type);
+                    ps.setInt(3, amount);
+                    ps.setInt(4, resolvedBalanceBefore);
+                    ps.setInt(5, balanceAfter);
+                    ps.setString(6, ref);
+                    ps.setString(7, party);
+                    ps.setString(8, desc);
+                    ps.setLong(9, ts);
+                    ps.setString(10, sig);
+                    ps.setInt(11, verified ? 1 : 0);
+                    ps.executeUpdate();
+                }
+
+                int itemCode = isCredit ? 0x0040 : 0x0041;
+                insertAuditLogInternal(conn, sid, "WALLET_" + type, itemCode,
+                        "[" + ref + "] " + desc + " (" + amount + " VND)", sig);
+            }
+
+            String updateCardSql = "UPDATE cards SET wallet_balance = ?, updated_at = CURRENT_TIMESTAMP WHERE student_id = ?";
+            try (PreparedStatement ps = conn.prepareStatement(updateCardSql)) {
+                ps.setInt(1, balanceAfter);
+                ps.setString(2, sid);
+                ps.executeUpdate();
+            }
+
+            conn.commit();
+            return true;
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error recording wallet transaction: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Queries E-Wallet transactions from `wallet_transactions` (optionally filtered by student_id).
+     */
+    public static synchronized String getWalletTransactionsJsonByStudent(String studentIdFilter) {
+        StringBuilder sb = new StringBuilder("[");
+        boolean hasFilter = studentIdFilter != null && !studentIdFilter.trim().isEmpty();
+        String sql = "SELECT id, student_id, tx_type, amount, balance_before, balance_after, "
+                + "tx_ref, counterparty, description, timestamp_seconds, rsa_signature_hex, verified_by_server "
+                + "FROM wallet_transactions "
+                + (hasFilter ? "WHERE student_id = ? " : "")
+                + "ORDER BY timestamp_seconds DESC, id DESC";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            if (hasFilter) {
+                ps.setString(1, studentIdFilter.trim());
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) sb.append(",");
+                    first = false;
+                    sb.append("{")
+                            .append("\"id\":").append(rs.getLong("id")).append(",")
+                            .append("\"studentId\":\"").append(esc(rs.getString("student_id"))).append("\",")
+                            .append("\"txType\":\"").append(esc(rs.getString("tx_type"))).append("\",")
+                            .append("\"amount\":").append(rs.getInt("amount")).append(",")
+                            .append("\"balanceBefore\":").append(rs.getInt("balance_before")).append(",")
+                            .append("\"balanceAfter\":").append(rs.getInt("balance_after")).append(",")
+                            .append("\"txRef\":\"").append(esc(rs.getString("tx_ref"))).append("\",")
+                            .append("\"counterparty\":\"").append(esc(rs.getString("counterparty"))).append("\",")
+                            .append("\"description\":\"").append(esc(rs.getString("description"))).append("\",")
+                            .append("\"timestampSeconds\":").append(rs.getLong("timestamp_seconds")).append(",")
+                            .append("\"rsaSignatureHex\":\"").append(esc(rs.getString("rsa_signature_hex"))).append("\",")
+                            .append("\"verifiedByServer\":").append(rs.getInt("verified_by_server") != 0)
+                            .append("}");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error querying wallet_transactions: " + e.getMessage());
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     /**
