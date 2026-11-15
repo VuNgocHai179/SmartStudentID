@@ -251,7 +251,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="12dp"
                         android:layout_weight="1"
-                        android:text="Nhật ký trên chip"
+                        android:text="Hoạt động thẻ gần đây"
                         android:textColor="@color/slate_900"
                         android:textSize="14sp"
                         android:textStyle="bold" />
@@ -262,7 +262,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="34dp"
                         android:minHeight="0dp"
-                        android:text="Đọc log"
+                        android:text="Làm mới"
                         app:icon="@drawable/ic_refresh" />
                 </LinearLayout>
 

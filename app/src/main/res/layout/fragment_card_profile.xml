@@ -399,7 +399,7 @@
                     style="@style/Widget.SmartID.Button.Soft"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
-                    android:text="Đồng bộ hồ sơ &amp; ảnh từ chip"
+                    android:text="Làm mới thông tin thẻ"
                     app:icon="@drawable/ic_refresh" />
 
                 <View
@@ -447,7 +447,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Đổi ảnh chân dung (thư viện / camera)"
+                            android:text="Đổi ảnh chân dung"
                             android:textColor="@color/slate_900"
                             android:textSize="14sp"
                             android:textStyle="bold" />

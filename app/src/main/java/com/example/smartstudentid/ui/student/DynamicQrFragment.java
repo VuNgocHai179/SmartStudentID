@@ -219,8 +219,8 @@ public class DynamicQrFragment extends Fragment {
                     return true;
                 }, (ok, bMs, tMs) -> renderAttendanceHistory());
 
-                tvAttendanceSignResult.setText("✓ Điểm danh & lưu Server SQLite thành công (" + totalMs + " ms)");
-                Toast.makeText(requireContext(), "Đã ký số điểm danh lên Server SQLite!", Toast.LENGTH_SHORT).show();
+                tvAttendanceSignResult.setText("✓ Điểm danh thành công");
+                Toast.makeText(requireContext(), "Đã ghi nhận điểm danh thành công!", Toast.LENGTH_SHORT).show();
             } else {
                 tvAttendanceSignResult.setText("❌ Điểm danh thất bại.");
             }
@@ -237,7 +237,7 @@ public class DynamicQrFragment extends Fragment {
                 (history, mainBlockedMs, totalMs) -> {
                     if (!isAdded()) return;
                     if (history == null || history.isEmpty()) {
-                        tvAttendanceHistoryList.setText("• Chưa có bản ghi điểm danh trên Server SQLite.");
+                        tvAttendanceHistoryList.setText("• Chưa có lịch sử điểm danh.");
                         return;
                     }
                     SimpleDateFormat sdf = new SimpleDateFormat("dd/MM HH:mm", Locale.getDefault());

@@ -255,7 +255,7 @@ public class CardProfileFragment extends Fragment {
             return;
         }
         avatarUploadInProgress = true;
-        tvProfileSyncStatus.setText("Đang xử lý ảnh: Resize 150×150 → WebP 75% → ghi thẻ...");
+        tvProfileSyncStatus.setText("Đang cập nhật ảnh chân dung...");
         Context appContext = requireContext().getApplicationContext();
 
         ApduThreadPool.getInstance().execute(() -> {
@@ -282,18 +282,16 @@ public class CardProfileFragment extends Fragment {
                 return;
             }
             if (result.packets < 0) {
-                tvProfileSyncStatus.setText("❌ Thẻ từ chối gói ảnh (kiểm tra PIN/session).");
-                Toast.makeText(requireContext(), "Ghi ảnh lên thẻ thất bại!",
+                tvProfileSyncStatus.setText("❌ Cập nhật ảnh thất bại.");
+                Toast.makeText(requireContext(), "Cập nhật ảnh thất bại!",
                         Toast.LENGTH_SHORT).show();
                 return;
             }
 
             encryptedCacheManager.saveAvatarBytes(result.webpBytes);
             renderAvatarBytes(result.webpBytes);
-            tvProfileSyncStatus.setText(String.format(Locale.US,
-                    "✓ Đã cập nhật ảnh WebP %.1f KB → %d gói APDU (INS 0x22) trong %d ms.",
-                    result.webpBytes.length / 1024.0, result.packets, totalMs));
-            Toast.makeText(requireContext(), "Đã cập nhật ảnh chân dung lên thẻ!",
+            tvProfileSyncStatus.setText("✓ Đã cập nhật ảnh chân dung.");
+            Toast.makeText(requireContext(), "Đã cập nhật ảnh chân dung thành công!",
                     Toast.LENGTH_SHORT).show();
         });
     }
@@ -312,7 +310,7 @@ public class CardProfileFragment extends Fragment {
      * Reads the student profile and WebP avatar chunks from the smart card asynchronously on ApduThreadPool.
      */
     private void reloadProfileAndAvatarFromCard() {
-        tvProfileSyncStatus.setText("Đang đồng bộ...");
+        tvProfileSyncStatus.setText("Đang cập nhật thông tin...");
         ApduThreadPool.getInstance().execute(() -> {
             String sessionPin = pinSessionManager.getTransientVerifiedPin();
             String verifiedPin = (sessionPin != null && !sessionPin.isEmpty()) ? sessionPin : "123456";
@@ -336,10 +334,8 @@ public class CardProfileFragment extends Fragment {
             if (bmp != null) {
                 ivStudentAvatar.setImageBitmap(bmp);
             }
-            double kb = payload.avatarBytes.length / 1024.0;
             tvAvatarMetaBadge.setVisibility(View.GONE);
-            tvProfileSyncStatus.setText(String.format(Locale.US,
-                    "✓ Đọc APDU + AES-128 + " + ImageOptimizer.calculateApduPacketCount(payload.avatarBytes.length) + " gói WebP (%d ms • 60 FPS)", totalMs));
+            tvProfileSyncStatus.setText("✓ Đã cập nhật thông tin thẻ.");
         });
     }
 
@@ -379,7 +375,7 @@ public class CardProfileFragment extends Fragment {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Cập nhật Hồ sơ cá nhân")
                 .setView(container)
-                .setPositiveButton("Ghi thẻ", (dialog, which) -> {
+                .setPositiveButton("Lưu", (dialog, which) -> {
                     String inputName = etName.getText().toString().trim();
                     if (!inputName.isEmpty()) {
                         finalCurrent.setFullName(inputName);
@@ -395,7 +391,7 @@ public class CardProfileFragment extends Fragment {
     }
 
     private void saveUpdatedProfileToCard(StudentCardRecord updated) {
-        tvProfileSyncStatus.setText("Đang lưu lên chip...");
+        tvProfileSyncStatus.setText("Đang lưu thông tin...");
         ApduThreadPool.getInstance().execute(() -> {
             ApduClient client = ApduClient.getInstance();
             byte[] utf8 = updated.toPipeDelimitedString().getBytes(StandardCharsets.UTF_8);
@@ -420,8 +416,8 @@ public class CardProfileFragment extends Fragment {
             if (!isAdded()) return;
             bindRecordToUi(updated);
             renderAvatarFromCacheOrGenerate(updated.getFullName());
-            tvProfileSyncStatus.setText("✓ Đã cập nhật hồ sơ trong " + totalMs + " ms.");
-            Toast.makeText(requireContext(), "Đã cập nhật hồ sơ lên chip thành công!", Toast.LENGTH_SHORT).show();
+            tvProfileSyncStatus.setText("✓ Đã cập nhật hồ sơ.");
+            Toast.makeText(requireContext(), "Đã cập nhật hồ sơ thành công!", Toast.LENGTH_SHORT).show();
         });
     }
 
@@ -489,7 +485,7 @@ public class CardProfileFragment extends Fragment {
                 Toast.makeText(requireContext(), "Đổi mã PIN thành công!", Toast.LENGTH_SHORT).show();
             } else {
                 tvProfileSyncStatus.setText("❌ Đổi mã PIN thất bại.");
-                Toast.makeText(requireContext(), "Sai mã PIN hiện tại (SW=" + resp.getSwHex() + ")", Toast.LENGTH_SHORT).show();
+                Toast.makeText(requireContext(), "Mã PIN hiện tại không chính xác", Toast.LENGTH_SHORT).show();
             }
         });
     }

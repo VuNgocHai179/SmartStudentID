@@ -36,6 +36,10 @@ public class OnCardActivityLog {
                 return "Library Book Returned";
             case 4:
                 return "Lab Room Door Access";
+            case 5:
+                return "Wallet Top-Up (Credit)";
+            case 6:
+                return "Wallet Payment (Debit)";
             default:
                 return "Card Transaction";
         }

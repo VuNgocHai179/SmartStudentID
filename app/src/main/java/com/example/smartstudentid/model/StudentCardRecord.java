@@ -17,6 +17,7 @@ public class StudentCardRecord {
     private String publicKeyModulusHex;
     private String publicKeyExponentHex;
     private String rawAesCiphertextHex;
+    private int walletBalance = 500000;
 
     public StudentCardRecord() {
     }
@@ -170,5 +171,13 @@ public class StudentCardRecord {
 
     public void setRawAesCiphertextHex(String rawAesCiphertextHex) {
         this.rawAesCiphertextHex = rawAesCiphertextHex;
+    }
+
+    public int getWalletBalance() {
+        return walletBalance;
+    }
+
+    public void setWalletBalance(int walletBalance) {
+        this.walletBalance = walletBalance;
     }
 }

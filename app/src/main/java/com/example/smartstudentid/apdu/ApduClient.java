@@ -3,6 +3,7 @@ package com.example.smartstudentid.apdu;
 import com.example.smartstudentid.model.AttendanceRecord;
 import com.example.smartstudentid.model.BookLoanRecord;
 import com.example.smartstudentid.model.StudentCardRecord;
+import com.example.smartstudentid.model.WalletTransactionRecord;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -309,6 +310,25 @@ public class ApduClient {
         }
     }
 
+    public void syncWalletTransactionToServerDb(WalletTransactionRecord tx) {
+        if (tx == null) return;
+        postJsonSilently("/api/wallet", gson.toJson(tx));
+    }
+
+    public List<WalletTransactionRecord> fetchWalletTransactionsByStudent(String studentId) {
+        String path = (studentId != null && !studentId.trim().isEmpty())
+                ? "/api/wallet?studentId=" + studentId.trim()
+                : "/api/wallet";
+        String resp = getJsonSilently(path);
+        if (resp == null || resp.isEmpty()) return null;
+        try {
+            Type type = new TypeToken<ArrayList<WalletTransactionRecord>>() {}.getType();
+            return gson.fromJson(resp, type);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     // =========================================================================
     // ADMIN AUTHENTICATION API (`admin_accounts` table in `smartcard.db`)
     // =========================================================================
@@ -539,12 +559,15 @@ public class ApduClient {
         int plainInfoLen = 0;
         final byte[] avatarBuffer = new byte[8192];
         int avatarLength = 0;
+        private final java.util.Map<String, byte[]> perCardAvatars = new java.util.HashMap<>();
 
         short trainingScore = 88;
         short attendanceCount = 12;
         byte labAccess = 1;
         final short[] borrowedBooks = new short[]{0x0102, 0x0205, 0, 0, 0};
         byte borrowedCount = 2;
+        int walletBalance = 500000;
+        private final java.util.Map<String, Integer> perCardBalances = new java.util.HashMap<>();
 
         final byte[] activityLogs = new byte[70];
         byte logHead = 0;
@@ -565,10 +588,27 @@ public class ApduClient {
 
         void loadSnapshot(String cardId, String infoUtf8, String pin) {
             boolean sameCard = cardId != null && cardId.equalsIgnoreCase(this.activeCardId);
+            if (!sameCard && this.activeCardId != null) {
+                perCardBalances.put(this.activeCardId.toUpperCase(java.util.Locale.US), this.walletBalance);
+                if (this.avatarLength > 0) {
+                    perCardAvatars.put(this.activeCardId.toUpperCase(java.util.Locale.US),
+                            Arrays.copyOf(avatarBuffer, avatarLength));
+                }
+            }
             this.activeCardId = cardId;
             this.activeInfoUtf8 = infoUtf8;
             if (!sameCard) {
-                this.avatarLength = 0;
+                Integer savedBalance = cardId != null
+                        ? perCardBalances.get(cardId.toUpperCase(java.util.Locale.US))
+                        : null;
+                this.walletBalance = savedBalance != null ? savedBalance : 500000;
+                byte[] saved = cardId != null ? perCardAvatars.get(cardId.toUpperCase(java.util.Locale.US)) : null;
+                if (saved != null && saved.length <= avatarBuffer.length) {
+                    System.arraycopy(saved, 0, avatarBuffer, 0, saved.length);
+                    this.avatarLength = saved.length;
+                } else {
+                    this.avatarLength = 0;
+                }
             }
             this.currentPin = (pin != null && !pin.isEmpty()) ? pin : "123456";
             this.pinTriesRemaining = 3;
@@ -695,6 +735,10 @@ public class ApduClient {
                             if (offset == 0 || offset + cdata.length > avatarLength) {
                                 avatarLength = offset + cdata.length;
                             }
+                            if (activeCardId != null) {
+                                perCardAvatars.put(activeCardId.toUpperCase(java.util.Locale.US),
+                                        Arrays.copyOf(avatarBuffer, avatarLength));
+                            }
                         }
                         return swOnly(0x9000);
                     }
@@ -717,6 +761,10 @@ public class ApduClient {
                             bos.write((borrowedBooks[i] >> 8) & 0xFF);
                             bos.write(borrowedBooks[i] & 0xFF);
                         }
+                        bos.write((walletBalance >> 24) & 0xFF);
+                        bos.write((walletBalance >> 16) & 0xFF);
+                        bos.write((walletBalance >> 8) & 0xFF);
+                        bos.write(walletBalance & 0xFF);
                         return withSw(bos.toByteArray(), 0x9000);
                     }
                     case 0x31:
@@ -750,12 +798,64 @@ public class ApduClient {
                         }
                         return withSw(bos.toByteArray(), 0x9000);
                     }
+                    case 0x40:
+                        return handleWalletMutation(true, cdata);
+                    case 0x41:
+                        return handleWalletMutation(false, cdata);
+                    case 0x42: {
+                        if (!pinValidated) return swOnly(0x6982);
+                        return withSw(new byte[]{
+                                (byte) ((walletBalance >> 24) & 0xFF),
+                                (byte) ((walletBalance >> 16) & 0xFF),
+                                (byte) ((walletBalance >> 8) & 0xFF),
+                                (byte) (walletBalance & 0xFF)
+                        }, 0x9000);
+                    }
                     default:
                         return swOnly(0x6D00);
                 }
             } catch (Exception e) {
                 return swOnly(0x6F00);
             }
+        }
+
+        private static final int MAX_WALLET_BALANCE = 50_000_000;
+
+        private byte[] handleWalletMutation(boolean isCredit, byte[] cdata) throws Exception {
+            if (!pinValidated) return swOnly(0x6982);
+            if (cdata.length < 8) return swOnly(0x6700);
+            int amount = ((cdata[0] & 0xFF) << 24)
+                    | ((cdata[1] & 0xFF) << 16)
+                    | ((cdata[2] & 0xFF) << 8)
+                    | (cdata[3] & 0xFF);
+            int tsInt = ((cdata[4] & 0xFF) << 24)
+                    | ((cdata[5] & 0xFF) << 16)
+                    | ((cdata[6] & 0xFF) << 8)
+                    | (cdata[7] & 0xFF);
+            if (amount <= 0) return swOnly(0x6984);
+
+            if (isCredit) {
+                if ((long) walletBalance + amount > MAX_WALLET_BALANCE) {
+                    return swOnly(ApduCommands.SW_FILE_FULL);
+                }
+                walletBalance += amount;
+            } else {
+                if (walletBalance < amount) return swOnly(ApduCommands.SW_CONDITIONS_NOT_SATISFIED);
+                walletBalance -= amount;
+            }
+            if (activeCardId != null) {
+                perCardBalances.put(activeCardId.toUpperCase(java.util.Locale.US), walletBalance);
+            }
+
+            byte logType = (byte) (isCredit ? 5 : 6);
+            byte logCode = (byte) (isCredit ? ApduCommands.INS_WALLET_CREDIT : ApduCommands.INS_WALLET_DEBIT);
+            addLog(logType, new byte[]{0x00, logCode, cdata[4], cdata[5], cdata[6], cdata[7]});
+
+            byte[] canonicalPayload = ApduCommands.buildCanonicalWalletReceipt(logCode, amount, walletBalance, tsInt);
+            Signature sig = Signature.getInstance("SHA1withRSA");
+            sig.initSign(rsaKeyPair.getPrivate());
+            sig.update(canonicalPayload);
+            return withSw(sig.sign(), 0x9000);
         }
 
         private void addLog(byte type, byte[] cdata) {

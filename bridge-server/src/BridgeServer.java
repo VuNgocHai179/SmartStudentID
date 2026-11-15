@@ -15,6 +15,7 @@ import java.security.Signature;
 import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
@@ -52,6 +53,8 @@ public class BridgeServer {
     public static void main(String[] args) throws Exception {
         // Initialize SQLite Relational Database (smartcard.db)
         DatabaseManager.initDatabase();
+        virtualCard.reloadAvatarFromDatabase();
+        virtualCard.reloadWalletBalanceFromDatabase();
 
         tryConnectPcscReader();
         startJcideMonitorThread();
@@ -273,6 +276,41 @@ public class BridgeServer {
             }
         });
 
+        // 7b. Endpoint for E-Wallet Transactions in SQLite (`wallet_transactions` & `cards.wallet_balance`)
+        server.createContext("/api/wallet", exchange -> {
+            if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                String query = exchange.getRequestURI().getQuery();
+                String studentIdFilter = null;
+                if (query != null && query.startsWith("studentId=")) {
+                    studentIdFilter = query.substring("studentId=".length());
+                }
+                sendJson(exchange, 200, DatabaseManager.getWalletTransactionsJsonByStudent(studentIdFilter));
+            } else if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                String body = readBody(exchange);
+                String studentId = extractJsonString(body, "studentId");
+                String txType = extractJsonString(body, "txType");
+                int amount = extractJsonInt(body, "amount", 0);
+                int balanceBefore = extractJsonInt(body, "balanceBefore", 0);
+                int balanceAfter = extractJsonInt(body, "balanceAfter", virtualCard.walletBalance);
+                String txRef = extractJsonString(body, "txRef");
+                String counterparty = extractJsonString(body, "counterparty");
+                String description = extractJsonString(body, "description");
+                long ts = extractJsonLong(body, "timestampSeconds", System.currentTimeMillis() / 1000L);
+                String sigHex = extractJsonString(body, "rsaSignatureHex");
+
+                boolean isCredit = !"DEBIT".equalsIgnoreCase(txType);
+                boolean rsaVerified = verifyWalletReceiptOnServer(isCredit, amount, balanceAfter, ts, sigHex);
+
+                boolean ok = DatabaseManager.recordWalletTransaction(
+                        studentId.isEmpty() ? virtualCard.activeCardId : studentId,
+                        txType, amount, balanceAfter, description, ts, sigHex, rsaVerified,
+                        txRef, balanceBefore, counterparty);
+                sendJson(exchange, 200, "{\"saved\":" + ok + ",\"verifiedByServer\":" + rsaVerified + ",\"db\":\"smartcard.db\"}");
+            } else {
+                sendJson(exchange, 405, "{\"error\":\"Method Not Allowed\"}");
+            }
+        });
+
         // 8. Endpoint for full SQLite Database Summary (`cards`, `attendance_logs`, `book_loans`, `card_audit_logs`)
         server.createContext("/api/db-summary", exchange -> {
             String dbJson = DatabaseManager.getDatabaseSummaryJson();
@@ -366,6 +404,7 @@ public class BridgeServer {
                     virtualCard.adminLocked || virtualCard.pinTriesRemaining == 0,
                     virtualCard.trainingScore, virtualCard.attendanceCount,
                     "", "", bytesToHex(virtualCard.encryptedInfo));
+            virtualCard.persistAvatarIfNeeded();
         }
     }
 
@@ -504,7 +543,7 @@ public class BridgeServer {
                 + "<div class='stat-card'><div>Sách đang mượn (book_loans)</div><div class='stat-val' id='stBooks'>-</div></div>"
                 + "<div class='stat-card'><div>Nhật ký bảo mật (card_audit_logs)</div><div class='stat-val' id='stAudit'>-</div></div>"
                 + "</div>"
-                + "<table><thead><tr><th>MSSV (PK)</th><th>Họ và Tên</th><th>Ngày sinh</th><th>Lớp</th><th>Khoa</th><th>Điểm RL</th><th>Điểm danh</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>"
+                + "<table><thead><tr><th>MSSV (PK)</th><th>Họ và Tên</th><th>Ngày sinh</th><th>Lớp</th><th>Khoa</th><th>Số dư Ví</th><th>Điểm RL</th><th>Điểm danh</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>"
                 + "<tbody id='cardsTableBody'></tbody></table>"
                 + "</div><script>"
                 + "async function refreshDb(){"
@@ -521,13 +560,13 @@ public class BridgeServer {
                 + "    div.className='card-btn'+(isCur?' active-card':'');"
                 + "    if(isCur) div.style='border-color:#10b981;background:#ecfdf5;';"
                 + "    div.onclick=()=>activateCard(c.studentId,`${c.studentId}|${c.fullName}|${c.dob}|${c.className}|${c.department}`,c.defaultPin||'123456');"
-                + "    div.innerHTML=`<div><div class='name'>${idx+1}. ${c.fullName} • ${c.studentId} ${isCur?'<span style=\"color:#059669;font-size:12px;margin-left:8px;\">● ĐANG GẮN TRÊN ĐẦU ĐỌC</span>':''}</div><div class='sub'>Lớp: ${c.className} • Ngành: ${c.department} • Ngày sinh: ${c.dob}</div></div><button class='badge' style='cursor:pointer;border:none;background:${isCur?'#059669':'#2563eb'}'>${isCur?'Đang hoạt động':'Nạp thẻ này ➔'}</button>`;"
+                + "    div.innerHTML=`<div><div class='name'>${idx+1}. ${c.fullName} • ${c.studentId} ${isCur?'<span style=\"color:#059669;font-size:12px;margin-left:8px;\">● ĐANG GẮN TRÊN ĐẦU ĐỌC</span>':''}</div><div class='sub'>Lớp: ${c.className} • Ngành: ${c.department} • Số dư ví: ${(c.walletBalance??500000).toLocaleString('vi-VN')} đ</div></div><button class='badge' style='cursor:pointer;border:none;background:${isCur?'#059669':'#2563eb'}'>${isCur?'Đang hoạt động':'Nạp thẻ này ➔'}</button>`;"
                 + "    cont.appendChild(div);"
                 + "  });"
                 + "  const tb=document.getElementById('cardsTableBody'); tb.innerHTML='';"
                 + "  (d.cards||[]).forEach(c=>{"
                 + "    const tr=document.createElement('tr');"
-                + "    tr.innerHTML=`<td><b>${c.studentId}</b></td><td>${c.fullName}</td><td>${c.dob}</td><td>${c.className}</td><td>${c.department}</td><td>${c.trainingScore}</td><td>${c.attendanceCount}</td><td>${c.cardLocked?'🔒 Khóa PIN':'✅ Sẵn sàng'}</td><td><button class='badge' style='cursor:pointer;border:none;padding:5px 10px;font-size:11px;' onclick=\"activateCard('${c.studentId}','${c.studentId}|${c.fullName}|${c.dob}|${c.className}|${c.department}','${c.defaultPin||'123456'}')\">Nạp</button> <button class='badge' style='cursor:pointer;border:none;background:#dc2626;padding:5px 10px;font-size:11px;margin-left:4px;' onclick=\"deleteCard('${c.studentId}')\">Xóa</button></td>`;"
+                + "    tr.innerHTML=`<td><b>${c.studentId}</b></td><td>${c.fullName}</td><td>${c.dob}</td><td>${c.className}</td><td>${c.department}</td><td><b>${(c.walletBalance??500000).toLocaleString('vi-VN')} đ</b></td><td>${c.trainingScore}</td><td>${c.attendanceCount}</td><td>${c.cardLocked?'🔒 Khóa PIN':'✅ Sẵn sàng'}</td><td><button class='badge' style='cursor:pointer;border:none;padding:5px 10px;font-size:11px;' onclick=\"activateCard('${c.studentId}','${c.studentId}|${c.fullName}|${c.dob}|${c.className}|${c.department}','${c.defaultPin||'123456'}')\">Nạp</button> <button class='badge' style='cursor:pointer;border:none;background:#dc2626;padding:5px 10px;font-size:11px;margin-left:4px;' onclick=\"deleteCard('${c.studentId}')\">Xóa</button></td>`;"
                 + "    tb.appendChild(tr);"
                 + "  });"
                 + "}"
@@ -666,6 +705,41 @@ public class BridgeServer {
         return out;
     }
 
+    private static byte[] buildCanonicalWalletReceipt(byte insCode, int amount, int newBalance, int tsInt) {
+        return new byte[]{
+                insCode,
+                (byte) ((amount >> 24) & 0xFF),
+                (byte) ((amount >> 16) & 0xFF),
+                (byte) ((amount >> 8) & 0xFF),
+                (byte) (amount & 0xFF),
+                (byte) ((newBalance >> 24) & 0xFF),
+                (byte) ((newBalance >> 16) & 0xFF),
+                (byte) ((newBalance >> 8) & 0xFF),
+                (byte) (newBalance & 0xFF),
+                (byte) ((tsInt >> 24) & 0xFF),
+                (byte) ((tsInt >> 16) & 0xFF),
+                (byte) ((tsInt >> 8) & 0xFF),
+                (byte) (tsInt & 0xFF)
+        };
+    }
+
+    private static boolean verifyWalletReceiptOnServer(boolean isCredit, int amount, int balanceAfter, long ts, String sigHex) {
+        if (sigHex == null || sigHex.trim().length() < 64 || virtualCard == null || virtualCard.rsaKeyPair == null) {
+            return false;
+        }
+        try {
+            byte[] sigBytes = hexToBytes(sigHex.trim());
+            byte[] canonicalPayload = buildCanonicalWalletReceipt(
+                    (byte) (isCredit ? 0x40 : 0x41), amount, balanceAfter, (int) ts);
+            Signature verifier = Signature.getInstance("SHA1withRSA");
+            verifier.initVerify(virtualCard.rsaKeyPair.getPublic());
+            verifier.update(canonicalPayload);
+            return verifier.verify(sigBytes);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private static String bytesToHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder(bytes.length * 2);
         for (byte b : bytes) {
@@ -687,12 +761,14 @@ public class BridgeServer {
         int plainInfoLen = 0;
         byte[] avatarBuffer = new byte[8192];
         int avatarLength = 0;
+        boolean avatarDirty = false;
 
         short trainingScore = 88;
         short attendanceCount = 12;
         byte labAccess = 1;
         short[] borrowedBooks = new short[]{0x0102, 0x0205, 0, 0, 0};
         byte borrowedCount = 2;
+        int walletBalance = 500000;
 
         final byte[] activityLogs = new byte[70];
         byte logHead = 0;
@@ -713,16 +789,67 @@ public class BridgeServer {
 
         void loadSnapshot(String cardId, String infoUtf8, String pin) {
             boolean sameCard = cardId != null && cardId.equalsIgnoreCase(this.activeCardId);
+            if (!sameCard) {
+                persistAvatarIfNeeded();
+            }
             this.activeCardId = cardId;
             this.activeInfoUtf8 = infoUtf8;
             this.currentPin = pin;
             this.pinTriesRemaining = 3;
             this.pinValidated = true;
             this.adminLocked = false;
-            if (!sameCard) {
-                this.avatarLength = 0;
-            }
             encryptAndStoreInfo(infoUtf8.getBytes(StandardCharsets.UTF_8));
+            if (!sameCard || this.avatarLength == 0) {
+                reloadAvatarFromDatabase();
+            }
+            reloadWalletBalanceFromDatabase();
+        }
+
+        void reloadWalletBalanceFromDatabase() {
+            if (activeCardId == null || activeCardId.trim().isEmpty()) {
+                this.walletBalance = 500000;
+                return;
+            }
+            try {
+                this.walletBalance = DatabaseManager.getCardWalletBalance(activeCardId);
+            } catch (Exception ignored) {
+            }
+        }
+
+        void persistAvatarIfNeeded() {
+            if (!avatarDirty || activeCardId == null || activeCardId.trim().isEmpty() || avatarLength <= 0) {
+                return;
+            }
+            try {
+                byte[] currentBytes = Arrays.copyOf(avatarBuffer, avatarLength);
+                String b64 = Base64.getEncoder().encodeToString(currentBytes);
+                boolean updated = DatabaseManager.saveCardAvatarBase64(activeCardId, b64);
+                if (!updated) {
+                    syncActiveCardInfoToDatabase();
+                    DatabaseManager.saveCardAvatarBase64(activeCardId, b64);
+                }
+                avatarDirty = false;
+            } catch (Exception ignored) {
+            }
+        }
+
+        void reloadAvatarFromDatabase() {
+            this.avatarLength = 0;
+            this.avatarDirty = false;
+            if (activeCardId == null || activeCardId.trim().isEmpty()) {
+                return;
+            }
+            try {
+                String b64 = DatabaseManager.getCardAvatarBase64(activeCardId);
+                if (b64 != null && !b64.isEmpty()) {
+                    byte[] decoded = Base64.getDecoder().decode(b64);
+                    if (decoded.length > 0 && decoded.length <= avatarBuffer.length) {
+                        System.arraycopy(decoded, 0, avatarBuffer, 0, decoded.length);
+                        this.avatarLength = decoded.length;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
         }
 
         /**
@@ -878,11 +1005,23 @@ public class BridgeServer {
                             if (offset == 0 || offset + cdata.length > avatarLength) {
                                 avatarLength = offset + cdata.length;
                             }
+                            avatarDirty = true;
+                            if (cdata.length < 240 || offset + cdata.length >= avatarBuffer.length) {
+                                persistAvatarIfNeeded();
+                            }
                         }
                         return swOnly(0x9000);
                     }
                     case 0x23: {
                         int offset = (p1 << 8) | p2;
+                        if (offset == 0) {
+                            if (avatarDirty) {
+                                persistAvatarIfNeeded();
+                            }
+                            if (avatarLength == 0) {
+                                reloadAvatarFromDatabase();
+                            }
+                        }
                         if (offset >= avatarLength) return withSw(new byte[0], 0x9000);
                         int len = Math.min(240, avatarLength - offset);
                         return withSw(Arrays.copyOfRange(avatarBuffer, offset, offset + len), 0x9000);
@@ -900,6 +1039,10 @@ public class BridgeServer {
                             bos.write((borrowedBooks[i] >> 8) & 0xFF);
                             bos.write(borrowedBooks[i] & 0xFF);
                         }
+                        bos.write((walletBalance >> 24) & 0xFF);
+                        bos.write((walletBalance >> 16) & 0xFF);
+                        bos.write((walletBalance >> 8) & 0xFF);
+                        bos.write(walletBalance & 0xFF);
                         return withSw(bos.toByteArray(), 0x9000);
                     }
                     case 0x31:
@@ -945,12 +1088,77 @@ public class BridgeServer {
                         }
                         return withSw(bos.toByteArray(), 0x9000);
                     }
+                    case 0x40:
+                        return handleWalletMutation(true, cdata);
+                    case 0x41:
+                        return handleWalletMutation(false, cdata);
+                    case 0x42: {
+                        if (!pinValidated) return swOnly(0x6982);
+                        return withSw(new byte[]{
+                                (byte) ((walletBalance >> 24) & 0xFF),
+                                (byte) ((walletBalance >> 16) & 0xFF),
+                                (byte) ((walletBalance >> 8) & 0xFF),
+                                (byte) (walletBalance & 0xFF)
+                        }, 0x9000);
+                    }
                     default:
                         return swOnly(0x6D00);
                 }
             } catch (Exception e) {
                 return swOnly(0x6F00);
             }
+        }
+
+        private static final int MAX_WALLET_BALANCE = 50_000_000;
+
+        private byte[] handleWalletMutation(boolean isCredit, byte[] cdata) throws Exception {
+            if (!pinValidated) return swOnly(0x6982);
+            if (cdata.length < 8) return swOnly(0x6700);
+            int amount = ((cdata[0] & 0xFF) << 24)
+                    | ((cdata[1] & 0xFF) << 16)
+                    | ((cdata[2] & 0xFF) << 8)
+                    | (cdata[3] & 0xFF);
+            long ts = ((long) (cdata[4] & 0xFF) << 24)
+                    | ((long) (cdata[5] & 0xFF) << 16)
+                    | ((long) (cdata[6] & 0xFF) << 8)
+                    | (cdata[7] & 0xFF);
+            if (ts <= 0) ts = System.currentTimeMillis() / 1000L;
+            if (amount <= 0) return swOnly(0x6984);
+
+            int balanceBefore = walletBalance;
+            if (isCredit) {
+                if ((long) walletBalance + amount > MAX_WALLET_BALANCE) return swOnly(0x6A84);
+                walletBalance += amount;
+            } else {
+                if (walletBalance < amount) return swOnly(0x6985);
+                walletBalance -= amount;
+            }
+
+            byte logCode = (byte) (isCredit ? 0x40 : 0x41);
+            byte[] receiptPayload = buildCanonicalWalletReceipt(logCode, amount, walletBalance, (int) ts);
+            Signature sig = Signature.getInstance("SHA1withRSA");
+            sig.initSign(rsaKeyPair.getPrivate());
+            sig.update(receiptPayload);
+            byte[] sigBytes = sig.sign();
+            String sigHex = bytesToHex(sigBytes);
+
+            byte logType = (byte) (isCredit ? 5 : 6);
+            addLog(logType, new byte[]{0x00, logCode, receiptPayload[9], receiptPayload[10], receiptPayload[11], receiptPayload[12]});
+            String txRef = DatabaseManager.generateBankTxRef(ts, amount);
+            DatabaseManager.recordWalletTransaction(
+                    activeCardId,
+                    isCredit ? "CREDIT" : "DEBIT",
+                    amount,
+                    walletBalance,
+                    isCredit ? "Nạp tiền ví điện tử trên chip" : "Thanh toán dịch vụ khuôn viên",
+                    ts,
+                    sigHex,
+                    true,
+                    txRef,
+                    balanceBefore,
+                    isCredit ? "Vietcombank • *8829 (Napas 247)" : "POS Dịch vụ Smart Campus"
+            );
+            return withSw(sigBytes, 0x9000);
         }
 
         private void addLog(byte type, byte[] cdata) {
