@@ -12,6 +12,8 @@ import android.util.AttributeSet;
 import android.view.Choreographer;
 import android.view.View;
 
+import com.example.smartstudentid.optimization.ChaosInjectionManager;
+
 import java.util.Arrays;
 import java.util.Locale;
 
@@ -33,8 +35,8 @@ public class RealtimeTopicChartView extends View {
     public static final int MODE_AFTER = 2;
 
     private static final long SAMPLE_INTERVAL_NS = 50_000_000L; // 50 ms (~20 Hz)
-    private static final long FPS_WINDOW_NS = 500_000_000L;
-    private static final int GAP_WINDOWS = 6;
+    private static final long FPS_WINDOW_NS = 250_000_000L;
+    private static final int GAP_WINDOWS = 4;
 
     private static final int COLOR_BLUE = 0xFF2563EB;
     private static final int COLOR_BLUE_FILL = 0x262563EB;
@@ -94,6 +96,10 @@ public class RealtimeTopicChartView extends View {
 
     public void setTopic(int topic) {
         state.setTopic(topic, readUsedHeapMb());
+        if (topic == TOPIC_STARTUP && ChaosInjectionManager.getInstance().isPinRamLeakAndSecurityBypassActive()) {
+            state.pinExposurePct = 100f;
+            state.pinExposureMode = MODE_BEFORE;
+        }
         invalidate();
     }
 
@@ -207,7 +213,10 @@ public class RealtimeTopicChartView extends View {
         framesInWindow++;
         long windowElapsedNs = frameTimeNanos - windowStartNs;
         if (windowElapsedNs >= FPS_WINDOW_NS) {
-            int fps = Math.max(0, Math.round(framesInWindow * 1_000_000_000f / windowElapsedNs));
+            int rawFps = Math.max(0, Math.round(framesInWindow * 1_000_000_000f / windowElapsedNs));
+            int fps = windowMaxGapMs > 32L
+                    ? Math.min(rawFps, Math.max(6, Math.round(1000f / windowMaxGapMs)))
+                    : rawFps;
             framesInWindow = 0;
             windowStartNs = frameTimeNanos;
             gapRing[ringIndex % GAP_WINDOWS] = windowMaxGapMs;
@@ -230,6 +239,11 @@ public class RealtimeTopicChartView extends View {
                 lastSampleNs = frameTimeNanos;
                 float sampleGap = tickMaxGapMs > 0f ? tickMaxGapMs : gapMs;
                 tickMaxGapMs = 0f;
+                if (state.topic == TOPIC_STARTUP
+                        && ChaosInjectionManager.getInstance().isPinRamLeakAndSecurityBypassActive()) {
+                    state.pinExposurePct = 100f;
+                    state.pinExposureMode = MODE_BEFORE;
+                }
                 state.onSampleTick(SystemClock.elapsedRealtime(), sampleGap, missedTicks, readUsedHeapMb());
                 invalidate();
             }
@@ -318,10 +332,16 @@ public class RealtimeTopicChartView extends View {
 
             default:
                 left = state.lastTotalMs > 0
-                        ? String.format(Locale.US, "Tổng 5 APDU: %d ms", state.lastTotalMs)
-                        : (state.runInProgress ? "Đang đo từng lệnh APDU..." : "Chờ đọc thẻ...");
-                right = "Kênh ISO 7816-4";
-                rightColor = COLOR_BLUE;
+                        ? String.format(Locale.US,
+                        state.activeRunAfterMode ? "Sau tối ưu: %d ms" : "Tổng nghẽn 5 bước: %d ms",
+                        state.lastTotalMs)
+                        : (state.runInProgress ? "Đang đo từng bước APDU..." : "Chờ đọc thẻ...");
+                right = (state.activeRunAfterMode && state.lastTotalMs > 0)
+                        ? "Combo §2–§4"
+                        : "Kênh ISO 7816-4";
+                rightColor = (state.activeRunAfterMode && state.lastTotalMs > 0)
+                        ? COLOR_GREEN
+                        : COLOR_BLUE;
                 break;
         }
 
@@ -782,7 +802,11 @@ public class RealtimeTopicChartView extends View {
                 if (idx >= 0) {
                     stepMs[idx] = elapsedMs;
                     currentStepStartMs = nowMs;
-                    pushSample(Math.max(1f, elapsedMs), MODE_APDU);
+                    float sampleVal = Math.max(1f, elapsedMs);
+                    int mode = activeRunAfterMode ? MODE_AFTER : MODE_APDU;
+                    for (int k = 0; k < 4; k++) {
+                        pushSample(sampleVal, mode);
+                    }
                 }
             } else if (topic == TOPIC_IMAGE && ins == 0x22) {
                 liveUploadPackets++;
@@ -819,6 +843,9 @@ public class RealtimeTopicChartView extends View {
                     break;
                 }
                 case TOPIC_CACHE: {
+                    if (!runInProgress && lastOpenMs >= 0L) {
+                        break;
+                    }
                     float val = runInProgress ? Math.max(1f, nowMs - runStartMs) : 0f;
                     int mode = runInProgress
                             ? (activeRunAfterMode ? MODE_AFTER : MODE_BEFORE)
@@ -843,8 +870,11 @@ public class RealtimeTopicChartView extends View {
                     break;
                 }
                 default: {
+                    if (!runInProgress && lastTotalMs > 0L) {
+                        break;
+                    }
                     float val = runInProgress ? Math.max(0f, nowMs - currentStepStartMs) : 0f;
-                    pushSample(val, MODE_APDU);
+                    pushSample(val, activeRunAfterMode ? MODE_AFTER : MODE_APDU);
                     break;
                 }
             }
@@ -874,7 +904,10 @@ public class RealtimeTopicChartView extends View {
             lastOpenMs = totalMs;
             lastFromCache = fromCache;
             int mode = fromCache ? MODE_AFTER : MODE_BEFORE;
-            pushSample(Math.max(1f, totalMs), mode);
+            float sampleVal = Math.max(1f, totalMs);
+            for (int k = 0; k < 4; k++) {
+                pushSample(sampleVal, mode);
+            }
 
             if (histCount == MAX_HISTORY) {
                 System.arraycopy(histMs, 1, histMs, 0, MAX_HISTORY - 1);

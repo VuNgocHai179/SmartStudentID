@@ -30,6 +30,7 @@ import com.example.smartstudentid.apdu.ApduCommands;
 import com.example.smartstudentid.apdu.CardResponse;
 import com.example.smartstudentid.model.StudentCardRecord;
 import com.example.smartstudentid.optimization.ApduThreadPool;
+import com.example.smartstudentid.optimization.ChaosInjectionManager;
 import com.example.smartstudentid.optimization.ImageOptimizer;
 import com.example.smartstudentid.optimization.LocalCacheManager;
 import com.example.smartstudentid.optimization.OptimizationConfig;
@@ -156,8 +157,10 @@ public class CardProfileFragment extends Fragment {
 
     private void loadInitialProfileState() {
         long cacheStartNs = System.nanoTime();
+        boolean cacheBypass = ChaosInjectionManager.getInstance().isCacheBypassAndPlaintextLeakActive();
         StudentCardRecord cached = encryptedCacheManager.getStudentProfile();
-        if (cached != null && cached.getStudentId() != null && !cached.getStudentId().isEmpty()) {
+        if (!cacheBypass && OptimizationConfig.isOptimizedModeEnabled()
+                && cached != null && cached.getStudentId() != null && !cached.getStudentId().isEmpty()) {
             bindRecordToUi(cached);
             renderAvatarFromCacheOrGenerate(cached.getFullName());
             long cacheMs = Math.max(1, (System.nanoTime() - cacheStartNs) / 1_000_000);

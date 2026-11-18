@@ -6,7 +6,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
-import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.view.Choreographer;
 import android.view.View;
@@ -23,9 +22,13 @@ import java.util.Locale;
 public class UiHeartbeatView extends View {
 
     private static final int SEGMENTS = 16;
-    private static final long SEGMENT_MS = 90L;
-    private static final int FPS_WINDOW_MS = 500;
-    private static final int GAP_WINDOWS = 6; // ~3 s rolling worst frame gap
+    private static final int FRAMES_PER_SEGMENT = 4;
+    private static final int FPS_WINDOW_MS = 250;
+    private static final int GAP_WINDOWS = 4; // ~1 s rolling worst frame gap
+
+    public interface StatsListener {
+        void onFrameStats(int fps, long worstGapMs, boolean jank);
+    }
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
@@ -39,13 +42,31 @@ public class UiHeartbeatView extends View {
     private int fps = 60;
     private long windowMaxGapMs;
     private int ringIndex;
-    private long worstGapMs;
+    private long worstGapMs = 17;
+    private int frameStep;
     private boolean running;
+    private StatsListener statsListener;
 
     public UiHeartbeatView(Context context, AttributeSet attrs) {
         super(context, attrs);
         paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
         setContentDescription("Nhịp UI: animation chạy trên Main Thread để phát hiện giật/đứng hình");
+    }
+
+    public void setStatsListener(StatsListener listener) {
+        this.statsListener = listener;
+    }
+
+    public int getCurrentFps() {
+        return fps;
+    }
+
+    public long getWorstGapMs() {
+        return worstGapMs;
+    }
+
+    public boolean isJankState() {
+        return fps < 45 || worstGapMs > 32;
     }
 
     @Override
@@ -68,7 +89,9 @@ public class UiHeartbeatView extends View {
         framesInWindow = 0;
         windowMaxGapMs = 0;
         ringIndex = 0;
-        worstGapMs = 0;
+        worstGapMs = 17;
+        fps = 60;
+        frameStep = 0;
         Arrays.fill(gapRing, 0);
         Choreographer.getInstance().postFrameCallback(frameCallback);
     }
@@ -80,6 +103,7 @@ public class UiHeartbeatView extends View {
 
     private void onFrame(long frameTimeNanos) {
         if (!running) return;
+        frameStep++;
         if (lastFrameNs != 0) {
             long gapMs = (frameTimeNanos - lastFrameNs) / 1_000_000;
             if (gapMs > windowMaxGapMs) {
@@ -94,7 +118,10 @@ public class UiHeartbeatView extends View {
         framesInWindow++;
         long elapsedMs = (frameTimeNanos - windowStartNs) / 1_000_000;
         if (elapsedMs >= FPS_WINDOW_MS) {
-            fps = Math.max(0, Math.round(framesInWindow * 1000f / elapsedMs));
+            int rawFps = Math.max(0, Math.round(framesInWindow * 1000f / elapsedMs));
+            fps = windowMaxGapMs > 32
+                    ? Math.min(rawFps, Math.max(6, Math.round(1000f / windowMaxGapMs)))
+                    : rawFps;
             framesInWindow = 0;
             windowStartNs = frameTimeNanos;
 
@@ -106,6 +133,10 @@ public class UiHeartbeatView extends View {
                 worst = Math.max(worst, gap);
             }
             worstGapMs = worst;
+
+            if (statsListener != null) {
+                statsListener.onFrameStats(fps, worstGapMs, isJankState());
+            }
         }
 
         invalidate();
@@ -122,10 +153,11 @@ public class UiHeartbeatView extends View {
         float barHeight = dp(10);
         float gap = dp(3);
         float segmentWidth = (width - gap * (SEGMENTS - 1)) / SEGMENTS;
-        int activeColor = fps >= 50 ? Color.parseColor("#059669")
+        boolean jank = isJankState();
+        int activeColor = !jank ? Color.parseColor("#059669")
                 : fps >= 30 ? Color.parseColor("#D97706")
                 : Color.parseColor("#DC2626");
-        int activeSegment = (int) ((SystemClock.elapsedRealtime() / SEGMENT_MS) % SEGMENTS);
+        int activeSegment = (frameStep / FRAMES_PER_SEGMENT) % SEGMENTS;
         float top = dp(5);
         for (int i = 0; i < SEGMENTS; i++) {
             float left = i * (segmentWidth + gap);
@@ -134,10 +166,12 @@ public class UiHeartbeatView extends View {
             canvas.drawRoundRect(rect, barHeight / 2f, barHeight / 2f, paint);
         }
 
-        paint.setColor(Color.parseColor("#64748B"));
+        paint.setColor(Color.parseColor(jank ? "#DC2626" : "#059669"));
         paint.setTextSize(dp(10));
-        canvas.drawText(String.format(Locale.US, "UI %d fps • trễ max %d ms", fps, worstGapMs),
-                0, height - dp(6), paint);
+        String statusText = jank
+                ? String.format(Locale.US, "⚠ UI BỊ NGHẼN: %d FPS • trễ frame %d ms (Rớt khung!)", fps, worstGapMs)
+                : String.format(Locale.US, "✓ UI MƯỢT: %d FPS • trễ max %d ms (Chuẩn 60 FPS)", fps, worstGapMs);
+        canvas.drawText(statusText, 0, height - dp(6), paint);
     }
 
     private float dp(float value) {

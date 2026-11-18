@@ -71,11 +71,23 @@
         </LinearLayout>
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnTogglePerfHud"
+            style="@style/Widget.SmartID.Button.Pill"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="📊 HUD"
+            android:textSize="11sp" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnHeaderSwitchCard"
             style="@style/Widget.SmartID.Button.Pill"
             android:layout_width="wrap_content"
             android:layout_height="38dp"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="6dp"
             android:minWidth="0dp"
             android:text="Đăng xuất"
             app:icon="@drawable/ic_close" />
@@ -86,19 +98,33 @@
         android:layout_height="1dp"
         android:background="@color/slate_100" />
 
-    <!-- ViewPager2 hosting the 4 Student Fragments -->
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/viewPagerStudent"
+    <!-- ViewPager2 hosting the 5 Topic Demo Fragments + Floating Live Perf HUD -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
+
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/viewPagerStudent"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <com.example.smartstudentid.ui.widget.LivePerfHudView
+            android:id="@+id/livePerfHud"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="10dp"
+            android:layout_marginEnd="12dp"
+            android:elevation="12dp" />
+    </FrameLayout>
 
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:background="@color/slate_100" />
 
-    <!-- Bottom navigation -->
+    <!-- Bottom navigation (5 isolated optimization topic demo tabs §1–§5) -->
     <LinearLayout
         android:id="@+id/bottomNavBar"
         android:layout_width="match_parent"
@@ -108,13 +134,13 @@
         android:elevation="8dp"
         android:gravity="center"
         android:orientation="horizontal"
-        android:paddingStart="6dp"
+        android:paddingStart="4dp"
         android:paddingTop="6dp"
-        android:paddingEnd="6dp"
+        android:paddingEnd="4dp"
         android:paddingBottom="6dp">
 
         <LinearLayout
-            android:id="@+id/navTabCard"
+            android:id="@+id/navTab1"
             android:layout_width="0dp"
             android:layout_height="60dp"
             android:layout_weight="1"
@@ -125,34 +151,35 @@
             android:orientation="vertical">
 
             <FrameLayout
-                android:id="@+id/navIconBgCard"
-                android:layout_width="46dp"
+                android:id="@+id/navIconBg1"
+                android:layout_width="40dp"
                 android:layout_height="30dp"
                 android:background="@drawable/bg_nav_active">
 
                 <ImageView
-                    android:id="@+id/ivNavIconCard"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
+                    android:id="@+id/ivNavIcon1"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:contentDescription="Thẻ sinh viên"
-                    android:src="@drawable/ic_nav_card"
+                    android:contentDescription="Chuyên đề 1 Điểm nghẽn"
+                    android:src="@drawable/ic_bolt"
                     app:tint="@color/brand_600" />
             </FrameLayout>
 
             <TextView
-                android:id="@+id/tvNavLabelCard"
+                android:id="@+id/tvNavLabel1"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
-                android:text="Thẻ SV"
+                android:maxLines="1"
+                android:text="§1 Nghẽn"
                 android:textColor="@color/brand_600"
                 android:textSize="10sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/navTabQr"
+            android:id="@+id/navTab2"
             android:layout_width="0dp"
             android:layout_height="60dp"
             android:layout_weight="1"
@@ -163,32 +190,33 @@
             android:orientation="vertical">
 
             <FrameLayout
-                android:id="@+id/navIconBgQr"
-                android:layout_width="46dp"
+                android:id="@+id/navIconBg2"
+                android:layout_width="40dp"
                 android:layout_height="30dp">
 
                 <ImageView
-                    android:id="@+id/ivNavIconQr"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
+                    android:id="@+id/ivNavIcon2"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:contentDescription="Điểm danh QR"
-                    android:src="@drawable/ic_nav_qr"
+                    android:contentDescription="Chuyên đề 2 60 FPS"
+                    android:src="@drawable/ic_speed"
                     app:tint="@color/slate_500" />
             </FrameLayout>
 
             <TextView
-                android:id="@+id/tvNavLabelQr"
+                android:id="@+id/tvNavLabel2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
-                android:text="Điểm danh"
+                android:maxLines="1"
+                android:text="§2 60FPS"
                 android:textColor="@color/slate_500"
                 android:textSize="10sp" />
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/navTabLibrary"
+            android:id="@+id/navTab3"
             android:layout_width="0dp"
             android:layout_height="60dp"
             android:layout_weight="1"
@@ -199,32 +227,33 @@
             android:orientation="vertical">
 
             <FrameLayout
-                android:id="@+id/navIconBgLibrary"
-                android:layout_width="46dp"
+                android:id="@+id/navIconBg3"
+                android:layout_width="40dp"
                 android:layout_height="30dp">
 
                 <ImageView
-                    android:id="@+id/ivNavIconLibrary"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
+                    android:id="@+id/ivNavIcon3"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:contentDescription="Thư viện"
-                    android:src="@drawable/ic_nav_library"
+                    android:contentDescription="Chuyên đề 3 Cache"
+                    android:src="@drawable/ic_cached"
                     app:tint="@color/slate_500" />
             </FrameLayout>
 
             <TextView
-                android:id="@+id/tvNavLabelLibrary"
+                android:id="@+id/tvNavLabel3"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
-                android:text="Thư viện"
+                android:maxLines="1"
+                android:text="§3 Cache"
                 android:textColor="@color/slate_500"
                 android:textSize="10sp" />
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/navTabSecurityOpt"
+            android:id="@+id/navTab4"
             android:layout_width="0dp"
             android:layout_height="60dp"
             android:layout_weight="1"
@@ -235,26 +264,64 @@
             android:orientation="vertical">
 
             <FrameLayout
-                android:id="@+id/navIconBgSecurityOpt"
-                android:layout_width="46dp"
+                android:id="@+id/navIconBg4"
+                android:layout_width="40dp"
                 android:layout_height="30dp">
 
                 <ImageView
-                    android:id="@+id/ivNavIconSecurityOpt"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
+                    android:id="@+id/ivNavIcon4"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:contentDescription="Bảo mật và tối ưu"
-                    android:src="@drawable/ic_nav_security"
+                    android:contentDescription="Chuyên đề 4 Ảnh WebP"
+                    android:src="@drawable/ic_image"
                     app:tint="@color/slate_500" />
             </FrameLayout>
 
             <TextView
-                android:id="@+id/tvNavLabelSecurityOpt"
+                android:id="@+id/tvNavLabel4"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
-                android:text="Bảo mật"
+                android:maxLines="1"
+                android:text="§4 WebP"
+                android:textColor="@color/slate_500"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navTab5"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:id="@+id/navIconBg5"
+                android:layout_width="40dp"
+                android:layout_height="30dp">
+
+                <ImageView
+                    android:id="@+id/ivNavIcon5"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="Chuyên đề 5 PIN và RAM"
+                    android:src="@drawable/ic_shield"
+                    app:tint="@color/slate_500" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/tvNavLabel5"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:maxLines="1"
+                android:text="§5 PIN"
                 android:textColor="@color/slate_500"
                 android:textSize="10sp" />
         </LinearLayout>

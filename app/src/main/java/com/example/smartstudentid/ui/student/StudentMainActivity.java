@@ -11,6 +11,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 import androidx.viewpager2.widget.ViewPager2;
@@ -19,35 +20,27 @@ import com.example.smartstudentid.R;
 import com.example.smartstudentid.model.StudentCardRecord;
 import com.example.smartstudentid.security.BaseSecureActivity;
 import com.example.smartstudentid.security.EncryptedCacheManager;
+import com.example.smartstudentid.ui.demo.TopicDemoFragment;
+import com.example.smartstudentid.ui.widget.LivePerfHudView;
 import com.google.android.material.button.MaterialButton;
 
 /**
- * Main Student Activity hosting the 4 Light Mode functional tabs:
- * - Tab 0: CardProfileFragment (Apple Wallet / VNeID Digital Card, Avatar WebP, Profile & PIN)
- * - Tab 1: DynamicQrFragment (30-Second Anti-Replay Dynamic QR & RSA-1024 Attendance Check-In)
- * - Tab 2: LibraryLabFragment (Atomic Book Borrow/Return, Lab Door Access & 10-Entry Circular Log)
- * - Tab 3: SecurityOptLabFragment (Before/After Optimization Switch, Benchmark & 5 MASVS Security Layers)
+ * Main Student Activity hosting the 5 isolated Optimization & Security Topic Demo tabs (§1–§5)
+ * directly on the bottom navigation bar so each topic can be demonstrated independently.
  */
 public class StudentMainActivity extends BaseSecureActivity {
+
+    private static final int TOPIC_TAB_COUNT = 5;
 
     private TextView tvHeaderGreeting;
     private TextView tvHeaderPerfBadge;
     private ViewPager2 viewPagerStudent;
+    private LivePerfHudView livePerfHud;
+    private MaterialButton btnTogglePerfHud;
 
-    private TextView tvNavLabelCard;
-    private TextView tvNavLabelQr;
-    private TextView tvNavLabelLibrary;
-    private TextView tvNavLabelSecurityOpt;
-
-    private ImageView ivNavIconCard;
-    private ImageView ivNavIconQr;
-    private ImageView ivNavIconLibrary;
-    private ImageView ivNavIconSecurityOpt;
-
-    private FrameLayout navIconBgCard;
-    private FrameLayout navIconBgQr;
-    private FrameLayout navIconBgLibrary;
-    private FrameLayout navIconBgSecurityOpt;
+    private final TextView[] navLabels = new TextView[TOPIC_TAB_COUNT];
+    private final ImageView[] navIcons = new ImageView[TOPIC_TAB_COUNT];
+    private final FrameLayout[] navIconBgs = new FrameLayout[TOPIC_TAB_COUNT];
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,35 +59,40 @@ public class StudentMainActivity extends BaseSecureActivity {
         tvHeaderPerfBadge = findViewById(R.id.tvHeaderPerfBadge);
         viewPagerStudent = findViewById(R.id.viewPagerStudent);
 
-        tvNavLabelCard = findViewById(R.id.tvNavLabelCard);
-        tvNavLabelQr = findViewById(R.id.tvNavLabelQr);
-        tvNavLabelLibrary = findViewById(R.id.tvNavLabelLibrary);
-        tvNavLabelSecurityOpt = findViewById(R.id.tvNavLabelSecurityOpt);
+        int[] tabIds = {R.id.navTab1, R.id.navTab2, R.id.navTab3, R.id.navTab4, R.id.navTab5};
+        int[] labelIds = {R.id.tvNavLabel1, R.id.tvNavLabel2, R.id.tvNavLabel3, R.id.tvNavLabel4, R.id.tvNavLabel5};
+        int[] iconIds = {R.id.ivNavIcon1, R.id.ivNavIcon2, R.id.ivNavIcon3, R.id.ivNavIcon4, R.id.ivNavIcon5};
+        int[] bgIds = {R.id.navIconBg1, R.id.navIconBg2, R.id.navIconBg3, R.id.navIconBg4, R.id.navIconBg5};
 
-        ivNavIconCard = findViewById(R.id.ivNavIconCard);
-        ivNavIconQr = findViewById(R.id.ivNavIconQr);
-        ivNavIconLibrary = findViewById(R.id.ivNavIconLibrary);
-        ivNavIconSecurityOpt = findViewById(R.id.ivNavIconSecurityOpt);
+        for (int i = 0; i < TOPIC_TAB_COUNT; i++) {
+            final int tabIndex = i;
+            navLabels[i] = findViewById(labelIds[i]);
+            navIcons[i] = findViewById(iconIds[i]);
+            navIconBgs[i] = findViewById(bgIds[i]);
+            LinearLayout tab = findViewById(tabIds[i]);
+            tab.setOnClickListener(v -> viewPagerStudent.setCurrentItem(tabIndex, true));
+        }
 
-        navIconBgCard = findViewById(R.id.navIconBgCard);
-        navIconBgQr = findViewById(R.id.navIconBgQr);
-        navIconBgLibrary = findViewById(R.id.navIconBgLibrary);
-        navIconBgSecurityOpt = findViewById(R.id.navIconBgSecurityOpt);
+        livePerfHud = findViewById(R.id.livePerfHud);
+        btnTogglePerfHud = findViewById(R.id.btnTogglePerfHud);
+        updateHudToggleButtonStyle(true);
+        btnTogglePerfHud.setOnClickListener(v -> {
+            boolean show = livePerfHud.getVisibility() != View.VISIBLE;
+            livePerfHud.setVisibility(show ? View.VISIBLE : View.GONE);
+            updateHudToggleButtonStyle(show);
+        });
 
-        LinearLayout navTabCard = findViewById(R.id.navTabCard);
-        LinearLayout navTabQr = findViewById(R.id.navTabQr);
-        LinearLayout navTabLibrary = findViewById(R.id.navTabLibrary);
-        LinearLayout navTabSecurityOpt = findViewById(R.id.navTabSecurityOpt);
         MaterialButton btnHeaderSwitchCard = findViewById(R.id.btnHeaderSwitchCard);
-
-        navTabCard.setOnClickListener(v -> viewPagerStudent.setCurrentItem(0, true));
-        navTabQr.setOnClickListener(v -> viewPagerStudent.setCurrentItem(1, true));
-        navTabLibrary.setOnClickListener(v -> viewPagerStudent.setCurrentItem(2, true));
-        navTabSecurityOpt.setOnClickListener(v -> viewPagerStudent.setCurrentItem(3, true));
-
         btnHeaderSwitchCard.setOnClickListener(v -> logoutCurrentCard());
 
         updateBottomNavHighlight(0);
+    }
+
+    private void updateHudToggleButtonStyle(boolean hudVisible) {
+        int bg = ContextCompat.getColor(this, hudVisible ? R.color.brand_600 : R.color.brand_50);
+        int fg = ContextCompat.getColor(this, hudVisible ? R.color.white : R.color.brand_600);
+        btnTogglePerfHud.setBackgroundTintList(ColorStateList.valueOf(bg));
+        btnTogglePerfHud.setTextColor(fg);
     }
 
     public void logoutCurrentCard() {
@@ -104,31 +102,20 @@ public class StudentMainActivity extends BaseSecureActivity {
     }
 
     private void setupViewPager() {
-        // Keep one page either side in memory: smooth swiping without holding all 4 fragments.
         viewPagerStudent.setOffscreenPageLimit(1);
         viewPagerStudent.setAdapter(new FragmentStateAdapter(this) {
             @NonNull
             @Override
             public Fragment createFragment(int position) {
-                switch (position) {
-                    case 0:
-                        return new CardProfileFragment();
-                    case 1:
-                        return new DynamicQrFragment();
-                    case 2:
-                        return new LibraryLabFragment();
-                    default:
-                        return new SecurityOptLabFragment();
-                }
+                return TopicDemoFragment.newInstance(position);
             }
 
             @Override
             public int getItemCount() {
-                return 4;
+                return TOPIC_TAB_COUNT;
             }
         });
 
-        // Subtle depth while swiping (cheap property animation on the compositor).
         viewPagerStudent.setPageTransformer((page, position) -> {
             float distance = Math.abs(position);
             page.setAlpha(1f - 0.18f * distance);
@@ -145,10 +132,9 @@ public class StudentMainActivity extends BaseSecureActivity {
     }
 
     private void updateBottomNavHighlight(int activeTab) {
-        applyNavHighlight(activeTab == 0, tvNavLabelCard, ivNavIconCard, navIconBgCard);
-        applyNavHighlight(activeTab == 1, tvNavLabelQr, ivNavIconQr, navIconBgQr);
-        applyNavHighlight(activeTab == 2, tvNavLabelLibrary, ivNavIconLibrary, navIconBgLibrary);
-        applyNavHighlight(activeTab == 3, tvNavLabelSecurityOpt, ivNavIconSecurityOpt, navIconBgSecurityOpt);
+        for (int i = 0; i < TOPIC_TAB_COUNT; i++) {
+            applyNavHighlight(i == activeTab, navLabels[i], navIcons[i], navIconBgs[i]);
+        }
     }
 
     private void applyNavHighlight(boolean active, TextView label, ImageView icon, FrameLayout iconBackground) {
@@ -179,10 +165,10 @@ public class StudentMainActivity extends BaseSecureActivity {
         boolean fromCache = getIntent().getBooleanExtra("FROM_CACHE", true);
         if (fromCache) {
             tvHeaderPerfBadge.setText("● Phiên PIN bảo mật • " + loadMs + " ms");
-        tvHeaderPerfBadge.setVisibility(android.view.View.GONE);
+            tvHeaderPerfBadge.setVisibility(View.GONE);
         } else {
             tvHeaderPerfBadge.setText("● Xác thực RSA-1024 • " + loadMs + " ms");
-        tvHeaderPerfBadge.setVisibility(android.view.View.GONE);
+            tvHeaderPerfBadge.setVisibility(View.GONE);
         }
     }
 }

@@ -31,15 +31,7 @@
             android:layout_marginTop="2dp"
             android:textAppearance="@style/TextAppearance.SmartID.ScreenTitle" />
 
-        <TextView
-            android:id="@+id/tvTopicGoal"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:lineSpacingExtra="3dp"
-            android:textAppearance="@style/TextAppearance.SmartID.Body" />
-
-        <!-- Before / After switch (hidden for the §1 diagnosis page) -->
+        <!-- Before / After switch + Chaos controls -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardDemoMode"
             style="@style/Widget.SmartID.Card"
@@ -51,37 +43,95 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
+                android:orientation="vertical"
                 android:padding="14dp">
 
                 <LinearLayout
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
-                    <TextView
-                        android:layout_width="wrap_content"
+                    <LinearLayout
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:text="CHẾ ĐỘ DEMO"
-                        android:textAppearance="@style/TextAppearance.SmartID.Label"
-                        android:textColor="@color/slate_500" />
+                        android:layout_weight="1"
+                        android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/tvModeHint"
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="CHẾ ĐỘ DEMO"
+                            android:textAppearance="@style/TextAppearance.SmartID.Label"
+                            android:textColor="@color/slate_500" />
+
+                        <TextView
+                            android:id="@+id/tvModeHint"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="❌ Before"
+                            android:textAppearance="@style/TextAppearance.SmartID.Micro"
+                            android:textColor="@color/red_600"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchDemoMode"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="Before — chưa tối ưu"
-                        android:textAppearance="@style/TextAppearance.SmartID.Micro"
-                        android:textColor="@color/red_600" />
+                        android:layout_height="wrap_content" />
                 </LinearLayout>
 
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/switchDemoMode"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
+                <!-- Explicit Chaos Tool & Step-by-Step Optimization Controls -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnInjectTopicFault"
+                        style="@style/Widget.SmartID.Button.Primary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="44dp"
+                        android:paddingStart="8dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingBottom="8dp"
+                        android:text="🔥 B1. Gây lỗi"
+                        android:textSize="12sp"
+                        app:backgroundTint="@color/red_600" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnApplyTopicFix"
+                        style="@style/Widget.SmartID.Button.Primary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:minHeight="44dp"
+                        android:paddingStart="8dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingBottom="8dp"
+                        android:text="🛠 B2. Xử lý"
+                        android:textSize="12sp"
+                        app:backgroundTint="@color/emerald_600" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAutoDemoTopic"
+                    style="@style/Widget.SmartID.Button.Soft"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:minHeight="42dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp"
+                    android:text="▶ Chạy Demo Tự động (B1 → B2)"
+                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -270,7 +320,8 @@
                     android:layout_marginTop="8dp"
                     android:lineSpacingExtra="3dp"
                     android:text=""
-                    android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+                    android:textAppearance="@style/TextAppearance.SmartID.Micro"
+                    android:visibility="gone" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnResetCache"
@@ -281,6 +332,19 @@
                     android:text="Xóa cache (mô phỏng lần đầu)"
                     android:textSize="11sp"
                     android:visibility="gone" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnInspectTopicSecurity"
+                    style="@style/Widget.SmartID.Button.Outline"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:minHeight="44dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp"
+                    android:text="Kiểm chứng dữ liệu &amp; bảo mật"
+                    android:visibility="gone"
+                    app:icon="@drawable/ic_lock" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -306,12 +370,12 @@
                     android:textAppearance="@style/TextAppearance.SmartID.Label"
                     android:textColor="@color/slate_500" />
 
-                <TextView
-                    android:id="@+id/tvRealtimeChartSubtitle"
+                <com.example.smartstudentid.ui.widget.UiHeartbeatView
+                    android:id="@+id/demoHeartbeat"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+                    android:layout_height="44dp"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone" />
 
                 <com.example.smartstudentid.ui.widget.RealtimeTopicChartView
                     android:id="@+id/demoRealtimeChart"
@@ -351,15 +415,5 @@
                     android:orientation="vertical" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
-
-        <TextView
-            android:id="@+id/tvTopicHint"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/bg_soft_panel"
-            android:lineSpacingExtra="3dp"
-            android:padding="12dp"
-            android:textAppearance="@style/TextAppearance.SmartID.Micro" />
     </LinearLayout>
 </ScrollView>
