@@ -5,6 +5,7 @@ package com.example.smartstudentid.model;
  */
 public class BookLoanRecord {
     private int bookCode;
+    private String studentId;
     private String bookTitle;
     private String author;
     private boolean borrowed;
@@ -30,6 +31,14 @@ public class BookLoanRecord {
 
     public void setBookCode(int bookCode) {
         this.bookCode = bookCode;
+    }
+
+    public String getStudentId() {
+        return studentId;
+    }
+
+    public void setStudentId(String studentId) {
+        this.studentId = studentId;
     }
 
     public String getBookTitle() {

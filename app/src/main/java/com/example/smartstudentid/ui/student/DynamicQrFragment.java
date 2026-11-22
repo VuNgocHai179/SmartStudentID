@@ -174,8 +174,10 @@ public class DynamicQrFragment extends Fragment {
         final String finalCourse = courseInput;
         tvAttendanceSignResult.setText("Đang điểm danh...");
 
+        final long[] signedTsHolder = new long[1];
         ApduThreadPool.getInstance().execute(() -> {
             long ts = System.currentTimeMillis() / 1000L;
+            signedTsHolder[0] = ts;
             byte[] data = new byte[]{
                     0x01, 0x01,
                     (byte) ((ts >> 24) & 0xFF),
@@ -202,16 +204,15 @@ public class DynamicQrFragment extends Fragment {
                     cacheManager.saveStudentProfile(profile);
                 }
 
-                String sigHex = ApduCommands.bytesToHex(resp.getData());
-                String sigShort = sigHex.length() > 36 ? sigHex.substring(0, 36) + "..." : sigHex;
+                String fullSigHex = ApduCommands.bytesToHex(resp.getData()).replace(" ", "");
 
                 AttendanceRecord newRecord = new AttendanceRecord(
                         studentId,
                         "AT19N01",
                         finalCourse,
-                        System.currentTimeMillis() / 1000L,
-                        sigShort,
-                        true
+                        signedTsHolder[0],
+                        fullSigHex,
+                        false
                 );
 
                 ApduThreadPool.getInstance().execute(() -> {

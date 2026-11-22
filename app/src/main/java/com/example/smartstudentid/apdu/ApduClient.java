@@ -18,6 +18,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
 import java.security.Signature;
 import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
@@ -546,7 +548,7 @@ public class ApduClient {
         return false;
     }
 
-    private static class LocalFallbackCardEngine {
+    static class LocalFallbackCardEngine {
         String activeInfoUtf8 = "CT070315|Vũ Ngọc Hải|15/08/2003|CT7C|An toàn Thông tin";
         String activeCardId = "CT070315";
         String currentPin = "123456";
@@ -573,8 +575,10 @@ public class ApduClient {
         byte logHead = 0;
         byte logCount = 0;
 
+        private static final IvParameterSpec ZERO_IV = new IvParameterSpec(new byte[16]);
+
         KeyPair rsaKeyPair;
-        final SecretKeySpec aesKey = new SecretKeySpec("SMART_STUDENT_ID".getBytes(StandardCharsets.UTF_8), "AES");
+        SecretKeySpec aesKey = deriveAesKeyFromPin("123456");
 
         LocalFallbackCardEngine() {
             try {
@@ -583,6 +587,39 @@ public class ApduClient {
                 rsaKeyPair = kpg.generateKeyPair();
                 loadSnapshot("CT070315", "CT070315|Vũ Ngọc Hải|15/08/2003|CT7C|An toàn Thông tin", "123456");
             } catch (Exception ignored) {
+            }
+        }
+
+        private static SecretKeySpec deriveAesKeyFromPin(String pin) {
+            try {
+                MessageDigest md = MessageDigest.getInstance("SHA-1");
+                byte[] digest = md.digest((pin != null ? pin : "123456").getBytes(StandardCharsets.UTF_8));
+                return new SecretKeySpec(Arrays.copyOf(digest, 16), "AES");
+            } catch (Exception e) {
+                throw new RuntimeException("SHA-1 unavailable", e);
+            }
+        }
+
+        private void reencryptWithNewPin(String newPin) {
+            byte[] plainBytes = null;
+            try {
+                if (encryptedInfo != null && encryptedInfo.length > 0 && plainInfoLen > 0) {
+                    Cipher decCipher = Cipher.getInstance("AES/CBC/NoPadding");
+                    decCipher.init(Cipher.DECRYPT_MODE, aesKey, ZERO_IV);
+                    byte[] dec = decCipher.doFinal(encryptedInfo);
+                    plainBytes = Arrays.copyOf(dec, Math.min(plainInfoLen, dec.length));
+                }
+            } catch (Exception ignored) {
+            }
+
+            if (plainBytes == null && activeInfoUtf8 != null && !activeInfoUtf8.isEmpty()) {
+                plainBytes = activeInfoUtf8.getBytes(StandardCharsets.UTF_8);
+            }
+
+            this.currentPin = (newPin != null && !newPin.isEmpty()) ? newPin : "123456";
+            this.aesKey = deriveAesKeyFromPin(this.currentPin);
+            if (plainBytes != null && plainBytes.length > 0) {
+                encryptAndStoreInfo(plainBytes);
             }
         }
 
@@ -611,6 +648,7 @@ public class ApduClient {
                 }
             }
             this.currentPin = (pin != null && !pin.isEmpty()) ? pin : "123456";
+            this.aesKey = deriveAesKeyFromPin(this.currentPin);
             this.pinTriesRemaining = 3;
             this.pinValidated = true;
             this.adminLocked = false;
@@ -625,8 +663,8 @@ public class ApduClient {
                 byte[] padded = Arrays.copyOf(plain, paddedLen);
                 Arrays.fill(padded, plain.length, paddedLen, padVal);
 
-                Cipher cipher = Cipher.getInstance("AES/ECB/NoPadding");
-                cipher.init(Cipher.ENCRYPT_MODE, aesKey);
+                Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+                cipher.init(Cipher.ENCRYPT_MODE, aesKey, ZERO_IV);
                 encryptedInfo = cipher.doFinal(padded);
             } catch (Exception ignored) {
             }
@@ -656,6 +694,7 @@ public class ApduClient {
                         if (currentPin.equals(inputPin)) {
                             pinTriesRemaining = 3;
                             pinValidated = true;
+                            aesKey = deriveAesKeyFromPin(inputPin);
                             return swOnly(0x9000);
                         } else {
                             pinTriesRemaining--;
@@ -672,7 +711,8 @@ public class ApduClient {
                             return swOnly(pinTriesRemaining == 0 ? 0x6983 : (0x63C0 | pinTriesRemaining));
                         }
                         int newLen = cdata[1 + oldLen] & 0xFF;
-                        currentPin = new String(cdata, 2 + oldLen, newLen, StandardCharsets.UTF_8);
+                        String newPin = new String(cdata, 2 + oldLen, newLen, StandardCharsets.UTF_8);
+                        reencryptWithNewPin(newPin);
                         return swOnly(0x9000);
                     }
                     case 0x12: {
@@ -684,10 +724,10 @@ public class ApduClient {
                             pinTriesRemaining = 0;
                             pinValidated = false;
                         } else {
-                            // P1=00: Admin PUK unblocks and restores the default PIN
+                            // P1=00: Admin PUK unblocks and restores the default PIN + AES-128 key
                             adminLocked = false;
                             pinTriesRemaining = 3;
-                            currentPin = "123456";
+                            reencryptWithNewPin("123456");
                             pinValidated = true;
                         }
                         return swOnly(0x9000);
@@ -716,14 +756,15 @@ public class ApduClient {
                     }
                     case 0x20: {
                         if (!pinValidated) return swOnly(0x6982);
+                        activeInfoUtf8 = new String(cdata, StandardCharsets.UTF_8);
                         encryptAndStoreInfo(cdata);
                         return swOnly(0x9000);
                     }
                     case 0x21: {
                         if (p1 == 0x01) return withSw(encryptedInfo, 0x9000);
                         if (!pinValidated) return swOnly(0x6982);
-                        Cipher cipher = Cipher.getInstance("AES/ECB/NoPadding");
-                        cipher.init(Cipher.DECRYPT_MODE, aesKey);
+                        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+                        cipher.init(Cipher.DECRYPT_MODE, aesKey, ZERO_IV);
                         byte[] dec = cipher.doFinal(encryptedInfo);
                         return withSw(Arrays.copyOf(dec, plainInfoLen), 0x9000);
                     }

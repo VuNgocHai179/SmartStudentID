@@ -126,13 +126,13 @@ flowchart TB
   - [x] Lên được ý tưởng chung cho bài toán, mô tả rõ ràng, chi tiết các chức năng.
   - [x] Tạo mã PIN, thay đổi, kiểm tra mã PIN, có cơ chế giới hạn số lần nhập sai (3 lần khóa thẻ + mở khóa bằng PUK).
   - [x] Triển khai lưu thông tin cá nhân + ảnh lên thẻ và thay đổi thông tin.
-  - [ ] **Cần hoàn thiện thêm cho Mốc 1:** Tích hợp giao diện điều khiển trực tiếp trên máy tính (`PC Web/Desktop Dashboard` chạy tại `http://localhost:8080`) để demo trực tiếp trên PC bên cạnh App Android.
+  - [x] **Cần hoàn thiện thêm cho Mốc 1:** Tích hợp giao diện điều khiển trực tiếp trên máy tính (`PC Web/Desktop Dashboard` chạy tại `http://localhost:8080`) để demo trực tiếp trên PC bên cạnh App Android.
 
 ### 🚩 MỐC 2 (14/12/2026) – Mã hóa AES (Khóa từ PIN), Xác thực RSA & Nạp tiền/Thanh toán
 * **Yêu cầu tối thiểu của giảng viên:**
-  - [ ] **Nâng cấp AES & Mã hóa PIN:** Chuyển cơ chế khóa AES từ khóa cố định sang **khóa AES-128 dẫn xuất từ mã PIN** (băm mã PIN bằng `MessageDigest` trên thẻ) + **Tái mã hóa thông tin cá nhân khi đổi mã PIN**.
+  - [x] **Nâng cấp AES & Mã hóa PIN:** Chuyển cơ chế khóa AES từ khóa cố định sang **khóa AES-128 dẫn xuất từ mã PIN** (băm mã PIN bằng `MessageDigest` trên thẻ) + **Tái mã hóa thông tin cá nhân khi đổi mã PIN**.
   - [x] Tạo cặp khóa `RSA-1024` trên thẻ và xác thực thẻ bằng mật mã khóa công khai RSA (`Challenge-Response`).
-  - [ ] **Bổ sung Nghiệp vụ Nạp tiền & Thanh toán (`INS 0x40`, `0x41`, `0x42`):** Mỗi lần nạp tiền hoặc thanh toán đều bắt buộc xác thực bằng mã PIN và ký/xác thực bằng cặp khóa RSA.
+  - [x] **Bổ sung Nghiệp vụ Nạp tiền & Thanh toán (`INS 0x40`, `0x41`, `0x42`):** Mỗi lần nạp tiền hoặc thanh toán đều bắt buộc xác thực bằng mã PIN và ký/xác thực bằng cặp khóa RSA.
 
 ### 🚩 MỐC 3 (Dự kiến 28/12/2026) – Hoàn thiện CSDL, Báo cáo Cuối kỳ & Vấn đáp
 * **Yêu cầu tối thiểu của giảng viên:**
@@ -152,10 +152,10 @@ flowchart TB
    - [x] **Giao diện đẹp (0.5 điểm):** Có cả App Android hiện đại và Giao diện Quản lý Thẻ trên Máy tính (PC Dashboard).
    - [x] **Khởi tạo thẻ (0.5 điểm):** Khởi tạo thông tin chủ thẻ, ảnh, mã PIN, số dư, sinh khóa RSA.
    - [x] **Thay đổi thông tin cá nhân (0.5 điểm):** Cập nhật thông tin chữ và đổi ảnh chân dung trên thẻ.
-   - [ ] **Mã hóa được thông tin (1.0 điểm):** Mã hóa AES-128 trên thẻ với **khóa được tạo ra từ mã PIN**.
-   - [ ] **Thay đổi mã PIN, mã hóa mã PIN (0.5 điểm):** Băm mã PIN, đổi mã PIN và tái mã hóa lại dữ liệu thẻ theo khóa AES của PIN mới.
+   - [x] **Mã hóa được thông tin (1.0 điểm):** Mã hóa AES-128 trên thẻ với **khóa được tạo ra từ mã PIN**.
+   - [x] **Thay đổi mã PIN, mã hóa mã PIN (0.5 điểm):** Băm mã PIN, đổi mã PIN và tái mã hóa lại dữ liệu thẻ theo khóa AES của PIN mới.
    - [x] **Tạo được cặp khóa RSA (0.5 điểm):** Sinh cặp khóa `RSA-1024` ngay trên chip thẻ và xuất `Public Key (Modulus N, Exponent E)`.
-   - [ ] **Xác thực được theo chức năng (0.5 điểm):** Xác thực PIN + Ký số & Kiểm tra chữ ký RSA khi **Nạp tiền, Thanh toán**, Điểm danh, Mượn sách.
+   - [x] **Xác thực được theo chức năng (0.5 điểm):** Xác thực PIN + Ký số & Kiểm tra chữ ký RSA khi **Nạp tiền, Thanh toán**, Điểm danh, Mượn sách.
    - [x] **Có CSDL (0.5 điểm):** Lưu trữ thông tin thẻ, `Public Key RSA`, điểm rèn luyện và lịch sử giao dịch vào CSDL SQLite tập trung (`smartcard.db`) trên Máy chủ (`BridgeServer`).
    - [x] **Có demo chức năng (0.5 điểm):** Demo trực tiếp đầy đủ các luồng trên JCIDE Simulator + PC + Android.
 4. **Trả lời câu hỏi Vấn đáp (4.0 điểm – Điểm liệt nếu không trả lời được):**

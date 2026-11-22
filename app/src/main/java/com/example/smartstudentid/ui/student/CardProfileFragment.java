@@ -456,6 +456,7 @@ public class CardProfileFragment extends Fragment {
     }
 
     private void executeChangePinOnCard(String oldPin, String newPin) {
+        final String[] refreshedCipherHex = new String[1];
         ApduThreadPool.getInstance().execute(() -> {
             byte[] oldBytes = oldPin.getBytes(StandardCharsets.UTF_8);
             byte[] newBytes = newPin.getBytes(StandardCharsets.UTF_8);
@@ -465,19 +466,35 @@ public class CardProfileFragment extends Fragment {
             payload[1 + oldBytes.length] = (byte) newBytes.length;
             System.arraycopy(newBytes, 0, payload, 2 + oldBytes.length, newBytes.length);
 
-            return ApduClient.getInstance().sendApdu(
+            CardResponse resp = ApduClient.getInstance().sendApdu(
                     ApduCommands.CLA_SMART_STUDENT,
                     ApduCommands.INS_CHANGE_PIN,
                     (byte) 0x00,
                     (byte) 0x00,
                     payload
             );
+            if (resp.isSuccess()) {
+                CardResponse cipherResp = ApduClient.getInstance().sendApdu(
+                        ApduCommands.CLA_SMART_STUDENT,
+                        ApduCommands.INS_GET_STUDENT_INFO,
+                        ApduCommands.P1_INFO_RAW_CIPHERTEXT,
+                        (byte) 0x00,
+                        null
+                );
+                if (cipherResp.isSuccess() && cipherResp.getData().length > 0) {
+                    refreshedCipherHex[0] = ApduCommands.bytesToHex(cipherResp.getData());
+                }
+            }
+            return resp;
         }, (resp, mainBlockedMs, totalMs) -> {
             if (!isAdded()) return;
             if (resp.isSuccess()) {
                 StudentCardRecord rec = encryptedCacheManager.getStudentProfile();
                 if (rec != null) {
                     rec.setDefaultPin(newPin);
+                    if (refreshedCipherHex[0] != null && !refreshedCipherHex[0].isEmpty()) {
+                        rec.setRawAesCiphertextHex(refreshedCipherHex[0]);
+                    }
                     encryptedCacheManager.saveStudentProfile(rec);
                     pinSessionManager.createPinSession(rec.getStudentId(), rec.getFullName(), newPin);
                 }

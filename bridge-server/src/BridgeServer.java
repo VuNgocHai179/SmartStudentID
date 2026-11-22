@@ -693,32 +693,53 @@ public class BridgeServer {
             while (true) {
                 try {
                     Thread.sleep(1200);
-                    if (pcscChannel == null) {
-                        tryConnectPcscReader();
-                    }
-                    if (pcscChannel != null) {
-                        ResponseAPDU resp = pcscChannel.transmit(new CommandAPDU(new byte[]{(byte) 0x80, 0x21, 0x00, 0x00, 0x00}));
-                        if (resp.getSW() == 0x9000 && resp.getData().length > 5) {
-                            String info = new String(resp.getData(), StandardCharsets.UTF_8).trim();
-                            if (!info.isEmpty() && !info.equals(lastObservedJcideInfo) && info.contains("|")) {
-                                lastObservedJcideInfo = info;
-                                String[] parts = info.split("\\|");
-                                String sid = parts.length > 0 ? parts[0] : "CT070315";
-                                virtualCard.loadSnapshot(sid, info, "123456");
-                                syncActiveCardInfoToDatabase();
-                                try {
-                                    ResponseAPDU modResp = pcscChannel.transmit(new CommandAPDU(new byte[]{(byte) 0x80, 0x13, 0x01, 0x00, 0x00}));
-                                    ResponseAPDU expResp = pcscChannel.transmit(new CommandAPDU(new byte[]{(byte) 0x80, 0x13, 0x02, 0x00, 0x00}));
-                                    if (modResp.getSW() == 0x9000 && modResp.getData().length >= 64) {
-                                        String expHex = (expResp.getSW() == 0x9000 && expResp.getData().length > 0)
-                                                ? bytesToHex(expResp.getData()) : "010001";
-                                        DatabaseManager.updateCardPublicKey(sid, bytesToHex(modResp.getData()), expHex);
-                                    }
-                                } catch (Exception ignoredKey) {
-                                }
-                                tapEventId = System.currentTimeMillis();
-                                System.out.println("[JCIDE MONITOR] Detected new card loaded in JCIDE: " + info);
+                    synchronized (BridgeServer.class) {
+                        if (pcscChannel == null) {
+                            tryConnectPcscReader();
+                        }
+                        if (pcscChannel == null) {
+                            continue;
+                        }
+                        try {
+                            byte[] getInfoCmd = new byte[]{(byte) 0x80, 0x21, 0x00, 0x00, 0x00};
+                            byte[] rawResp = transmitPcscWithIsoFallback(pcscChannel, getInfoCmd);
+                            int sw = extractSw(rawResp);
+                            if (sw == 0x6A82 || sw == 0x6D00 || sw == 0x6E00) {
+                                byte[] selectAid = new byte[]{
+                                        0x00, (byte) 0xA4, 0x04, 0x00, 0x0A,
+                                        (byte) 0xA0, 0x00, 0x00, 0x00, 0x62, 0x03, 0x01, 0x0C, 0x06, 0x01
+                                };
+                                transmitPcscWithIsoFallback(pcscChannel, selectAid);
+                                rawResp = transmitPcscWithIsoFallback(pcscChannel, getInfoCmd);
+                                sw = extractSw(rawResp);
                             }
+                            if (sw == 0x9000 && rawResp.length > 7) {
+                                String info = new String(rawResp, 0, rawResp.length - 2, StandardCharsets.UTF_8).trim();
+                                if (!info.isEmpty() && !info.equals(lastObservedJcideInfo) && info.contains("|")) {
+                                    lastObservedJcideInfo = info;
+                                    String[] parts = info.split("\\|");
+                                    String sid = parts.length > 0 ? parts[0] : "CT070315";
+                                    virtualCard.loadSnapshot(sid, info, "123456");
+                                    syncActiveCardInfoToDatabase();
+                                    try {
+                                        byte[] modRaw = transmitPcscWithIsoFallback(pcscChannel, new byte[]{(byte) 0x80, 0x13, 0x01, 0x00, 0x00});
+                                        byte[] expRaw = transmitPcscWithIsoFallback(pcscChannel, new byte[]{(byte) 0x80, 0x13, 0x02, 0x00, 0x00});
+                                        if (extractSw(modRaw) == 0x9000 && modRaw.length >= 66) {
+                                            byte[] modBytes = Arrays.copyOf(modRaw, modRaw.length - 2);
+                                            String expHex = (extractSw(expRaw) == 0x9000 && expRaw.length > 2)
+                                                    ? bytesToHex(Arrays.copyOf(expRaw, expRaw.length - 2))
+                                                    : "010001";
+                                            DatabaseManager.updateCardPublicKey(sid, bytesToHex(modBytes), expHex);
+                                        }
+                                    } catch (Exception ignoredKey) {
+                                    }
+                                    tapEventId = System.currentTimeMillis();
+                                    System.out.println("[JCIDE MONITOR] Detected new card loaded in JCIDE: " + info);
+                                }
+                            }
+                        } catch (Exception e) {
+                            pcscChannel = null;
+                            activeReaderName = "Virtual-JCIDE-Fallback-Engine";
                         }
                     }
                 } catch (Exception ignored) {
@@ -745,12 +766,74 @@ public class BridgeServer {
         }
     }
 
+    private static int extractSw(byte[] rawResp) {
+        if (rawResp == null || rawResp.length < 2) {
+            return 0x6F00;
+        }
+        return ((rawResp[rawResp.length - 2] & 0xFF) << 8) | (rawResp[rawResp.length - 1] & 0xFF);
+    }
+
+    private static byte[] replaceOrAppendLe(byte[] cmdBytes, byte sw2) {
+        if (cmdBytes.length == 4) {
+            return new byte[]{cmdBytes[0], cmdBytes[1], cmdBytes[2], cmdBytes[3], sw2};
+        }
+        if (cmdBytes.length == 5) {
+            byte[] copy = Arrays.copyOf(cmdBytes, 5);
+            copy[4] = sw2;
+            return copy;
+        }
+        int lc = cmdBytes[4] & 0xFF;
+        if (cmdBytes.length == 5 + lc) {
+            byte[] extended = Arrays.copyOf(cmdBytes, 6 + lc);
+            extended[5 + lc] = sw2;
+            return extended;
+        }
+        byte[] copy = Arrays.copyOf(cmdBytes, cmdBytes.length);
+        copy[copy.length - 1] = sw2;
+        return copy;
+    }
+
+    /**
+     * Transmits an ISO/IEC 7816-4 APDU over PC/SC with automatic handling of:
+     *  - 6CXX (Wrong Le length): re-transmits with exact Le indicated by SW2.
+     *  - 61XX (Response bytes remaining): loops GET RESPONSE (00 C0 00 00 XX) to reassemble full payload.
+     */
+    private static byte[] transmitPcscWithIsoFallback(CardChannel channel, byte[] cmdBytes) throws Exception {
+        ResponseAPDU resp = channel.transmit(new CommandAPDU(cmdBytes));
+        if (resp.getSW1() == 0x6C) {
+            byte[] fixedCmd = replaceOrAppendLe(cmdBytes, (byte) resp.getSW2());
+            resp = channel.transmit(new CommandAPDU(fixedCmd));
+        }
+
+        if (resp.getSW1() != 0x61) {
+            return resp.getBytes();
+        }
+
+        ByteArrayOutputStream assembled = new ByteArrayOutputStream();
+        byte[] firstData = resp.getData();
+        if (firstData.length > 0) {
+            assembled.write(firstData);
+        }
+
+        int guard = 0;
+        while (resp.getSW1() == 0x61 && guard++ < 32) {
+            byte nextLen = (byte) resp.getSW2();
+            resp = channel.transmit(new CommandAPDU(new byte[]{0x00, (byte) 0xC0, 0x00, 0x00, nextLen}));
+            byte[] chunk = resp.getData();
+            if (chunk.length > 0) {
+                assembled.write(chunk);
+            }
+        }
+        assembled.write(resp.getSW1());
+        assembled.write(resp.getSW2());
+        return assembled.toByteArray();
+    }
+
     private static synchronized byte[] transmitApdu(byte[] cmdBytes) {
         byte[] virtualResp = virtualCard.processApdu(cmdBytes);
         if (pcscChannel != null) {
             try {
-                ResponseAPDU resp = pcscChannel.transmit(new CommandAPDU(cmdBytes));
-                return resp.getBytes();
+                return transmitPcscWithIsoFallback(pcscChannel, cmdBytes);
             } catch (Exception e) {
                 pcscChannel = null;
                 activeReaderName = "Virtual-JCIDE-Fallback-Engine";

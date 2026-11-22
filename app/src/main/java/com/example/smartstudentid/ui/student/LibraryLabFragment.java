@@ -118,8 +118,10 @@ public class LibraryLabFragment extends Fragment {
         byte ins = isReturning ? ApduCommands.INS_RETURN_OR_LAB_ACCESS : ApduCommands.INS_BORROW_OR_ATTENDANCE;
         byte p1 = isReturning ? ApduCommands.P1_ACTION_RETURN_BOOK : ApduCommands.P1_ACTION_BORROW_BOOK;
 
+        final long[] signedTsHolder = new long[1];
         ApduThreadPool.getInstance().execute(() -> {
             long ts = System.currentTimeMillis() / 1000L;
+            signedTsHolder[0] = ts;
             int code = book.getBookCode();
             byte[] payload = new byte[]{
                     (byte) ((code >> 8) & 0xFF),
@@ -140,9 +142,15 @@ public class LibraryLabFragment extends Fragment {
             if (!isAdded()) return;
             if (resp.isSuccess()) {
                 book.setBorrowed(!isReturning);
-                book.setTimestampSeconds(System.currentTimeMillis() / 1000L);
-                String sig = ApduCommands.bytesToHex(resp.getData());
-                book.setRsaSignatureHex(sig.length() > 24 ? sig.substring(0, 24) + "..." : sig);
+                book.setTimestampSeconds(signedTsHolder[0]);
+                if (!isReturning || book.getStudentId() == null || book.getStudentId().isEmpty()) {
+                    com.example.smartstudentid.model.StudentCardRecord profile = cacheManager.getStudentProfile();
+                    if (profile != null && profile.getStudentId() != null && !profile.getStudentId().isEmpty()) {
+                        book.setStudentId(profile.getStudentId());
+                    }
+                }
+                String fullSigHex = ApduCommands.bytesToHex(resp.getData()).replace(" ", "");
+                book.setRsaSignatureHex(fullSigHex);
 
                 ApduThreadPool.getInstance().execute(() -> {
                     ApduClient.getInstance().syncBookLoanToServerDb(book);
