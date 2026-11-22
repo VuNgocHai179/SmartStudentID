@@ -480,11 +480,29 @@ public class DatabaseManager {
                                                   String className, String department, String defaultPin,
                                                   boolean cardLocked, int trainingScore, int attendanceCount,
                                                   String modulusHex, String exponentHex, String cipherHex) {
+        return upsertCard(studentId, fullName, dob, className, department, defaultPin,
+                cardLocked, trainingScore, attendanceCount, modulusHex, exponentHex, cipherHex, -1);
+    }
+
+    /**
+     * Upserts a student card into the `cards` table with an optional initial/updated wallet balance.
+     * Passing a negative walletBalance preserves any existing balance or uses the table default (500000).
+     */
+    public static synchronized boolean upsertCard(String studentId, String fullName, String dob,
+                                                  String className, String department, String defaultPin,
+                                                  boolean cardLocked, int trainingScore, int attendanceCount,
+                                                  String modulusHex, String exponentHex, String cipherHex,
+                                                  int walletBalance) {
         if (studentId == null || studentId.trim().isEmpty()) return false;
+        boolean hasExplicitBalance = walletBalance >= 0;
         String sql = "INSERT INTO cards (student_id, full_name, dob, class_name, department, default_pin, "
                 + "card_locked, training_score, attendance_count, lab_access_granted, "
-                + "public_key_modulus_hex, public_key_exponent_hex, raw_aes_ciphertext_hex, updated_at) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, CURRENT_TIMESTAMP) "
+                + "public_key_modulus_hex, public_key_exponent_hex, raw_aes_ciphertext_hex, "
+                + (hasExplicitBalance ? "wallet_balance, " : "")
+                + "updated_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, "
+                + (hasExplicitBalance ? "?, " : "")
+                + "CURRENT_TIMESTAMP) "
                 + "ON CONFLICT(student_id) DO UPDATE SET "
                 + "full_name = CASE WHEN excluded.full_name != '' THEN excluded.full_name ELSE cards.full_name END, "
                 + "dob = CASE WHEN excluded.dob != '' THEN excluded.dob ELSE cards.dob END, "
@@ -497,6 +515,7 @@ public class DatabaseManager {
                 + "public_key_modulus_hex = CASE WHEN excluded.public_key_modulus_hex != '' THEN excluded.public_key_modulus_hex ELSE cards.public_key_modulus_hex END, "
                 + "public_key_exponent_hex = CASE WHEN excluded.public_key_exponent_hex != '' THEN excluded.public_key_exponent_hex ELSE cards.public_key_exponent_hex END, "
                 + "raw_aes_ciphertext_hex = CASE WHEN excluded.raw_aes_ciphertext_hex != '' THEN excluded.raw_aes_ciphertext_hex ELSE cards.raw_aes_ciphertext_hex END, "
+                + (hasExplicitBalance ? "wallet_balance = excluded.wallet_balance, " : "")
                 + "updated_at = CURRENT_TIMESTAMP";
 
         try (Connection conn = getConnection()) {
@@ -514,6 +533,9 @@ public class DatabaseManager {
                 ps.setString(10, modulusHex != null ? modulusHex : "");
                 ps.setString(11, exponentHex != null ? exponentHex : "");
                 ps.setString(12, cipherHex != null ? cipherHex : "");
+                if (hasExplicitBalance) {
+                    ps.setInt(13, walletBalance);
+                }
                 ps.executeUpdate();
             }
 
@@ -525,6 +547,34 @@ public class DatabaseManager {
             System.err.println("[SQLite DB] Error upserting card: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Reads stored academic/security stats for a student card: [trainingScore, attendanceCount, labAccess, cardLocked].
+     * Returns null if the student card is not yet registered in SQLite.
+     */
+    public static synchronized int[] getCardStats(String studentId) {
+        if (studentId == null || studentId.trim().isEmpty()) {
+            return null;
+        }
+        String sql = "SELECT training_score, attendance_count, lab_access_granted, card_locked FROM cards WHERE student_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return new int[]{
+                            rs.getInt("training_score"),
+                            rs.getInt("attendance_count"),
+                            rs.getInt("lab_access_granted"),
+                            rs.getInt("card_locked")
+                    };
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error reading card stats: " + e.getMessage());
+        }
+        return null;
     }
 
     /**
@@ -1158,6 +1208,47 @@ public class DatabaseManager {
     }
 
     /**
+     * Queries security & APDU audit logs from `card_audit_logs` (optionally filtered by student_id).
+     */
+    public static synchronized String getAuditLogsJsonByStudent(String studentIdFilter, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        StringBuilder sb = new StringBuilder("[");
+        boolean hasFilter = studentIdFilter != null && !studentIdFilter.trim().isEmpty();
+        String sql = "SELECT id, student_id, action_type, item_code, description, rsa_signature_hex, timestamp_seconds "
+                + "FROM card_audit_logs "
+                + (hasFilter ? "WHERE student_id = ? " : "")
+                + "ORDER BY timestamp_seconds DESC, id DESC LIMIT ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            int paramIdx = 1;
+            if (hasFilter) {
+                ps.setString(paramIdx++, studentIdFilter.trim());
+            }
+            ps.setInt(paramIdx, safeLimit);
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) sb.append(",");
+                    first = false;
+                    sb.append("{")
+                            .append("\"id\":").append(rs.getLong("id")).append(",")
+                            .append("\"studentId\":\"").append(esc(rs.getString("student_id"))).append("\",")
+                            .append("\"actionType\":\"").append(esc(rs.getString("action_type"))).append("\",")
+                            .append("\"itemCode\":").append(rs.getInt("item_code")).append(",")
+                            .append("\"description\":\"").append(esc(rs.getString("description"))).append("\",")
+                            .append("\"rsaSignatureHex\":\"").append(esc(rs.getString("rsa_signature_hex"))).append("\",")
+                            .append("\"timestampSeconds\":").append(rs.getLong("timestamp_seconds"))
+                            .append("}");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error querying card_audit_logs: " + e.getMessage());
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    /**
      * Returns a comprehensive JSON summary of all relational tables in `smartcard.db`.
      */
     public static synchronized String getDatabaseSummaryJson() {
@@ -1167,6 +1258,7 @@ public class DatabaseManager {
         int borrowedBooks = 0;
         int totalAuditLogs = 0;
         int totalAdmins = 0;
+        int totalWalletTx = 0;
 
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
@@ -1188,14 +1280,17 @@ public class DatabaseManager {
             try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM admin_accounts")) {
                 if (rs.next()) totalAdmins = rs.getInt(1);
             }
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM wallet_transactions")) {
+                if (rs.next()) totalWalletTx = rs.getInt(1);
+            }
         } catch (Exception ignored) {
         }
 
         return String.format(
                 "{\"dbEngine\":\"SQLite 3 (JDBC)\",\"dbFile\":\"%s\",\"totalCards\":%d,\"lockedCards\":%d,"
-                        + "\"totalAttendance\":%d,\"borrowedBooks\":%d,\"totalAuditLogs\":%d,\"totalAdmins\":%d,"
+                        + "\"totalAttendance\":%d,\"borrowedBooks\":%d,\"totalAuditLogs\":%d,\"totalAdmins\":%d,\"totalWalletTx\":%d,"
                         + "\"cards\":%s,\"attendance\":%s,\"books\":%s,\"admins\":%s}",
-                esc(DB_FILE.getPath()), totalCards, lockedCards, totalAttendance, borrowedBooks, totalAuditLogs, totalAdmins,
+                esc(DB_FILE.getPath()), totalCards, lockedCards, totalAttendance, borrowedBooks, totalAuditLogs, totalAdmins, totalWalletTx,
                 getAllCardsJson(), getAllAttendanceJson(), getAllBooksJson(), getAllAdminAccountsJson()
         );
     }

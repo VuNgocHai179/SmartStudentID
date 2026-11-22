@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.KeyPair;
@@ -39,8 +40,9 @@ import javax.smartcardio.TerminalFactory;
  */
 public class BridgeServer {
 
-    private static final int PORT = 8080;
+    private static final int PORT = Integer.parseInt(System.getProperty("bridge.port", "8080"));
     private static final File SCRIPTS_DIR = new File("javacard-applet/scripts");
+    private static final File WEB_DIR = new File("bridge-server/web");
 
     private static final VirtualSmartCardEmulator virtualCard = new VirtualSmartCardEmulator();
     private static CardChannel pcscChannel = null;
@@ -53,41 +55,24 @@ public class BridgeServer {
     public static void main(String[] args) throws Exception {
         // Initialize SQLite Relational Database (smartcard.db)
         DatabaseManager.initDatabase();
-        virtualCard.reloadAvatarFromDatabase();
-        virtualCard.reloadWalletBalanceFromDatabase();
+        virtualCard.reloadFromDatabase();
 
         tryConnectPcscReader();
         startJcideMonitorThread();
 
         HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", PORT), 0);
 
-        // 0. Web Console at http://localhost:8080 for loading .scr files & inspecting SQLite DB
+        // 0. Web Console at http://localhost:8080 serving static UI files from bridge-server/web
         server.createContext("/", exchange -> {
-            if (!"/".equals(exchange.getRequestURI().getPath())) {
-                sendJson(exchange, 404, "{\"error\":\"Not Found\"}");
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"error\":\"Method Not Allowed\"}");
                 return;
             }
-            byte[] html = buildPcLoaderHtml().getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
-            exchange.sendResponseHeaders(200, html.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(html);
-            }
+            serveStaticWeb(exchange);
         });
 
         // 1. Endpoint for checking Bridge & Card Reader connection status + tapEventId for phone auto-popup
-        server.createContext("/api/status", exchange -> {
-            String json = String.format(
-                    "{\"status\":\"ONLINE\",\"apiVersion\":2,\"dbEngine\":\"SQLite (smartcard.db)\",\"reader\":\"%s\","
-                            + "\"activeStudentId\":\"%s\",\"activeStudentInfo\":\"%s\",\"pinTries\":%d,\"tapEventId\":%d}",
-                    escapeJson(activeReaderName),
-                    escapeJson(virtualCard.activeCardId),
-                    escapeJson(virtualCard.activeInfoUtf8),
-                    virtualCard.pinTriesRemaining,
-                    tapEventId
-            );
-            sendJson(exchange, 200, json);
-        });
+        server.createContext("/api/status", exchange -> sendJson(exchange, 200, buildStatusJson()));
 
         // 2. Endpoint for executing a .scr APDU script file (by file name or raw script content)
         server.createContext("/api/load-scr", exchange -> {
@@ -180,25 +165,20 @@ public class BridgeServer {
                 boolean cardLocked = extractJsonBoolean(body, "cardLocked", false);
                 int trainingScore = extractJsonInt(body, "trainingScore", 85);
                 int attendanceCount = extractJsonInt(body, "attendanceCount", 0);
+                int walletBalance = extractJsonInt(body, "walletBalance", -1);
                 String modHex = extractJsonString(body, "publicKeyModulusHex");
                 String expHex = extractJsonString(body, "publicKeyExponentHex");
                 String cipherHex = extractJsonString(body, "rawAesCiphertextHex");
 
                 boolean ok = DatabaseManager.upsertCard(studentId, fullName, dob, className,
                         department, defaultPin, cardLocked, trainingScore, attendanceCount,
-                        modHex, expHex, cipherHex);
+                        modHex, expHex, cipherHex, walletBalance);
+                if (ok && walletBalance >= 0 && studentId.equalsIgnoreCase(virtualCard.activeCardId)) {
+                    virtualCard.walletBalance = walletBalance;
+                }
                 sendJson(exchange, 200, "{\"saved\":" + ok + ",\"db\":\"smartcard.db\"}");
             } else if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
-                String query = exchange.getRequestURI().getQuery();
-                String sid = "";
-                if (query != null && query.contains("studentId=")) {
-                    for (String part : query.split("&")) {
-                        if (part.startsWith("studentId=")) {
-                            sid = part.substring("studentId=".length());
-                            break;
-                        }
-                    }
-                }
+                String sid = extractQueryParam(exchange.getRequestURI().getQuery(), "studentId");
                 boolean deleted = DatabaseManager.deleteCard(sid);
                 System.out.println("[SQLITE DB] Deleted card: " + sid + " -> " + deleted);
                 sendJson(exchange, 200, "{\"deleted\":" + deleted + ",\"studentId\":\"" + escapeJson(sid) + "\"}");
@@ -222,18 +202,41 @@ public class BridgeServer {
             sendJson(exchange, 200, "{\"unblocked\":" + ok + ",\"studentId\":\"" + escapeJson(studentId) + "\",\"db\":\"smartcard.db\"}");
         });
 
+        // 5a. Endpoint for serving persisted WebP student portrait from SQLite (`cards.avatar_webp_base64`)
+        server.createContext("/api/cards/avatar", exchange -> {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"error\":\"Method Not Allowed\"}");
+                return;
+            }
+            String sid = extractQueryParam(exchange.getRequestURI().getQuery(), "studentId");
+            if (sid.isEmpty()) sid = virtualCard.activeCardId;
+            String b64 = DatabaseManager.getCardAvatarBase64(sid);
+            if (b64 == null || b64.isEmpty()) {
+                sendJson(exchange, 404, "{\"found\":false}");
+                return;
+            }
+            try {
+                byte[] imgBytes = Base64.getDecoder().decode(b64);
+                exchange.getResponseHeaders().set("Content-Type", "image/webp");
+                exchange.getResponseHeaders().set("Cache-Control", "no-store");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                exchange.sendResponseHeaders(200, imgBytes.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(imgBytes);
+                }
+            } catch (Exception e) {
+                sendJson(exchange, 500, "{\"found\":false}");
+            }
+        });
+
         // 5b. NOTE: lock state is persisted through POST /api/cards (full card record) and by the
         // INS 0x12 handler itself. No separate /api/cards/lock route is exposed.
 
         // 6. Endpoint for Attendance History in SQLite (`attendance_logs` table)
         server.createContext("/api/attendance", exchange -> {
             if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-                String query = exchange.getRequestURI().getQuery();
-                String studentIdFilter = null;
-                if (query != null && query.startsWith("studentId=")) {
-                    studentIdFilter = query.substring("studentId=".length());
-                }
-                sendJson(exchange, 200, DatabaseManager.getAttendanceJsonByStudent(studentIdFilter));
+                String studentIdFilter = extractQueryParam(exchange.getRequestURI().getQuery(), "studentId");
+                sendJson(exchange, 200, DatabaseManager.getAttendanceJsonByStudent(studentIdFilter.isEmpty() ? null : studentIdFilter));
             } else if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
                 String body = readBody(exchange);
                 String studentId = extractJsonString(body, "studentId");
@@ -279,12 +282,8 @@ public class BridgeServer {
         // 7b. Endpoint for E-Wallet Transactions in SQLite (`wallet_transactions` & `cards.wallet_balance`)
         server.createContext("/api/wallet", exchange -> {
             if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-                String query = exchange.getRequestURI().getQuery();
-                String studentIdFilter = null;
-                if (query != null && query.startsWith("studentId=")) {
-                    studentIdFilter = query.substring("studentId=".length());
-                }
-                sendJson(exchange, 200, DatabaseManager.getWalletTransactionsJsonByStudent(studentIdFilter));
+                String studentIdFilter = extractQueryParam(exchange.getRequestURI().getQuery(), "studentId");
+                sendJson(exchange, 200, DatabaseManager.getWalletTransactionsJsonByStudent(studentIdFilter.isEmpty() ? null : studentIdFilter));
             } else if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
                 String body = readBody(exchange);
                 String studentId = extractJsonString(body, "studentId");
@@ -378,6 +377,58 @@ public class BridgeServer {
             } else {
                 sendJson(exchange, 405, "{\"error\":\"Method Not Allowed\"}");
             }
+        });
+
+        // 12. Endpoint: List available .scr APDU scripts in javacard-applet/scripts
+        server.createContext("/api/scripts", exchange -> {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"error\":\"Method Not Allowed\"}");
+                return;
+            }
+            StringBuilder sb = new StringBuilder("[");
+            File[] files = SCRIPTS_DIR.exists() ? SCRIPTS_DIR.listFiles((dir, name) -> name.toLowerCase().endsWith(".scr")) : null;
+            if (files != null) {
+                Arrays.sort(files, java.util.Comparator.comparing(File::getName));
+                for (int i = 0; i < files.length; i++) {
+                    if (i > 0) sb.append(",");
+                    sb.append("{\"fileName\":\"").append(escapeJson(files[i].getName()))
+                            .append("\",\"sizeBytes\":").append(files[i].length()).append("}");
+                }
+            }
+            sb.append("]");
+            sendJson(exchange, 200, sb.toString());
+        });
+
+        // 13. Endpoint: Query security & APDU audit logs (`card_audit_logs` table)
+        server.createContext("/api/audit-logs", exchange -> {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"error\":\"Method Not Allowed\"}");
+                return;
+            }
+            String query = exchange.getRequestURI().getQuery();
+            String studentIdFilter = extractQueryParam(query, "studentId");
+            String limitRaw = extractQueryParam(query, "limit");
+            int limit = 200;
+            if (!limitRaw.isEmpty()) {
+                try {
+                    limit = Integer.parseInt(limitRaw);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            sendJson(exchange, 200, DatabaseManager.getAuditLogsJsonByStudent(
+                    studentIdFilter.isEmpty() ? null : studentIdFilter, limit));
+        });
+
+        // 14. Endpoint: Force re-scan physical / JCIDE PC/SC smart card readers
+        server.createContext("/api/pcsc/reconnect", exchange -> {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"error\":\"Method Not Allowed\"}");
+                return;
+            }
+            pcscChannel = null;
+            activeReaderName = "Virtual-JCIDE-Fallback-Engine";
+            tryConnectPcscReader();
+            sendJson(exchange, 200, buildStatusJson());
         });
 
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
@@ -509,95 +560,88 @@ public class BridgeServer {
         return virtualResp;
     }
 
-    private static String buildPcLoaderHtml() {
-        return "<!DOCTYPE html><html lang='vi'><head><meta charset='UTF-8'>"
-                + "<title>PC Bridge & Quản Trị CSDL SQLite (smartcard.db)</title>"
-                + "<style>"
-                + "body{font-family:'Segoe UI',system-ui,sans-serif;background:#f8fafc;color:#0f172a;margin:0;padding:32px;}"
-                + ".wrap{max-width:960px;margin:0 auto;background:#fff;border-radius:20px;padding:28px;box-shadow:0 8px 30px rgba(15,23,42,0.07);border:1px solid #e2e8f0;}"
-                + "h1{margin:0 0 8px;font-size:22px;color:#0f172a;} h2{margin:28px 0 12px;font-size:18px;color:#1e293b;} p{margin:0 0 20px;color:#64748b;font-size:14px;}"
-                + ".card-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:16px 20px;margin-bottom:12px;border-radius:14px;border:1px solid #cbd5e1;background:#f8fafc;cursor:pointer;text-align:left;transition:0.15s;}"
-                + ".card-btn:hover{background:#eff6ff;border-color:#2563eb;}"
-                + ".name{font-weight:700;font-size:16px;color:#0f172a;} .sub{font-size:13px;color:#475569;margin-top:3px;}"
-                + ".badge{background:#2563eb;color:#fff;padding:8px 14px;border-radius:10px;font-weight:700;font-size:13px;}"
-                + ".upload-box{margin-top:16px;padding:18px;border:2px dashed #94a3b8;border-radius:14px;background:#f8fafc;text-align:center;}"
-                + "pre{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:12px;font-size:12px;overflow-x:auto;margin-top:18px;min-height:80px;}"
-                + "table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}"
-                + "th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left;}"
-                + "th{background:#f1f5f9;font-weight:700;color:#334155;}"
-                + ".stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px;}"
-                + ".stat-card{background:#f8fafc;border:1px solid #e2e8f0;padding:14px;border-radius:12px;}"
-                + ".stat-val{font-size:20px;font-weight:800;color:#2563eb;}"
-                + "</style></head><body><div class='wrap'>"
-                + "<h1>💳 Bộ Nạp Thẻ JCIDE (.scr) & Hệ Quản Trị CSDL SQLite (smartcard.db)</h1>"
-                + "<p>Hệ thống quản lý dữ liệu tập trung bằng <strong>SQLite Relational Database (3NF)</strong> tại <code>bridge-server/data/smartcard.db</code>.</p>"
-                + "<h2>⚡ Danh Sách Thẻ Trong CSDL (Chạm vào thẻ bất kỳ để nạp vào đầu đọc ảo/điện thoại):</h2>"
-                + "<div id='cardsListContainer'>Đang tải danh sách thẻ từ SQLite...</div>"
-                + "<div class='upload-box'><strong>Hoặc chọn bất kỳ file kịch bản <code>.scr</code> nào từ máy tính của bạn:</strong><br><br>"
-                + "<input type='file' id='scrFile' accept='.scr,.txt' onchange='uploadCustomScr(this)'/></div>"
-                + "<pre id='logBox'>Sẵn sàng nạp thẻ...</pre>"
-                + "<h2>🗄️ Trạng Thái CSDL Quan Hệ SQLite (smartcard.db)</h2>"
-                + "<div class='stats'>"
-                + "<div class='stat-card'><div>Tổng thẻ (Bảng cards)</div><div class='stat-val' id='stCards'>-</div></div>"
-                + "<div class='stat-card'><div>Lượt điểm danh (attendance_logs)</div><div class='stat-val' id='stAtt'>-</div></div>"
-                + "<div class='stat-card'><div>Sách đang mượn (book_loans)</div><div class='stat-val' id='stBooks'>-</div></div>"
-                + "<div class='stat-card'><div>Nhật ký bảo mật (card_audit_logs)</div><div class='stat-val' id='stAudit'>-</div></div>"
-                + "</div>"
-                + "<table><thead><tr><th>MSSV (PK)</th><th>Họ và Tên</th><th>Ngày sinh</th><th>Lớp</th><th>Khoa</th><th>Số dư Ví</th><th>Điểm RL</th><th>Điểm danh</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>"
-                + "<tbody id='cardsTableBody'></tbody></table>"
-                + "</div><script>"
-                + "async function refreshDb(){"
-                + "  const r=await fetch('/api/db-summary');"
-                + "  const d=await r.json();"
-                + "  document.getElementById('stCards').textContent=d.totalCards+' thẻ';"
-                + "  document.getElementById('stAtt').textContent=d.totalAttendance+' lượt';"
-                + "  document.getElementById('stBooks').textContent=d.borrowedBooks+' cuốn';"
-                + "  document.getElementById('stAudit').textContent=d.totalAuditLogs+' bản ghi';"
-                + "  const cont=document.getElementById('cardsListContainer'); cont.innerHTML='';"
-                + "  (d.cards||[]).forEach((c,idx)=>{"
-                + "    const isCur=(d.activeStudentId===c.studentId);"
-                + "    const div=document.createElement('div');"
-                + "    div.className='card-btn'+(isCur?' active-card':'');"
-                + "    if(isCur) div.style='border-color:#10b981;background:#ecfdf5;';"
-                + "    div.onclick=()=>activateCard(c.studentId,`${c.studentId}|${c.fullName}|${c.dob}|${c.className}|${c.department}`,c.defaultPin||'123456');"
-                + "    div.innerHTML=`<div><div class='name'>${idx+1}. ${c.fullName} • ${c.studentId} ${isCur?'<span style=\"color:#059669;font-size:12px;margin-left:8px;\">● ĐANG GẮN TRÊN ĐẦU ĐỌC</span>':''}</div><div class='sub'>Lớp: ${c.className} • Ngành: ${c.department} • Số dư ví: ${(c.walletBalance??500000).toLocaleString('vi-VN')} đ</div></div><button class='badge' style='cursor:pointer;border:none;background:${isCur?'#059669':'#2563eb'}'>${isCur?'Đang hoạt động':'Nạp thẻ này ➔'}</button>`;"
-                + "    cont.appendChild(div);"
-                + "  });"
-                + "  const tb=document.getElementById('cardsTableBody'); tb.innerHTML='';"
-                + "  (d.cards||[]).forEach(c=>{"
-                + "    const tr=document.createElement('tr');"
-                + "    tr.innerHTML=`<td><b>${c.studentId}</b></td><td>${c.fullName}</td><td>${c.dob}</td><td>${c.className}</td><td>${c.department}</td><td><b>${(c.walletBalance??500000).toLocaleString('vi-VN')} đ</b></td><td>${c.trainingScore}</td><td>${c.attendanceCount}</td><td>${c.cardLocked?'🔒 Khóa PIN':'✅ Sẵn sàng'}</td><td><button class='badge' style='cursor:pointer;border:none;padding:5px 10px;font-size:11px;' onclick=\"activateCard('${c.studentId}','${c.studentId}|${c.fullName}|${c.dob}|${c.className}|${c.department}','${c.defaultPin||'123456'}')\">Nạp</button> <button class='badge' style='cursor:pointer;border:none;background:#dc2626;padding:5px 10px;font-size:11px;margin-left:4px;' onclick=\"deleteCard('${c.studentId}')\">Xóa</button></td>`;"
-                + "    tb.appendChild(tr);"
-                + "  });"
-                + "}"
-                + "async function activateCard(id,info,pin){"
-                + "  document.getElementById('logBox').textContent='Đang kích hoạt nạp thẻ '+id+' vào đầu đọc ảo/điện thoại...';"
-                + "  const r=await fetch('/api/activate-card',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId:id,studentInfo:info,pin:pin})});"
-                + "  const d=await r.json();"
-                + "  document.getElementById('logBox').textContent='✓ ĐÃ NẠP THẺ VÀO ĐẦU ĐỌC: '+id+'\\nĐiện thoại có thể quét thẻ và đăng nhập vào sinh viên này ngay lập tức!';"
-                + "  refreshDb();"
-                + "}"
-                + "async function deleteCard(id){"
-                + "  if(!confirm('Bạn có chắc chắn muốn xóa thẻ '+id+' khỏi CSDL SQLite?'))return;"
-                + "  const r=await fetch('/api/cards?studentId='+encodeURIComponent(id),{method:'DELETE'});"
-                + "  const d=await r.json();"
-                + "  alert('Đã xóa thẻ '+id+' khỏi CSDL SQLite!');"
-                + "  refreshDb();"
-                + "}"
-                + "function uploadCustomScr(input){"
-                + "  if(!input.files||!input.files[0])return;"
-                + "  const reader=new FileReader();"
-                + "  reader.onload=async(e)=>{"
-                + "    const text=e.target.result;"
-                + "    const r=await fetch('/api/load-scr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scriptContent:text})});"
-                + "    const d=await r.json();"
-                + "    document.getElementById('logBox').textContent='✓ ĐÃ NẠP FILE .SCR & CẬP NHẬT SQLITE:\\nSinh viên: '+d.activeStudentInfo+'\\n\\n'+d.logs.join('\\n');"
-                + "    refreshDb();"
-                + "  };"
-                + "  reader.readAsText(input.files[0],'UTF-8');"
-                + "}"
-                + "refreshDb(); setInterval(refreshDb, 3000);"
-                + "</script></body></html>";
+    private static String buildStatusJson() {
+        boolean locked = virtualCard.adminLocked || virtualCard.pinTriesRemaining == 0;
+        return String.format(
+                "{\"status\":\"ONLINE\",\"apiVersion\":2,\"dbEngine\":\"SQLite (smartcard.db)\",\"reader\":\"%s\","
+                        + "\"pcscConnected\":%s,\"activeStudentId\":\"%s\",\"activeStudentInfo\":\"%s\","
+                        + "\"pinTries\":%d,\"cardLocked\":%s,\"walletBalance\":%d,"
+                        + "\"trainingScore\":%d,\"attendanceCount\":%d,\"hasAvatar\":%s,\"tapEventId\":%d}",
+                escapeJson(activeReaderName),
+                (pcscChannel != null),
+                escapeJson(virtualCard.activeCardId),
+                escapeJson(virtualCard.activeInfoUtf8),
+                virtualCard.pinTriesRemaining,
+                locked,
+                virtualCard.walletBalance,
+                virtualCard.trainingScore,
+                virtualCard.attendanceCount,
+                (virtualCard.avatarLength > 0),
+                tapEventId
+        );
+    }
+
+    private static void serveStaticWeb(HttpExchange exchange) throws IOException {
+        String rawPath = exchange.getRequestURI().getPath();
+        if (rawPath == null || "/".equals(rawPath)) {
+            rawPath = "/index.html";
+        }
+        String relPath = rawPath.startsWith("/") ? rawPath.substring(1) : rawPath;
+        if (relPath.contains("..")) {
+            sendJson(exchange, 403, "{\"error\":\"Forbidden\"}");
+            return;
+        }
+        File target = new File(WEB_DIR, relPath);
+        try {
+            String baseCanonical = WEB_DIR.getCanonicalPath();
+            String targetCanonical = target.getCanonicalPath();
+            if (!targetCanonical.startsWith(baseCanonical + File.separator)) {
+                sendJson(exchange, 403, "{\"error\":\"Forbidden\"}");
+                return;
+            }
+        } catch (IOException e) {
+            sendJson(exchange, 500, "{\"error\":\"Server Error\"}");
+            return;
+        }
+
+        if (!target.exists() || !target.isFile()) {
+            sendJson(exchange, 404, "{\"error\":\"Not Found\"}");
+            return;
+        }
+
+        byte[] content = Files.readAllBytes(target.toPath());
+        exchange.getResponseHeaders().set("Content-Type", resolveContentType(target.getName()));
+        exchange.getResponseHeaders().set("Cache-Control", "no-store, no-cache, must-revalidate");
+        exchange.sendResponseHeaders(200, content.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(content);
+        }
+    }
+
+    private static String resolveContentType(String fileName) {
+        String lower = fileName.toLowerCase(java.util.Locale.ROOT);
+        if (lower.endsWith(".html")) return "text/html; charset=utf-8";
+        if (lower.endsWith(".css")) return "text/css; charset=utf-8";
+        if (lower.endsWith(".js")) return "application/javascript; charset=utf-8";
+        if (lower.endsWith(".svg")) return "image/svg+xml";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".webp")) return "image/webp";
+        return "application/octet-stream";
+    }
+
+    private static String extractQueryParam(String query, String key) {
+        if (query == null || query.isEmpty() || key == null || key.isEmpty()) {
+            return "";
+        }
+        for (String pair : query.split("&")) {
+            int eq = pair.indexOf('=');
+            String k = eq >= 0 ? pair.substring(0, eq) : pair;
+            if (key.equals(k)) {
+                String v = eq >= 0 ? pair.substring(eq + 1) : "";
+                return URLDecoder.decode(v, StandardCharsets.UTF_8);
+            }
+        }
+        return "";
     }
 
     private static String readBody(HttpExchange exchange) throws IOException {
@@ -803,6 +847,36 @@ public class BridgeServer {
                 reloadAvatarFromDatabase();
             }
             reloadWalletBalanceFromDatabase();
+            reloadStatsFromDatabase();
+        }
+
+        void reloadFromDatabase() {
+            reloadAvatarFromDatabase();
+            reloadWalletBalanceFromDatabase();
+            reloadStatsFromDatabase();
+            try {
+                applyLockState(DatabaseManager.isCardLocked(activeCardId));
+            } catch (Exception ignored) {
+            }
+        }
+
+        void reloadStatsFromDatabase() {
+            if (activeCardId == null || activeCardId.trim().isEmpty()) {
+                return;
+            }
+            try {
+                int[] stats = DatabaseManager.getCardStats(activeCardId);
+                if (stats != null) {
+                    this.trainingScore = (short) stats[0];
+                    this.attendanceCount = (short) stats[1];
+                    this.labAccess = (byte) stats[2];
+                } else {
+                    this.trainingScore = 85;
+                    this.attendanceCount = 0;
+                    this.labAccess = 1;
+                }
+            } catch (Exception ignored) {
+            }
         }
 
         void reloadWalletBalanceFromDatabase() {

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartStudentID — Nền Tảng Quản Trị &amp; Cầu Nối PC/SC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- 1. TOP APPLICATION NAVIGATION -->
+    <header class="top-nav">
+      <div class="brand-group">
+        <div class="logo-badge">ID</div>
+        <div class="brand-text">
+          <span class="brand-title">SmartStudentID</span>
+          <span class="brand-divider">/</span>
+          <span class="brand-subtitle">Nền Tảng Quản Trị &amp; Cầu Nối PC/SC (Bridge Server)</span>
+        </div>
+      </div>
+
+      <div class="status-group">
+        <button id="btnReaderReconnect" class="status-chip status-chip-btn" title="Nhấn để quét lại đầu đọc thẻ PC/SC">
+          <span id="readerDot" class="status-dot virtual"></span>
+          <span id="readerNameText">Đang kết nối...</span>
+        </button>
+        <div id="portChip" class="status-chip font-mono">Port: 8080</div>
+        <div class="status-chip font-mono">SQLite (WAL)</div>
+      </div>
+    </header>
+
+    <!-- INLINE NOTIFICATION BANNER -->
+    <div id="toastBanner" class="toast-banner hidden" role="status">
+      <span id="toastMessage"></span>
+      <button id="toastCloseBtn" class="modal-close" type="button" aria-label="Đóng thông báo">&times;</button>
+    </div>
+
+    <!-- 2. ACTIVE CARD HERO BAR -->
+    <section class="active-card-hero">
+      <div class="avatar-frame" id="heroAvatarBox">
+        <img id="heroAvatarImg" class="hidden" alt="Ảnh thẻ sinh viên">
+        <span id="heroAvatarInitials">SV</span>
+      </div>
+
+      <div>
+        <div class="hero-meta-title">
+          <span id="heroStudentName" class="hero-student-name">Đang tải hồ sơ thẻ...</span>
+          <span id="heroCardStatusTag" class="hero-tag ready">Đang trên đầu đọc</span>
+        </div>
+        <div class="hero-student-sub">
+          <span>MSSV: <strong id="heroStudentId" class="font-mono">--------</strong></span>
+          <span>Lớp: <strong id="heroClassName">--</strong></span>
+          <span>Khoa: <strong id="heroDepartment">--</strong></span>
+          <span>Ngày sinh: <strong id="heroDob" class="font-mono">--/--/----</strong></span>
+          <span>Chữ ký: <strong id="heroRsaStatus" class="font-mono">RSA-1024</strong></span>
+        </div>
+      </div>
+
+      <div class="hero-stats-strip">
+        <div class="stat-unit">
+          <span class="stat-label">Số Dư Ví Điện Tử</span>
+          <span id="heroWalletBalance" class="stat-number font-mono positive">-- đ</span>
+        </div>
+
+        <div class="stat-unit">
+          <span class="stat-label">Mã PIN Thẻ</span>
+          <span id="heroPinTries" class="stat-number font-mono">3/3 <span style="font-size: 12px; font-weight: 400; color: var(--text-muted);">lần</span></span>
+        </div>
+
+        <div>
+          <button id="btnTriggerPhone" class="btn-action-primary" type="button">
+            Kích Hoạt Điện Thoại
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. MAIN DATA TABLE PANEL -->
+    <main class="content-panel">
+      <div class="panel-header-tabs">
+        <div class="tabs-wrapper" role="tablist">
+          <button class="tab-btn active" data-tab="cards" type="button">
+            <span>Hồ Sơ Thẻ</span>
+            <span id="tabCountCards" class="count-badge">0</span>
+          </button>
+          <button class="tab-btn" data-tab="wallet" type="button">
+            <span>Ví Điện Tử</span>
+            <span id="tabCountWallet" class="count-badge">0</span>
+          </button>
+          <button class="tab-btn" data-tab="attendance" type="button">
+            <span>Điểm Danh</span>
+            <span id="tabCountAttendance" class="count-badge">0</span>
+          </button>
+          <button class="tab-btn" data-tab="books" type="button">
+            <span>Thư Viện</span>
+            <span id="tabCountBooks" class="count-badge">0</span>
+          </button>
+          <button class="tab-btn" data-tab="audit" type="button">
+            <span>Kiểm Toán</span>
+            <span id="tabCountAudit" class="count-badge">0</span>
+          </button>
+        </div>
+
+        <div class="panel-toolbar-actions">
+          <input id="searchFilter" type="search" class="search-input" placeholder="Tìm MSSV, họ tên...">
+          <button id="btnOpenScrModal" class="btn-action-outline" type="button">Nạp .scr</button>
+          <button id="btnExportJson" class="btn-action-outline" type="button">Xuất JSON</button>
+          <button id="btnOpenIssueModal" class="btn-action-primary" type="button">+ Cấp Thẻ Mới</button>
+        </div>
+      </div>
+
+      <!-- Tab 1: Cards Table -->
+      <div id="panelCards" class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 115px;">Mã Sinh Viên</th>
+              <th>Họ và Tên</th>
+              <th style="width: 95px;">Lớp Học</th>
+              <th>Khoa / Viện</th>
+              <th class="text-right" style="width: 130px;">Số Dư Ví</th>
+              <th class="text-center" style="width: 95px;">Điểm RL</th>
+              <th class="text-center" style="width: 145px;">Trạng Thái PIN</th>
+              <th class="text-right" style="width: 215px;">Thao Tác</th>
+            </tr>
+          </thead>
+          <tbody id="cardsTableBody">
+            <tr><td colspan="8" class="empty-state-cell">Đang tải danh sách thẻ từ SQLite...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tab 2: Wallet Transactions Table -->
+      <div id="panelWallet" class="table-scroll hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 130px;">Mã Tham Chiếu</th>
+              <th style="width: 105px;">MSSV</th>
+              <th style="width: 85px;">Loại</th>
+              <th class="text-right" style="width: 120px;">Số Tiền</th>
+              <th class="text-right" style="width: 120px;">Số Dư Sau</th>
+              <th>Đối Tác / Nội Dung</th>
+              <th class="text-center" style="width: 115px;">Chữ Ký RSA</th>
+              <th class="text-right" style="width: 145px;">Thời Gian</th>
+            </tr>
+          </thead>
+          <tbody id="walletTableBody">
+            <tr><td colspan="8" class="empty-state-cell">Đang tải giao dịch ví...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tab 3: Attendance Logs Table -->
+      <div id="panelAttendance" class="table-scroll hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 110px;">MSSV</th>
+              <th style="width: 105px;">Mã Môn</th>
+              <th>Tên Học Phần</th>
+              <th>Chữ Ký RSA-1024</th>
+              <th class="text-center" style="width: 120px;">Xác Thực</th>
+              <th class="text-right" style="width: 155px;">Thời Gian</th>
+            </tr>
+          </thead>
+          <tbody id="attendanceTableBody">
+            <tr><td colspan="6" class="empty-state-cell">Đang tải nhật ký điểm danh...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tab 4: Book Loans Table -->
+      <div id="panelBooks" class="table-scroll hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 100px;">Mã Sách</th>
+              <th>Tên Đầu Sách</th>
+              <th>Tác Giả</th>
+              <th style="width: 110px;">MSSV Mượn</th>
+              <th class="text-center" style="width: 120px;">Trạng Thái</th>
+              <th class="text-right" style="width: 155px;">Cập Nhật</th>
+            </tr>
+          </thead>
+          <tbody id="booksTableBody">
+            <tr><td colspan="6" class="empty-state-cell">Đang tải kho sách thư viện...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tab 5: Audit Logs Table -->
+      <div id="panelAudit" class="table-scroll hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 70px;">ID</th>
+              <th style="width: 105px;">MSSV</th>
+              <th style="width: 160px;">Hành Động</th>
+              <th style="width: 85px;">Mã Lệnh</th>
+              <th>Mô Tả Chi Tiết</th>
+              <th class="text-right" style="width: 155px;">Thời Gian</th>
+            </tr>
+          </thead>
+          <tbody id="auditTableBody">
+            <tr><td colspan="6" class="empty-state-cell">Đang tải nhật ký kiểm toán...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- 4. LOWER SECTION: APDU CONSOLE & DATABASE SUMMARY -->
+    <div class="lower-split">
+
+      <!-- APDU Playground & Inspector -->
+      <section class="sub-card">
+        <div class="sub-card-header">
+          <div>
+            <div class="sub-card-title">Console Điều Khiển APDU (ISO/IEC 7816-4)</div>
+            <div class="sub-card-caption">Giao tiếp trực tiếp với chip thẻ Java Card / Bộ giả lập qua PC Bridge</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="status-chip font-mono" style="font-size: 10px;">CLA = 0x80</span>
+            <button id="btnClearApduLog" class="btn-action-outline btn-table" type="button">Xóa log</button>
+          </div>
+        </div>
+
+        <div class="preset-pill-row">
+          <span class="preset-label">Lệnh mẫu:</span>
+          <button class="pill-btn font-mono" type="button" data-apdu="00 A4 04 00 0A A0 00 00 00 62 03 01 0C 06 01" data-label="Select Applet">00 A4 04 00 (Select)</button>
+          <button class="pill-btn font-mono" type="button" data-apdu="80 10 00 00 06 31 32 33 34 35 36" data-label="Verify PIN 123456">80 10 (PIN Đúng)</button>
+          <button class="pill-btn font-mono" type="button" data-apdu="80 10 00 00 06 30 30 30 30 30 30" data-label="Verify PIN Sai 000000">80 10 (PIN Sai)</button>
+          <button class="pill-btn font-mono" type="button" data-apdu="80 21 00 00 00" data-label="Get Student Info UTF-8">80 21 (Get Info)</button>
+          <button class="pill-btn font-mono" type="button" data-apdu="80 21 01 00 00" data-label="Get Raw AES-128 Cipher">80 21 01 (AES Cipher)</button>
+          <button class="pill-btn font-mono" type="button" data-apdu="80 13 01 00 00" data-label="Get RSA Modulus N">80 13 (Get RSA N)</button>
+          <button class="pill-btn font-mono" type="button" data-apdu="80 30 00 00 00" data-label="Get Academic &amp; Wallet Status">80 30 (Get Status)</button>
+        </div>
+
+        <form id="apduForm" class="console-input-bar">
+          <input id="apduHexInput" type="text" class="console-input" value="00 A4 04 00 0A A0 00 00 00 62 03 01 0C 06 01" placeholder="Nhập lệnh APDU Hex (ví dụ: 80 10 00 00 06 31 32 33 34 35 36)" spellcheck="false" autocomplete="off">
+          <button id="btnSendApdu" class="btn-action-primary" type="submit">Phát Lệnh</button>
+        </form>
+
+        <div id="apduLogScreen" class="console-log-screen">
+          <div class="log-entry">
+            <div class="log-line">
+              <span class="log-time">[HỆ THỐNG]</span>
+              <span>Sẵn sàng gửi khung lệnh APDU. Chọn lệnh mẫu hoặc nhập mã Hex rồi nhấn Phát Lệnh.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Database Summary & Integrity -->
+      <section class="sub-card">
+        <div class="sub-card-header">
+          <div>
+            <div class="sub-card-title">Cơ Sở Dữ Liệu Tập Trung (SQLite)</div>
+            <div class="sub-card-caption">bridge-server/data/smartcard.db</div>
+          </div>
+          <span class="status-chip status-chip-success">WAL Active</span>
+        </div>
+
+        <div class="summary-list">
+          <div class="summary-item">
+            <div>
+              <div class="summary-meta-title">Hồ Sơ Thẻ Đã Cấp (cards)</div>
+              <div id="dbSubCardsNote" class="summary-meta-sub">Định danh sinh viên &amp; khóa công khai RSA</div>
+            </div>
+            <div id="dbTotalCards" class="summary-val font-mono">00</div>
+          </div>
+
+          <div class="summary-item">
+            <div>
+              <div class="summary-meta-title">Giao Dịch Ví (wallet_transactions)</div>
+              <div class="summary-meta-sub">Nạp tiền &amp; thanh toán ký số RSA</div>
+            </div>
+            <div id="dbTotalWallet" class="summary-val font-mono">00</div>
+          </div>
+
+          <div class="summary-item">
+            <div>
+              <div class="summary-meta-title">Nhật Ký Điểm Danh (attendance_logs)</div>
+              <div class="summary-meta-sub">Chữ ký SHA1withRSA đã thẩm định</div>
+            </div>
+            <div id="dbTotalAttendance" class="summary-val font-mono">00</div>
+          </div>
+
+          <div class="summary-item">
+            <div>
+              <div class="summary-meta-title">Sách Đang Mượn (book_loans)</div>
+              <div class="summary-meta-sub">Đầu sách thư viện đang lưu hành</div>
+            </div>
+            <div id="dbBorrowedBooks" class="summary-val font-mono">00</div>
+          </div>
+
+          <div class="summary-item">
+            <div>
+              <div class="summary-meta-title">Kiểm Toán Giao Dịch (card_audit_logs)</div>
+              <div class="summary-meta-sub">Dấu vết PIN, PUK, điểm danh &amp; phòng Lab</div>
+            </div>
+            <div id="dbTotalAudit" class="summary-val font-mono">00</div>
+          </div>
+        </div>
+
+        <div class="sub-card-footer">
+          <span id="lastSyncText" class="font-mono">Đồng bộ tự động: mỗi 3 giây</span>
+          <button id="btnManualRefresh" class="btn-action-outline btn-table" type="button">Làm mới</button>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+
+  <!-- MODAL 1: ISSUE NEW STUDENT CARD -->
+  <div id="modalIssueCard" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalIssueTitle">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2 id="modalIssueTitle" class="modal-title">Phát Hành Thẻ Sinh Viên Mới</h2>
+        <button class="modal-close" type="button" data-close-modal="modalIssueCard">&times;</button>
+      </div>
+      <form id="issueCardForm">
+        <div class="modal-body">
+          <div id="issueFormError" class="form-error hidden"></div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label" for="issueStudentId">Mã Số Sinh Viên (MSSV) *</label>
+              <input id="issueStudentId" class="form-control font-mono" type="text" placeholder="VD: CT070318" required maxlength="20">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="issueClassName">Lớp Đào Tạo *</label>
+              <input id="issueClassName" class="form-control" type="text" placeholder="VD: CT7C" required maxlength="50">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="issueFullName">Họ Và Tên Sinh Viên *</label>
+            <input id="issueFullName" class="form-control" type="text" placeholder="VD: Nguyễn Văn Long" required maxlength="100">
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label" for="issueDob">Ngày Sinh (dd/mm/yyyy) *</label>
+              <input id="issueDob" class="form-control font-mono" type="text" placeholder="15/08/2003" required maxlength="20">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="issueDepartment">Khoa / Viện *</label>
+              <input id="issueDepartment" class="form-control" type="text" list="departmentOptions" value="An toàn Thông tin" required maxlength="100">
+              <datalist id="departmentOptions">
+                <option value="An toàn Thông tin">
+                <option value="Công nghệ Thông tin">
+                <option value="Điện tử Viễn thông">
+              </datalist>
+            </div>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label" for="issuePin">Mã PIN Mặc Định (4–8 số) *</label>
+              <input id="issuePin" class="form-control font-mono" type="text" value="123456" required minlength="4" maxlength="8">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="issueBalance">Số Dư Ví Khởi Tạo (VNĐ)</label>
+              <input id="issueBalance" class="form-control font-mono" type="number" value="500000" min="0" step="1000">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="issueAvatarFile">Ảnh Chân Dung (Tự động nén WebP 150×150px ghi lên thẻ)</label>
+            <div class="avatar-upload-row">
+              <div class="avatar-frame" style="width: 48px; height: 48px;">
+                <img id="issueAvatarPreview" class="hidden" alt="Xem trước ảnh">
+                <span id="issueAvatarPlaceholder" style="font-size: 11px;">150px</span>
+              </div>
+              <div style="flex: 1;">
+                <input id="issueAvatarFile" type="file" accept="image/*" style="font-size: 12px; width: 100%;">
+                <div id="issueAvatarInfo" class="form-hint">Tùy chọn. Hệ thống sẽ nén WebP &lt; 8KB và chia gói APDU.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-action-outline" type="button" data-close-modal="modalIssueCard">Hủy</button>
+          <button id="btnSubmitIssueCard" class="btn-action-primary" type="submit">Ghi Thẻ &amp; Lưu CSDL</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: PUK LOCK / UNBLOCK -->
+  <div id="modalPuk" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalPukTitle">
+    <div class="modal-panel modal-sm">
+      <div class="modal-header">
+        <h2 id="modalPukTitle" class="modal-title">Xác Thực Mã PUK Quản Trị (INS 0x12)</h2>
+        <button class="modal-close" type="button" data-close-modal="modalPuk">&times;</button>
+      </div>
+      <form id="pukForm">
+        <div class="modal-body">
+          <div id="pukFormError" class="form-error hidden"></div>
+          <p id="pukDescription" style="font-size: 12.5px; color: var(--text-secondary);"></p>
+          <div class="form-group">
+            <label class="form-label" for="pukCodeInput">Mã PUK Quản Trị (8 chữ số) *</label>
+            <input id="pukCodeInput" class="form-control font-mono" type="password" inputmode="numeric" maxlength="8" placeholder="Nhập 8 chữ số PUK (mặc định: 88888888)" required>
+            <span class="form-hint">Gửi trực tiếp lệnh APDU 80 12 tới chip để đồng bộ thẻ và SQLite.</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-action-outline" type="button" data-close-modal="modalPuk">Hủy</button>
+          <button id="btnSubmitPuk" class="btn-action-primary" type="submit">Thực Thi Lệnh PUK</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 3: LOAD .SCR SCRIPT -->
+  <div id="modalScr" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalScrTitle">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2 id="modalScrTitle" class="modal-title">Nạp Kịch Bản Thẻ JCIDE (.scr)</h2>
+        <button class="modal-close" type="button" data-close-modal="modalScr">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <span class="form-label">Kịch bản có sẵn trong thư mục javacard-applet/scripts/</span>
+          <div id="scriptsListContainer" style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+            <span class="form-hint">Đang quét danh sách file .scr...</span>
+          </div>
+        </div>
+        <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-subtle);">
+          <label class="form-label" for="customScrFile">Hoặc chọn file .scr từ máy tính</label>
+          <input id="customScrFile" class="form-control" type="file" accept=".scr,.txt">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action-outline" type="button" data-close-modal="modalScr">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: CONFIRM DELETE CARD -->
+  <div id="modalConfirmDelete" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalDeleteTitle">
+    <div class="modal-panel modal-sm">
+      <div class="modal-header">
+        <h2 id="modalDeleteTitle" class="modal-title">Xác Nhận Xóa Hồ Sơ Thẻ</h2>
+        <button class="modal-close" type="button" data-close-modal="modalConfirmDelete">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="deleteConfirmText" style="font-size: 12.5px; color: var(--text-secondary);"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action-outline" type="button" data-close-modal="modalConfirmDelete">Hủy</button>
+        <button id="btnConfirmDelete" class="btn-action-primary" type="button" style="background-color: var(--danger-text); border-color: var(--danger-text);">Xác Nhận Xóa</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
