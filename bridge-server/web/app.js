@@ -99,7 +99,31 @@
     customScrFile: document.getElementById('customScrFile'),
 
     deleteConfirmText: document.getElementById('deleteConfirmText'),
-    btnConfirmDelete: document.getElementById('btnConfirmDelete')
+    btnConfirmDelete: document.getElementById('btnConfirmDelete'),
+
+    btnOpenWalletModal: document.getElementById('btnOpenWalletModal'),
+    walletTxForm: document.getElementById('walletTxForm'),
+    walletFormError: document.getElementById('walletFormError'),
+    walletActiveNote: document.getElementById('walletActiveNote'),
+    walletTxType: document.getElementById('walletTxType'),
+    walletAmount: document.getElementById('walletAmount'),
+    walletNote: document.getElementById('walletNote'),
+    walletPin: document.getElementById('walletPin'),
+    walletTamperTest: document.getElementById('walletTamperTest'),
+    btnSubmitWalletTx: document.getElementById('btnSubmitWalletTx'),
+
+    btnOpenRsaModal: document.getElementById('btnOpenRsaModal'),
+    rsaChallengeResultBox: document.getElementById('rsaChallengeResultBox'),
+    btnSyncCardRsaKey: document.getElementById('btnSyncCardRsaKey'),
+    btnRunRsaTamper: document.getElementById('btnRunRsaTamper'),
+    btnRunRsaChallenge: document.getElementById('btnRunRsaChallenge'),
+    btnOpenAesPinModal: document.getElementById('btnOpenAesPinModal'),
+    changePinAesForm: document.getElementById('changePinAesForm'),
+    aesPinFormError: document.getElementById('aesPinFormError'),
+    aesOldPin: document.getElementById('aesOldPin'),
+    aesNewPin: document.getElementById('aesNewPin'),
+    aesInspectionBox: document.getElementById('aesInspectionBox'),
+    btnSubmitChangePinAes: document.getElementById('btnSubmitChangePinAes')
   };
 
   function esc(val) {
@@ -309,8 +333,8 @@
     els.heroDepartment.textContent = department;
     els.heroDob.textContent = dob;
 
-    const hasRsa = activeRecord && activeRecord.publicKeyModulusHex && activeRecord.publicKeyModulusHex.length > 8;
-    els.heroRsaStatus.textContent = hasRsa ? 'RSA-1024 (Đã lưu DB)' : 'RSA-1024 (Trên chip)';
+    const hasRsa = activeRecord && (activeRecord.hasValidRsaKey || (activeRecord.publicKeyModulusHex && activeRecord.publicKeyModulusHex.length >= 128));
+    els.heroRsaStatus.textContent = hasRsa ? 'RSA-1024 (SQLite Đã Lưu)' : 'Chưa có khóa RSA hợp lệ';
 
     if (isLocked) {
       els.heroCardStatusTag.textContent = 'Đã khóa PIN';
@@ -964,6 +988,372 @@
 
     els.issueCardForm.addEventListener('submit', handleIssueCardSubmit);
     els.pukForm.addEventListener('submit', handlePukSubmit);
+
+    // Wallet PIN + RSA Modal
+    function intToHex4B(num) {
+      return [
+        (num >>> 24) & 0xFF,
+        (num >>> 16) & 0xFF,
+        (num >>> 8) & 0xFF,
+        num & 0xFF
+      ].map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+    }
+
+    function decodeInt4BFromHex(hex) {
+      if (!hex || hex.length < 8) return null;
+      return parseInt(hex.slice(0, 8), 16) >>> 0;
+    }
+
+    els.btnOpenWalletModal.addEventListener('click', () => {
+      const st = state.status;
+      if (!st || !st.activeStudentId) return;
+      els.walletFormError.classList.add('hidden');
+      els.walletTamperTest.checked = false;
+      els.walletActiveNote.innerHTML = `Thẻ đang thao tác: <strong class="font-mono">${esc(st.activeStudentId)}</strong> • Số dư hiện tại: <strong class="font-mono">${esc(formatVnd(st.walletBalance ?? 500000))}</strong>`;
+      openModal('modalWalletTx');
+      setTimeout(() => els.walletAmount.focus(), 50);
+    });
+
+    els.walletTxType.addEventListener('change', () => {
+      const isCredit = els.walletTxType.value === 'CREDIT';
+      if (els.walletNote.value === 'Nạp tiền tại quầy PC Bridge' || els.walletNote.value === 'Thanh toán học phí / căng-tin PC') {
+        els.walletNote.value = isCredit ? 'Nạp tiền tại quầy PC Bridge' : 'Thanh toán học phí / căng-tin PC';
+      }
+    });
+
+    els.walletTxForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      els.walletFormError.classList.add('hidden');
+
+      const st = state.status;
+      if (!st || !st.activeStudentId) return;
+      const sid = st.activeStudentId;
+      const isCredit = els.walletTxType.value === 'CREDIT';
+      const amount = parseInt(els.walletAmount.value || '0', 10);
+      const note = els.walletNote.value.trim() || (isCredit ? 'Nạp tiền ví điện tử' : 'Thanh toán dịch vụ');
+      const pin = els.walletPin.value.trim();
+      const tamperTest = els.walletTamperTest.checked;
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        els.walletFormError.textContent = 'Số tiền giao dịch phải lớn hơn 0.';
+        els.walletFormError.classList.remove('hidden');
+        return;
+      }
+      if (!/^\d{4,8}$/.test(pin)) {
+        els.walletFormError.textContent = 'Mã PIN phải gồm 4–8 chữ số.';
+        els.walletFormError.classList.remove('hidden');
+        return;
+      }
+
+      els.btnSubmitWalletTx.disabled = true;
+      els.btnSubmitWalletTx.textContent = 'Đang xử lý...';
+      const endpoint = isCredit ? '/api/wallet/credit' : '/api/wallet/debit';
+      const tsInt = Math.floor(Date.now() / 1000);
+      const balanceBefore = Number(st.walletBalance ?? 500000);
+
+      try {
+        if (tamperTest) {
+          const fakeBalanceAfter = isCredit ? (balanceBefore + amount) : Math.max(0, balanceBefore - amount);
+          const forgedSig = 'A5'.repeat(128);
+          await apiJson(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              studentId: sid,
+              transactionType: isCredit ? 'CREDIT' : 'DEBIT',
+              amount,
+              balanceBefore,
+              balanceAfter: fakeBalanceAfter,
+              timestampSeconds: tsInt,
+              rsaSignatureHex: forgedSig,
+              note: `[KIỂM THỬ GIẢ MẠO] ${note}`
+            })
+          });
+        } else {
+          await sendRawApdu(SELECT_APPLET_APDU, `Ví ${sid}: Select Applet`);
+          const pinHex = utf8ToHex(pin);
+          const pinLc = (pinHex.length / 2).toString(16).padStart(2, '0').toUpperCase();
+          const pinResp = await sendRawApdu(`80100000${pinLc}${pinHex}`, `Ví ${sid}: Verify PIN`);
+          if (pinResp.sw !== '9000') {
+            await refreshAll();
+            throw new Error(`Xác thực PIN thất bại (SW=${pinResp.sw}: ${explainSw(pinResp.sw)})`);
+          }
+
+          const insHex = isCredit ? '40' : '41';
+          const payloadHex = intToHex4B(amount) + intToHex4B(tsInt);
+          const txResp = await sendRawApdu(`80${insHex}000008${payloadHex}`, `Ví ${sid}: ${isCredit ? 'Nạp tiền' : 'Thanh toán'} + Ký RSA`);
+          if (txResp.sw !== '9000') {
+            throw new Error(`Giao dịch trên chip bị từ chối (SW=${txResp.sw}: ${explainSw(txResp.sw)})`);
+          }
+
+          const balResp = await sendRawApdu('8042000000', `Ví ${sid}: Đọc số dư mới`);
+          const decodedBal = (balResp.sw === '9000') ? decodeInt4BFromHex(balResp.data) : null;
+          const balanceAfter = decodedBal !== null ? decodedBal : (isCredit ? balanceBefore + amount : balanceBefore - amount);
+
+          const verifyRes = await apiJson(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              studentId: sid,
+              transactionType: isCredit ? 'CREDIT' : 'DEBIT',
+              amount,
+              balanceBefore,
+              balanceAfter,
+              timestampSeconds: tsInt,
+              rsaSignatureHex: txResp.data || '',
+              note
+            })
+          });
+
+          closeModal('modalWalletTx');
+          showToast(
+            `${verifyRes.message || 'Giao dịch ví thành công'} (Số dư mới: ${formatVnd(balanceAfter)})`,
+            'success'
+          );
+          await refreshAll();
+          return;
+        }
+      } catch (err) {
+        els.walletFormError.textContent = err.message || 'Giao dịch thất bại.';
+        els.walletFormError.classList.remove('hidden');
+        await refreshAll();
+      } finally {
+        els.btnSubmitWalletTx.disabled = false;
+        els.btnSubmitWalletTx.textContent = 'Xác Thực & Ký RSA';
+      }
+    });
+
+    // RSA Challenge-Response Modal
+    function appendRsaBoxLine(htmlContent) {
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      div.innerHTML = `<div class="log-line">${htmlContent}</div>`;
+      els.rsaChallengeResultBox.appendChild(div);
+      els.rsaChallengeResultBox.scrollTop = els.rsaChallengeResultBox.scrollHeight;
+    }
+
+    async function executeRsaChallenge(tamperSignature) {
+      const st = state.status;
+      if (!st || !st.activeStudentId) return;
+      const sid = st.activeStudentId;
+
+      els.rsaChallengeResultBox.innerHTML = '';
+      els.btnRunRsaChallenge.disabled = true;
+      els.btnRunRsaTamper.disabled = true;
+
+      try {
+        appendRsaBoxLine(`<span class="log-time">[1/3]</span> <span>Yêu cầu Server sinh Challenge Nonce 16 bytes cho <strong class="log-tx">${esc(sid)}</strong>...</span>`);
+        const ch = await apiJson(`/api/rsa/challenge?studentId=${encodeURIComponent(sid)}`);
+        appendRsaBoxLine(`<span class="log-time">[NONCE]</span> <span class="log-data">${esc(ch.nonceHex)}</span> <span class="log-time">(DB RSA Key: ${ch.hasValidRsaKey ? 'Có' : 'Chưa có'})</span>`);
+
+        await sendRawApdu(SELECT_APPLET_APDU, `RSA Challenge ${sid}: Select Applet`);
+        const signRes = await sendRawApdu(`8014000010${ch.nonceHex}`, `RSA Challenge ${sid}: Ký Nonce (INS 0x14)`);
+        if (signRes.sw !== '9000' || !signRes.data) {
+          throw new Error(`Chip từ chối ký Challenge (SW=${signRes.sw})`);
+        }
+
+        let sigHex = signRes.data;
+        if (tamperSignature && sigHex.length >= 4) {
+          const flippedChar = sigHex[0] === 'F' ? '0' : 'F';
+          sigHex = flippedChar + sigHex.slice(1);
+          appendRsaBoxLine(`<span class="log-sw-warn">[GIẢ MẠO]</span> <span>Đã sửa 1 ký tự đầu của chữ ký để kiểm thử phản ứng Server...</span>`);
+        } else {
+          appendRsaBoxLine(`<span class="log-time">[2/3]</span> <span>Chip đã ký RSA-1024 (${sigHex.length / 2} bytes): <span class="log-tx">${esc(sigHex.slice(0, 32))}...</span></span>`);
+        }
+
+        const resp = await fetch('/api/rsa/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: sid,
+            nonceHex: ch.nonceHex,
+            signatureHex: sigHex
+          })
+        });
+        const verifyData = await resp.json();
+        if (resp.ok && verifyData.verified) {
+          appendRsaBoxLine(`<span class="log-sw-ok">[3/3 HỢP LỆ]</span> <span class="log-sw-ok">${esc(verifyData.message)}</span>`);
+          showToast(`RSA-1024 Challenge-Response cho ${sid} HỢP LỆ.`, 'success');
+        } else {
+          appendRsaBoxLine(`<span class="log-sw-err">[3/3 TỪ CHỐI • HTTP ${resp.status}]</span> <span class="log-sw-err">${esc(verifyData.message)}</span>`);
+          showToast(`Server từ chối chữ ký RSA (HTTP ${resp.status}).`, 'error');
+        }
+        await refreshAll();
+      } catch (err) {
+        appendRsaBoxLine(`<span class="log-sw-err">[LỖI]</span> <span class="log-sw-err">${esc(err.message)}</span>`);
+      } finally {
+        els.btnRunRsaChallenge.disabled = false;
+        els.btnRunRsaTamper.disabled = false;
+      }
+    }
+
+    els.btnOpenRsaModal.addEventListener('click', () => openModal('modalRsaChallenge'));
+    els.btnRunRsaChallenge.addEventListener('click', () => executeRsaChallenge(false));
+    els.btnRunRsaTamper.addEventListener('click', () => executeRsaChallenge(true));
+    els.btnSyncCardRsaKey.addEventListener('click', async () => {
+      const st = state.status;
+      if (!st || !st.activeStudentId) return;
+      try {
+        const res = await apiJson('/api/cards/sync-rsa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: st.activeStudentId })
+        });
+        appendRsaBoxLine(`<span class="log-sw-ok">[ĐỒNG BỘ]</span> <span>Đã lưu Public Key RSA (${res.modulusBytes}B) của ${esc(res.studentId)} vào SQLite.</span>`);
+        await refreshAll();
+      } catch (err) {
+        appendRsaBoxLine(`<span class="log-sw-err">[LỖI ĐỒNG BỘ]</span> <span class="log-sw-err">${esc(err.message)}</span>`);
+      }
+    });
+
+    // AES-128 & Change PIN Modal
+    function appendAesBoxLine(htmlContent) {
+      if (!els.aesInspectionBox) return;
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      div.innerHTML = `<div class="log-line">${htmlContent}</div>`;
+      els.aesInspectionBox.appendChild(div);
+      els.aesInspectionBox.scrollTop = els.aesInspectionBox.scrollHeight;
+    }
+
+    async function loadAesInspection() {
+      if (!els.aesInspectionBox) return;
+      els.aesInspectionBox.innerHTML = '<div class="log-entry"><div class="log-line"><span class="log-time">[AES]</span> <span>Đang đọc trạng thái EEPROM & khóa dẫn xuất từ PIN...</span></div></div>';
+      try {
+        const info = await apiJson('/api/aes/inspect');
+        els.aesInspectionBox.innerHTML = '';
+        appendAesBoxLine(`<span class="log-time">[THẺ]</span> <strong class="log-tx">${esc(info.activeStudentId || '--')}</strong> · <span>${esc(info.keyDerivation || 'AES-128-CBC / SHA-1(PIN)[0..15] / Zero IV')}</span>`);
+        appendAesBoxLine(`<span class="log-time">[KEY HASH]</span> <span class="log-data">SHA-1(PIN) prefix: ${esc(info.pinHashPrefix || '--')}</span>`);
+        const cipherPreview = info.chipCiphertextHex
+          ? `${info.chipCiphertextHex.slice(0, 64)}${info.chipCiphertextHex.length > 64 ? '...' : ''}`
+          : '(Chưa có dữ liệu AES trên chip)';
+        appendAesBoxLine(`<span class="log-time">[EEPROM ${info.cipherBytes ?? 0}B]</span> <span class="log-tx">${esc(cipherPreview)}</span>`);
+        appendAesBoxLine(`<span class="log-time">[PLAINTEXT]</span> <span>Độ dài gốc: <strong>${info.plainBytes ?? 0} bytes</strong></span>`);
+      } catch (err) {
+        els.aesInspectionBox.innerHTML = '';
+        appendAesBoxLine(`<span class="log-sw-err">[LỖI]</span> <span class="log-sw-err">${esc(err.message)}</span>`);
+      }
+    }
+
+    if (els.btnOpenAesPinModal) {
+      els.btnOpenAesPinModal.addEventListener('click', () => {
+        if (els.aesPinFormError) els.aesPinFormError.classList.add('hidden');
+        if (els.aesOldPin) els.aesOldPin.value = '';
+        if (els.aesNewPin) els.aesNewPin.value = '';
+        openModal('modalChangePinAes');
+        loadAesInspection();
+      });
+    }
+
+    if (els.changePinAesForm) {
+      els.changePinAesForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (els.aesPinFormError) els.aesPinFormError.classList.add('hidden');
+
+        const oldPin = (els.aesOldPin.value || '').trim();
+        const newPin = (els.aesNewPin.value || '').trim();
+        const showAesErr = (msg) => {
+          if (els.aesPinFormError) {
+            els.aesPinFormError.textContent = msg;
+            els.aesPinFormError.classList.remove('hidden');
+          }
+        };
+
+        if (!/^\d{4,8}$/.test(oldPin) || !/^\d{4,8}$/.test(newPin)) {
+          showAesErr('PIN cũ và PIN mới phải gồm 4–8 chữ số.');
+          return;
+        }
+        if (oldPin === newPin) {
+          showAesErr('PIN mới phải khác PIN cũ để tạo khóa AES-128 mới.');
+          return;
+        }
+
+        const st = state.status;
+        const sid = (st && st.activeStudentId) ? st.activeStudentId : 'ACTIVE_CARD';
+        const origBtnText = els.btnSubmitChangePinAes ? els.btnSubmitChangePinAes.textContent : 'Đổi PIN & Mã Hóa Lại AES';
+        if (els.btnSubmitChangePinAes) {
+          els.btnSubmitChangePinAes.disabled = true;
+          els.btnSubmitChangePinAes.textContent = 'Đang đổi PIN & AES...';
+        }
+        if (els.aesInspectionBox) els.aesInspectionBox.innerHTML = '';
+
+        try {
+          const selRes = await sendRawApdu(SELECT_APPLET_APDU, `AES Re-encrypt ${sid}: Select Applet`);
+          if (selRes.sw !== '9000') {
+            throw new Error(`Select Applet thất bại (SW=${selRes.sw})`);
+          }
+
+          const oldPinHex = utf8ToHex(oldPin);
+          const oldLenHex = (oldPinHex.length / 2).toString(16).padStart(2, '0').toUpperCase();
+          const verifyOldRes = await sendRawApdu(`80100000${oldLenHex}${oldPinHex}`, `AES Re-encrypt ${sid}: Xác thực PIN cũ`);
+          if (verifyOldRes.sw !== '9000') {
+            throw new Error(`Xác thực PIN cũ thất bại (SW=${verifyOldRes.sw}: ${explainSw(verifyOldRes.sw)})`);
+          }
+
+          const beforeRes = await sendRawApdu('8021010000', `AES Re-encrypt ${sid}: Đọc bản mã TRƯỚC`);
+          if (beforeRes.sw !== '9000') {
+            throw new Error(`Đọc bản mã trước khi đổi PIN thất bại (SW=${beforeRes.sw})`);
+          }
+          const beforeCipher = beforeRes.data || '';
+          appendAesBoxLine(`<span class="log-time">[TRƯỚC ĐỔI PIN]</span> <span class="log-tx">${esc(beforeCipher ? beforeCipher.slice(0, 64) + (beforeCipher.length > 64 ? '...' : '') : '(Trống)')}</span> <span class="log-time">(${beforeCipher.length / 2}B)</span>`);
+
+          const newPinHex = utf8ToHex(newPin);
+          const newLenHex = (newPinHex.length / 2).toString(16).padStart(2, '0').toUpperCase();
+          const changeLcHex = ((2 + oldPinHex.length / 2 + newPinHex.length / 2)).toString(16).padStart(2, '0').toUpperCase();
+          const changeRes = await sendRawApdu(
+            `80110000${changeLcHex}${oldLenHex}${oldPinHex}${newLenHex}${newPinHex}`,
+            `AES Re-encrypt ${sid}: Đổi PIN & Re-encrypt EEPROM (INS 0x11)`
+          );
+          if (changeRes.sw !== '9000') {
+            throw new Error(`Đổi PIN thất bại (SW=${changeRes.sw}: ${explainSw(changeRes.sw)})`);
+          }
+
+          const verifyNewRes = await sendRawApdu(`80100000${newLenHex}${newPinHex}`, `AES Re-encrypt ${sid}: Xác thực PIN mới`);
+          if (verifyNewRes.sw !== '9000') {
+            throw new Error(`Xác thực PIN mới thất bại (SW=${verifyNewRes.sw}: ${explainSw(verifyNewRes.sw)})`);
+          }
+
+          const afterRes = await sendRawApdu('8021010000', `AES Re-encrypt ${sid}: Đọc bản mã SAU`);
+          if (afterRes.sw !== '9000') {
+            throw new Error(`Đọc bản mã sau khi đổi PIN thất bại (SW=${afterRes.sw})`);
+          }
+          const afterCipher = afterRes.data || '';
+          appendAesBoxLine(`<span class="log-time">[SAU ĐỔI PIN]</span> <span class="log-data">${esc(afterCipher ? afterCipher.slice(0, 64) + (afterCipher.length > 64 ? '...' : '') : '(Trống)')}</span> <span class="log-time">(${afterCipher.length / 2}B)</span>`);
+
+          const plainRes = await sendRawApdu('8021000000', `AES Re-encrypt ${sid}: Giải mã kiểm chứng UTF-8`);
+          if (plainRes.sw !== '9000') {
+            throw new Error(`Giải mã kiểm chứng thất bại (SW=${plainRes.sw})`);
+          }
+          const decodedPlain = hexToUtf8(plainRes.data || '');
+
+          const postInspect = await apiJson('/api/aes/inspect');
+          appendAesBoxLine(`<span class="log-time">[KEY HASH MỚI]</span> <span class="log-data">SHA-1(PIN) prefix: ${esc(postInspect.pinHashPrefix || '--')}</span>`);
+
+          if (beforeCipher && afterCipher && beforeCipher !== afterCipher) {
+            appendAesBoxLine(`<span class="log-sw-ok">[ĐỐI CHIẾU AES]</span> <span class="log-sw-ok">Bản mã EEPROM đã thay đổi hoàn toàn theo khóa PIN mới (AES-128-CBC).</span>`);
+          } else if (!beforeCipher && !afterCipher) {
+            appendAesBoxLine(`<span class="log-sw-warn">[ĐỐI CHIẾU AES]</span> <span>PIN đã đổi; chip chưa có dữ liệu sinh viên để mã hóa lại.</span>`);
+          } else {
+            appendAesBoxLine(`<span class="log-sw-err">[CẢNH BÁO]</span> <span class="log-sw-err">Bản mã trước và sau không thay đổi!</span>`);
+          }
+          appendAesBoxLine(`<span class="log-sw-ok">[GIẢI MÃ HỢP LỆ]</span> <span>${esc(decodedPlain || '(Trống)')}</span>`);
+
+          showToast(`Đã đổi PIN thẻ ${sid} và mã hóa lại EEPROM AES-128-CBC.`, 'success');
+          els.aesOldPin.value = '';
+          els.aesNewPin.value = '';
+          await refreshAll();
+        } catch (err) {
+          showAesErr(err.message || 'Không thể đổi PIN & mã hóa lại AES.');
+          appendAesBoxLine(`<span class="log-sw-err">[LỖI]</span> <span class="log-sw-err">${esc(err.message)}</span>`);
+          await refreshAll();
+        } finally {
+          if (els.btnSubmitChangePinAes) {
+            els.btnSubmitChangePinAes.disabled = false;
+            els.btnSubmitChangePinAes.textContent = origBtnText;
+          }
+        }
+      });
+    }
 
     // SCR Modal
     els.btnOpenScrModal.addEventListener('click', openScrModal);

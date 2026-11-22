@@ -10,6 +10,7 @@ import javacard.framework.Util;
 import javacard.security.AESKey;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
+import javacard.security.MessageDigest;
 import javacard.security.RSAPrivateKey;
 import javacard.security.RSAPublicKey;
 import javacard.security.Signature;
@@ -87,9 +88,12 @@ public class SmartCampusApplet extends Applet {
     // Persistent admin PUK lock flag: blocks all PIN operations until a P1=00 PUK unblock
     private boolean adminLocked;
 
-    // On-card cryptographic objects (AES-128 & RSA-1024)
+    // On-card cryptographic objects (AES-128 & RSA-1024 & SHA-1 PIN Digest)
     private final AESKey aesKey;
     private final Cipher aesCipher;
+    private final MessageDigest pinDigest;
+    private final byte[] pinHash;
+    private final byte[] zeroIv;
     private KeyPair rsaKeyPair;
     private RSAPrivateKey rsaPrivateKey;
     private RSAPublicKey rsaPublicKey;
@@ -119,38 +123,40 @@ public class SmartCampusApplet extends Applet {
 
     // ================== TRANSIENT MEMORY (RAM) ==================
     private final byte[] transientBuffer;
+    private final byte[] transientDigest;
 
     /**
      * Initializes the Applet and pre-allocates all EEPROM and transient RAM buffers
      * during installation in accordance with Java Card memory best practices.
      */
     protected SmartCampusApplet() {
-        // 1. Initialize default PIN ("123456") and Admin PUK ("88888888")
+        // 1. Allocate transient RAM working buffers (cleared on applet deselection)
+        transientBuffer = JCSystem.makeTransientByteArray((short) 256, JCSystem.CLEAR_ON_DESELECT);
+        transientDigest = JCSystem.makeTransientByteArray((short) 20, JCSystem.CLEAR_ON_DESELECT);
+
+        // 2. Initialize default PIN ("123456") and Admin PUK ("88888888")
         defaultPin = new byte[]{'1', '2', '3', '4', '5', '6'};
         adminPuk = new byte[]{'8', '8', '8', '8', '8', '8', '8', '8'};
         adminLocked = false;
         pin = new OwnerPIN(PIN_TRY_LIMIT, MAX_PIN_SIZE);
         pin.update(defaultPin, (short) 0, (byte) defaultPin.length);
 
-        // 2. Initialize internal AES-128 key and CBC cipher
+        // 3. Initialize PIN-derived AES-128 key, SHA-1 digest, and CBC cipher (zero IV)
+        pinDigest = MessageDigest.getInstance(MessageDigest.ALG_SHA, false);
+        pinHash = new byte[20];
+        zeroIv = new byte[16];
         aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
-        byte[] initialAesSecret = new byte[]{
-                (byte) 0x53, (byte) 0x4D, (byte) 0x41, (byte) 0x52,
-                (byte) 0x54, (byte) 0x5F, (byte) 0x53, (byte) 0x54,
-                (byte) 0x55, (byte) 0x44, (byte) 0x45, (byte) 0x4E,
-                (byte) 0x54, (byte) 0x5F, (byte) 0x49, (byte) 0x44
-        };
-        aesKey.setKey(initialAesSecret, (short) 0);
         aesCipher = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, false);
+        deriveAesKeyFromPin(defaultPin, (short) 0, (byte) defaultPin.length, true);
 
-        // 3. Initialize RSA-1024 key pair and SHA-1 with RSA PKCS#1 signature engine
+        // 4. Initialize RSA-1024 key pair and SHA-1 with RSA PKCS#1 signature engine
         rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_1024);
         rsaKeyPair.genKeyPair();
         rsaPrivateKey = (RSAPrivateKey) rsaKeyPair.getPrivate();
         rsaPublicKey = (RSAPublicKey) rsaKeyPair.getPublic();
         rsaSigner = Signature.getInstance(Signature.ALG_RSA_SHA_PKCS1, false);
 
-        // 4. Allocate EEPROM buffers for student profile and WebP avatar
+        // 5. Allocate EEPROM buffers for student profile and WebP avatar
         encryptedStudentInfo = new byte[MAX_INFO_SIZE];
         encryptedInfoLength = 0;
         plainInfoLength = 0;
@@ -158,7 +164,7 @@ public class SmartCampusApplet extends Applet {
         avatarBuffer = new byte[MAX_AVATAR_SIZE];
         avatarLength = 0;
 
-        // 5. Initialize default academic, library and e-wallet state (500,000 VND)
+        // 6. Initialize default academic, library and e-wallet state (500,000 VND)
         trainingScore = (short) 85;
         attendanceCount = (short) 0;
         labAccessPermission = (byte) 1;
@@ -166,13 +172,10 @@ public class SmartCampusApplet extends Applet {
         borrowedBookCount = (byte) 0;
         walletBalance = new byte[]{(byte) 0x00, (byte) 0x07, (byte) 0xA1, (byte) 0x20};
 
-        // 6. Allocate circular buffer for the 10 latest activities
+        // 7. Allocate circular buffer for the 10 latest activities
         activityLogBuffer = new byte[(short) (MAX_LOG_ENTRIES * LOG_ENTRY_SIZE)];
         logHeadIndex = (byte) 0;
         logCount = (byte) 0;
-
-        // 7. Allocate transient RAM working buffer (cleared on applet deselection)
-        transientBuffer = JCSystem.makeTransientByteArray((short) 256, JCSystem.CLEAR_ON_DESELECT);
 
         register();
     }
@@ -278,6 +281,8 @@ public class SmartCampusApplet extends Applet {
             }
             ISOException.throwIt((short) (SW_PIN_TRIES_PREFIX | triesLeft));
         }
+
+        deriveAesKeyFromPin(buffer, ISO7816.OFFSET_CDATA, len, false);
     }
 
     private void handleChangePin(APDU apdu) {
@@ -287,8 +292,14 @@ public class SmartCampusApplet extends Applet {
 
         short offset = ISO7816.OFFSET_CDATA;
         byte oldPinLen = buffer[offset++];
+        if (oldPinLen < 4 || oldPinLen > MAX_PIN_SIZE) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
         if (!pin.check(buffer, offset, oldPinLen)) {
             byte triesLeft = pin.getTriesRemaining();
+            if (triesLeft == 0) {
+                ISOException.throwIt((short) 0x6983);
+            }
             ISOException.throwIt((short) (SW_PIN_TRIES_PREFIX | triesLeft));
         }
         offset += oldPinLen;
@@ -298,10 +309,7 @@ public class SmartCampusApplet extends Applet {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
 
-        JCSystem.beginTransaction();
-        pin.update(buffer, offset, newPinLen);
-        JCSystem.commitTransaction();
-
+        updatePinAndReencrypt(buffer, offset, newPinLen, false);
         pin.check(buffer, offset, newPinLen);
     }
 
@@ -317,17 +325,58 @@ public class SmartCampusApplet extends Applet {
             ISOException.throwIt((short) 0x6300);
         }
 
-        JCSystem.beginTransaction();
         if (p1 == (byte) 0x01) {
-            // Admin PUK lock: reject every PIN-based operation until a P1=00 unblock
+            JCSystem.beginTransaction();
             adminLocked = true;
+            JCSystem.commitTransaction();
         } else {
-            // Admin PUK unblock: clear the admin lock and restore the default PIN
+            updatePinAndReencrypt(defaultPin, (short) 0, (byte) defaultPin.length, true);
+        }
+    }
+
+    /**
+     * Derives a 128-bit AES key from the card PIN via on-chip SHA-1 digest (first 16 bytes).
+     */
+    private void deriveAesKeyFromPin(byte[] pinBuf, short pinOff, byte pinLen, boolean persistPinHash) {
+        pinDigest.reset();
+        pinDigest.doFinal(pinBuf, pinOff, pinLen, transientDigest, (short) 0);
+        aesKey.setKey(transientDigest, (short) 0);
+        if (persistPinHash) {
+            Util.arrayCopyNonAtomic(transientDigest, (short) 0, pinHash, (short) 0, (short) 20);
+        }
+        Util.arrayFillNonAtomic(transientDigest, (short) 0, (short) transientDigest.length, (byte) 0);
+    }
+
+    /**
+     * Atomically updates the card PIN + SHA-1 PIN hash, derives the new AES-128 key,
+     * and re-encrypts EEPROM student profile data from the previous PIN key to the new PIN key.
+     */
+    private void updatePinAndReencrypt(byte[] newPinBuf, short newPinOff, byte newPinLen, boolean clearAdminLock) {
+        short infoCipherLen = encryptedInfoLength;
+        if (infoCipherLen > 0) {
+            aesCipher.init(aesKey, Cipher.MODE_DECRYPT, zeroIv, (short) 0, (short) 16);
+            aesCipher.doFinal(encryptedStudentInfo, (short) 0, infoCipherLen, transientBuffer, (short) 0);
+        }
+
+        pinDigest.reset();
+        pinDigest.doFinal(newPinBuf, newPinOff, newPinLen, transientDigest, (short) 0);
+
+        JCSystem.beginTransaction();
+        if (clearAdminLock) {
             adminLocked = false;
             pin.resetAndUnblock();
-            pin.update(defaultPin, (short) 0, (byte) defaultPin.length);
+        }
+        pin.update(newPinBuf, newPinOff, newPinLen);
+        Util.arrayCopy(transientDigest, (short) 0, pinHash, (short) 0, (short) 20);
+        aesKey.setKey(transientDigest, (short) 0);
+        if (infoCipherLen > 0) {
+            aesCipher.init(aesKey, Cipher.MODE_ENCRYPT, zeroIv, (short) 0, (short) 16);
+            aesCipher.doFinal(transientBuffer, (short) 0, infoCipherLen, encryptedStudentInfo, (short) 0);
         }
         JCSystem.commitTransaction();
+
+        Util.arrayFillNonAtomic(transientBuffer, (short) 0, (short) transientBuffer.length, (byte) 0);
+        Util.arrayFillNonAtomic(transientDigest, (short) 0, (short) transientDigest.length, (byte) 0);
     }
 
     // =========================================================================
@@ -384,12 +433,14 @@ public class SmartCampusApplet extends Applet {
         Util.arrayCopyNonAtomic(buffer, ISO7816.OFFSET_CDATA, transientBuffer, (short) 0, len);
         Util.arrayFillNonAtomic(transientBuffer, len, padValue, padValue);
 
-        aesCipher.init(aesKey, Cipher.MODE_ENCRYPT);
+        aesCipher.init(aesKey, Cipher.MODE_ENCRYPT, zeroIv, (short) 0, (short) 16);
         JCSystem.beginTransaction();
         aesCipher.doFinal(transientBuffer, (short) 0, paddedLen, encryptedStudentInfo, (short) 0);
         encryptedInfoLength = paddedLen;
         plainInfoLength = len;
         JCSystem.commitTransaction();
+
+        Util.arrayFillNonAtomic(transientBuffer, (short) 0, paddedLen, (byte) 0);
     }
 
     private void handleGetStudentInfo(APDU apdu) {
@@ -408,7 +459,7 @@ public class SmartCampusApplet extends Applet {
         }
 
         requirePinValidated();
-        aesCipher.init(aesKey, Cipher.MODE_DECRYPT);
+        aesCipher.init(aesKey, Cipher.MODE_DECRYPT, zeroIv, (short) 0, (short) 16);
         aesCipher.doFinal(encryptedStudentInfo, (short) 0, encryptedInfoLength, buffer, (short) 0);
         apdu.setOutgoingAndSend((short) 0, plainInfoLength);
     }

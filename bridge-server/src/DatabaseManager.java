@@ -1,7 +1,9 @@
 import java.io.File;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.security.spec.RSAPublicKeySpec;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -449,6 +451,8 @@ public class DatabaseManager {
             while (rs.next()) {
                 if (!first) sb.append(",");
                 first = false;
+                String modHex = rs.getString("public_key_modulus_hex");
+                String expHex = rs.getString("public_key_exponent_hex");
                 sb.append("{")
                         .append("\"studentId\":\"").append(esc(rs.getString("student_id"))).append("\",")
                         .append("\"fullName\":\"").append(esc(rs.getString("full_name"))).append("\",")
@@ -460,8 +464,9 @@ public class DatabaseManager {
                         .append("\"trainingScore\":").append(rs.getInt("training_score")).append(",")
                         .append("\"attendanceCount\":").append(rs.getInt("attendance_count")).append(",")
                         .append("\"labAccessGranted\":").append(rs.getInt("lab_access_granted") != 0).append(",")
-                        .append("\"publicKeyModulusHex\":\"").append(esc(rs.getString("public_key_modulus_hex"))).append("\",")
-                        .append("\"publicKeyExponentHex\":\"").append(esc(rs.getString("public_key_exponent_hex"))).append("\",")
+                        .append("\"publicKeyModulusHex\":\"").append(esc(modHex)).append("\",")
+                        .append("\"publicKeyExponentHex\":\"").append(esc(expHex)).append("\",")
+                        .append("\"hasValidRsaKey\":").append(isValidHexKey(modHex, 128)).append(",")
                         .append("\"rawAesCiphertextHex\":\"").append(esc(rs.getString("raw_aes_ciphertext_hex"))).append("\",")
                         .append("\"walletBalance\":").append(rs.getInt("wallet_balance"))
                         .append("}");
@@ -577,6 +582,131 @@ public class DatabaseManager {
         return null;
     }
 
+    public static boolean isValidHexKey(String hex, int minHexChars) {
+        if (hex == null) return false;
+        String clean = hex.replaceAll("\\s+", "");
+        return clean.length() >= minHexChars
+                && clean.length() % 2 == 0
+                && clean.matches("^[0-9A-Fa-f]+$");
+    }
+
+    private static byte[] hexStringToBytes(String cleanHex) {
+        int len = cleanHex.length();
+        byte[] out = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            out[i / 2] = (byte) ((Character.digit(cleanHex.charAt(i), 16) << 4)
+                    + Character.digit(cleanHex.charAt(i + 1), 16));
+        }
+        return out;
+    }
+
+    /**
+     * Reads the RSA-1024 Public Key (Modulus N and Exponent E) from `cards` in SQLite.
+     * Returns null if the card is missing or still contains a truncated placeholder key.
+     */
+    public static synchronized RSAPublicKeySpec getRsaPublicKeySpec(String studentId) {
+        if (studentId == null || studentId.trim().isEmpty()) {
+            return null;
+        }
+        String sql = "SELECT public_key_modulus_hex, public_key_exponent_hex FROM cards WHERE student_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String modHex = rs.getString("public_key_modulus_hex");
+                    String expHex = rs.getString("public_key_exponent_hex");
+                    if (!isValidHexKey(modHex, 128)) {
+                        return null;
+                    }
+                    String modClean = modHex.replaceAll("\\s+", "");
+                    String expClean = isValidHexKey(expHex, 2) ? expHex.replaceAll("\\s+", "") : "010001";
+                    BigInteger modulus = new BigInteger(1, hexStringToBytes(modClean));
+                    BigInteger exponent = new BigInteger(1, hexStringToBytes(expClean));
+                    return new RSAPublicKeySpec(modulus, exponent);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error reading RSA Public Key for " + studentId + ": " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Returns the stored RSA modulus hex string for display/audit if valid, or empty string.
+     */
+    public static synchronized String getRsaModulusHex(String studentId) {
+        if (studentId == null || studentId.trim().isEmpty()) return "";
+        String sql = "SELECT public_key_modulus_hex FROM cards WHERE student_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String mod = rs.getString("public_key_modulus_hex");
+                    return isValidHexKey(mod, 128) ? mod.replaceAll("\\s+", "").toUpperCase() : "";
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
+    }
+
+    /**
+     * Persists a card's RSA-1024 Public Key (Modulus N & Exponent E) into `cards` inside an ACID transaction.
+     */
+    public static synchronized boolean updateCardPublicKey(String studentId, String modulusHex, String exponentHex) {
+        if (studentId == null || studentId.trim().isEmpty() || !isValidHexKey(modulusHex, 128)) {
+            return false;
+        }
+        String sid = studentId.trim();
+        String modClean = modulusHex.replaceAll("\\s+", "").toUpperCase();
+        String expClean = isValidHexKey(exponentHex, 2)
+                ? exponentHex.replaceAll("\\s+", "").toUpperCase()
+                : "010001";
+
+        String sql = "UPDATE cards SET public_key_modulus_hex = ?, public_key_exponent_hex = ?, "
+                + "updated_at = CURRENT_TIMESTAMP WHERE student_id = ?";
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, modClean);
+                ps.setString(2, expClean);
+                ps.setString(3, sid);
+                if (ps.executeUpdate() == 0) {
+                    conn.rollback();
+                    return false;
+                }
+            }
+            insertAuditLogInternal(conn, sid, "SYNC_RSA_PUBLIC_KEY", 0x0013,
+                    "Cập nhật Public Key RSA-1024 vào CSDL (" + (modClean.length() / 2) + "B)", "");
+            conn.commit();
+            return true;
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error updating RSA Public Key for " + sid + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Returns all student_ids in `cards` that do not yet have a valid >=512-bit hex RSA modulus.
+     */
+    public static synchronized java.util.List<String> getStudentIdsMissingRsaKey() {
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        String sql = "SELECT student_id, public_key_modulus_hex FROM cards";
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                if (!isValidHexKey(rs.getString("public_key_modulus_hex"), 128)) {
+                    missing.add(rs.getString("student_id"));
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return missing;
+    }
+
     /**
      * Persists a card's WebP avatar (Base64-encoded) in `cards.avatar_webp_base64`.
      */
@@ -660,24 +790,98 @@ public class DatabaseManager {
      * Updates ONLY the target student's card record, keeping other cards intact.
      */
     public static synchronized boolean unblockCardByPuk(String studentId) {
+        return unblockCardByPuk(studentId, null);
+    }
+
+    /**
+     * Unblocks a PIN-locked card and optionally updates the re-encrypted AES ciphertext
+     * derived from the restored default PIN ('123456').
+     */
+    public static synchronized boolean unblockCardByPuk(String studentId, String reencryptedCipherHex) {
         if (studentId == null || studentId.trim().isEmpty()) {
             return false;
         }
-        String sql = "UPDATE cards SET card_locked = 0, default_pin = '123456', updated_at = CURRENT_TIMESTAMP WHERE student_id = ?";
+        String sid = studentId.trim();
+        boolean hasCipher = reencryptedCipherHex != null && !reencryptedCipherHex.trim().isEmpty();
+        String sql = "UPDATE cards SET card_locked = 0, default_pin = '123456', "
+                + (hasCipher ? "raw_aes_ciphertext_hex = ?, " : "")
+                + "updated_at = CURRENT_TIMESTAMP WHERE student_id = ?";
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, studentId.trim());
+                int idx = 1;
+                if (hasCipher) {
+                    ps.setString(idx++, reencryptedCipherHex.trim().toUpperCase());
+                }
+                ps.setString(idx, sid);
                 ps.executeUpdate();
             }
-            insertAuditLogInternal(conn, studentId.trim(), "UNBLOCK_BY_PUK", 0x0012,
-                    "Admin mở khóa thẻ sinh viên bằng mã PUK: " + studentId.trim(), "");
+            insertAuditLogInternal(conn, sid, "UNBLOCK_BY_PUK", 0x0012,
+                    "Admin mở khóa thẻ bằng PUK & khôi phục mã hóa AES PIN mặc định: " + sid, "");
             conn.commit();
             return true;
         } catch (Exception e) {
-            System.err.println("[SQLite DB] Error unblocking card " + studentId + ": " + e.getMessage());
+            System.err.println("[SQLite DB] Error unblocking card " + sid + ": " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Persists a card's updated PIN and atomically re-encrypted AES-128 CBC ciphertext into `cards`.
+     */
+    public static synchronized boolean updateCardPinAndCiphertext(String studentId, String newPin, String cipherHex) {
+        if (studentId == null || studentId.trim().isEmpty() || newPin == null || newPin.isEmpty()) {
+            return false;
+        }
+        String sid = studentId.trim();
+        boolean hasCipher = cipherHex != null && !cipherHex.trim().isEmpty();
+        String sql = "UPDATE cards SET default_pin = ?, "
+                + (hasCipher ? "raw_aes_ciphertext_hex = ?, " : "")
+                + "updated_at = CURRENT_TIMESTAMP WHERE student_id = ?";
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                int idx = 1;
+                ps.setString(idx++, newPin);
+                if (hasCipher) {
+                    ps.setString(idx++, cipherHex.trim().toUpperCase());
+                }
+                ps.setString(idx, sid);
+                ps.executeUpdate();
+            }
+            insertAuditLogInternal(conn, sid, "PIN_CHANGED_REENCRYPTED", 0x0011,
+                    "Đổi mã PIN & tái mã hóa nguyên tử AES-128 CBC theo khóa dẫn xuất từ PIN mới", "");
+            conn.commit();
+            return true;
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error updating PIN & ciphertext for " + sid + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Reads [pipeDelimitedInfo, defaultPin] from `cards` for the given student_id, or null if absent.
+     */
+    public static synchronized String[] getCardProfileAndPin(String studentId) {
+        if (studentId == null || studentId.trim().isEmpty()) return null;
+        String sql = "SELECT student_id, full_name, dob, class_name, department, default_pin FROM cards WHERE student_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String pipe = rs.getString("student_id") + "|"
+                            + rs.getString("full_name") + "|"
+                            + rs.getString("dob") + "|"
+                            + rs.getString("class_name") + "|"
+                            + rs.getString("department");
+                    String pin = rs.getString("default_pin");
+                    return new String[]{pipe, (pin != null && !pin.isEmpty()) ? pin : "123456"};
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     /**

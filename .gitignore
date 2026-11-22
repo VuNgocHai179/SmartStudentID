@@ -14,3 +14,6 @@
 .cxx
 local.properties
 /bridge-server/out/
+/bridge-server/data/virtual-chip-eeprom.properties
+/bridge-server/data/*.db-wal
+/bridge-server/data/*.db-shm

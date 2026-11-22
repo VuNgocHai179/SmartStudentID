@@ -72,7 +72,10 @@
           <span id="heroPinTries" class="stat-number font-mono">3/3 <span style="font-size: 12px; font-weight: 400; color: var(--text-muted);">lần</span></span>
         </div>
 
-        <div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button id="btnOpenWalletModal" class="btn-action-outline" type="button">
+            Giao Dịch Ví
+          </button>
           <button id="btnTriggerPhone" class="btn-action-primary" type="button">
             Kích Hoạt Điện Thoại
           </button>
@@ -225,7 +228,8 @@
             <div class="sub-card-caption">Giao tiếp trực tiếp với chip thẻ Java Card / Bộ giả lập qua PC Bridge</div>
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
-            <span class="status-chip font-mono" style="font-size: 10px;">CLA = 0x80</span>
+            <button id="btnOpenAesPinModal" class="btn-action-outline btn-table" type="button">Đổi PIN &amp; AES</button>
+            <button id="btnOpenRsaModal" class="btn-action-outline btn-table" type="button">Thử Thách RSA</button>
             <button id="btnClearApduLog" class="btn-action-outline btn-table" type="button">Xóa log</button>
           </div>
         </div>
@@ -459,6 +463,128 @@
         <button class="btn-action-outline" type="button" data-close-modal="modalConfirmDelete">Hủy</button>
         <button id="btnConfirmDelete" class="btn-action-primary" type="button" style="background-color: var(--danger-text); border-color: var(--danger-text);">Xác Nhận Xóa</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: E-WALLET TRANSACTION (PIN + RSA VERIFICATION) -->
+  <div id="modalWalletTx" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalWalletTitle">
+    <div class="modal-panel modal-sm">
+      <div class="modal-header">
+        <h2 id="modalWalletTitle" class="modal-title">Giao Dịch Ví Điện Tử (PIN + RSA)</h2>
+        <button class="modal-close" type="button" data-close-modal="modalWalletTx">&times;</button>
+      </div>
+      <form id="walletTxForm">
+        <div class="modal-body">
+          <div id="walletFormError" class="form-error hidden"></div>
+          <p id="walletActiveNote" style="font-size: 12px; color: var(--text-secondary);"></p>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label" for="walletTxType">Loại Giao Dịch *</label>
+              <select id="walletTxType" class="form-control">
+                <option value="CREDIT">Nạp tiền (0x40)</option>
+                <option value="DEBIT">Thanh toán (0x41)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="walletAmount">Số Tiền (VNĐ) *</label>
+              <input id="walletAmount" class="form-control font-mono" type="number" value="50000" min="1000" step="1000" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="walletNote">Nội Dung / Điểm Thanh Toán</label>
+            <input id="walletNote" class="form-control" type="text" value="Nạp tiền tại quầy PC Bridge" maxlength="120">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="walletPin">Mã PIN Xác Thực Thẻ (4–8 số) *</label>
+            <input id="walletPin" class="form-control font-mono" type="password" inputmode="numeric" value="123456" minlength="4" maxlength="8" required>
+          </div>
+
+          <label style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background-color: var(--bg-muted); cursor: pointer; font-size: 11.5px; color: var(--text-secondary);">
+            <input id="walletTamperTest" type="checkbox" style="margin-top: 2px;">
+            <span>Kiểm thử chống giả mạo: Gửi chữ ký RSA giả trực tiếp lên Server (không qua thẻ) để kiểm tra từ chối HTTP 403.</span>
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-action-outline" type="button" data-close-modal="modalWalletTx">Hủy</button>
+          <button id="btnSubmitWalletTx" class="btn-action-primary" type="submit">Xác Thực &amp; Ký RSA</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 6: RSA-1024 CHALLENGE-RESPONSE VERIFICATION -->
+  <div id="modalRsaChallenge" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalRsaTitle">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2 id="modalRsaTitle" class="modal-title">Xác Thực Thẻ Thật RSA-1024 (Challenge-Response)</h2>
+        <button class="modal-close" type="button" data-close-modal="modalRsaChallenge">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 12px; color: var(--text-secondary);">
+          Quy trình 3 bước: Server sinh Nonce 16 bytes &rarr; Chip ký bằng Private Key (<span class="font-mono">INS 0x14</span>) &rarr; Server thẩm định bằng Public Key trong <span class="font-mono">smartcard.db</span>.
+        </p>
+
+        <div id="rsaChallengeResultBox" class="console-log-screen" style="min-height: 150px; max-height: 220px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md);">
+          <div class="log-entry">
+            <div class="log-line">
+              <span class="log-time">[SẴN SÀNG]</span>
+              <span>Nhấn "Chạy Xác Thực RSA" để kiểm tra thẻ hiện tại đang gắn trên đầu đọc.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button id="btnSyncCardRsaKey" class="btn-action-outline" type="button">Đồng Bộ Khóa Public Từ Thẻ</button>
+        <div style="display: flex; gap: 8px;">
+          <button id="btnRunRsaTamper" class="btn-action-outline btn-table-danger" type="button">Thử Giả Mạo Chữ Ký</button>
+          <button id="btnRunRsaChallenge" class="btn-action-primary" type="button">Chạy Xác Thực RSA</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 7: CHANGE PIN & ATOMIC AES-128 RE-ENCRYPTION INSPECTOR -->
+  <div id="modalChangePinAes" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalAesPinTitle">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2 id="modalAesPinTitle" class="modal-title">Đổi Mã PIN &amp; Đối Chiếu Tái Mã Hóa AES-128 CBC</h2>
+        <button class="modal-close" type="button" data-close-modal="modalChangePinAes">&times;</button>
+      </div>
+      <form id="changePinAesForm">
+        <div class="modal-body">
+          <div id="aesPinFormError" class="form-error hidden"></div>
+          <p style="font-size: 12px; color: var(--text-secondary);">
+            Khóa AES-128 được dẫn xuất trực tiếp từ mã PIN (<span class="font-mono">SHA-1(PIN)[0..15]</span>). Khi đổi PIN (<span class="font-mono">INS 0x11</span>), thẻ giải mã hồ sơ bằng khóa cũ và tái mã hóa nguyên tử theo khóa PIN mới.
+          </p>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label" for="aesOldPin">Mã PIN Hiện Tại (4–8 số) *</label>
+              <input id="aesOldPin" class="form-control font-mono" type="password" inputmode="numeric" value="123456" minlength="4" maxlength="8" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="aesNewPin">Mã PIN Mới (4–8 số) *</label>
+              <input id="aesNewPin" class="form-control font-mono" type="password" inputmode="numeric" placeholder="VD: 654321" minlength="4" maxlength="8" required>
+            </div>
+          </div>
+
+          <div id="aesInspectionBox" class="console-log-screen" style="min-height: 145px; max-height: 220px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md);">
+            <div class="log-entry">
+              <div class="log-line">
+                <span class="log-time">[TRẠNG THÁI]</span>
+                <span>Đang đọc bản mã AES-128 hiện tại trên chip...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-action-outline" type="button" data-close-modal="modalChangePinAes">Đóng</button>
+          <button id="btnSubmitChangePinAes" class="btn-action-primary" type="submit">Đổi PIN &amp; Tái Mã Hóa AES</button>
+        </div>
+      </form>
     </div>
   </div>
 
