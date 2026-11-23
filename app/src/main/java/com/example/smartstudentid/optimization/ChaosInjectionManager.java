@@ -19,6 +19,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Controlled Fault & Vulnerability Injector + 4-Step Optimization Resolver.
@@ -31,7 +33,7 @@ public final class ChaosInjectionManager {
     public static final String PLAINTEXT_LEAK_PREFS = "insecure_plaintext_leak";
     public static final String PLAINTEXT_LEAK_KEY = "exposed_student_record";
     public static final String PLAINTEXT_LEAK_VALUE =
-            "MSSV=CT070315|HoTen=Vũ Ngọc Hải|PIN=123456|PLAIN_TEXT_EXPOSED";
+            "MSSV=CT070318|HoTen=Vũ Ngọc Hải|PIN=123456|PLAIN_TEXT_EXPOSED";
 
     private static final long JANK_INTERVAL_MS = 135L;
     private static final long JANK_SLEEP_MS = 55L;
@@ -62,6 +64,11 @@ public final class ChaosInjectionManager {
     private volatile List<byte[]> retainedHeapBlocks = null;
     private ScheduledFuture<?> churnFuture;
 
+    private final AtomicInteger jankTickCount = new AtomicInteger(0);
+    private final AtomicLong lastJankBlockMs = new AtomicLong(0L);
+    private final AtomicInteger churnCycleCount = new AtomicInteger(0);
+    private final AtomicLong retainedHeapBytes = new AtomicLong(0L);
+
     private final Runnable jankRunnable = new Runnable() {
         @Override
         public void run() {
@@ -70,6 +77,7 @@ public final class ChaosInjectionManager {
             }
             // Simulate synchronous blocking APDU + crypto on Main Thread (~85-95 ms)
             // while leaving a short gap so UI input remains responsive without ANR.
+            long startNs = System.nanoTime();
             try {
                 ApduClient.getInstance().sendApdu(
                         ApduCommands.CLA_SMART_STUDENT,
@@ -81,6 +89,9 @@ public final class ChaosInjectionManager {
             } catch (Exception ignored) {
             }
             sleepSafely(JANK_SLEEP_MS);
+            long elapsedMs = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
+            lastJankBlockMs.set(elapsedMs);
+            jankTickCount.incrementAndGet();
 
             if (uiThreadJankActive) {
                 mainHandler.postDelayed(this, JANK_INTERVAL_MS - JANK_SLEEP_MS);
@@ -155,6 +166,10 @@ public final class ChaosInjectionManager {
     private void setStep1ThreadingInternal(boolean inject) {
         uiThreadJankActive = inject;
         OptimizationConfig.setOptimizedModeEnabled(!inject);
+        if (!inject) {
+            jankTickCount.set(0);
+            lastJankBlockMs.set(0L);
+        }
         if (mainHandler != null) {
             mainHandler.removeCallbacks(jankRunnable);
             if (inject) {
@@ -234,11 +249,13 @@ public final class ChaosInjectionManager {
                             byte[] waste = new byte[16 * 1024];
                             waste[0] = (byte) i;
                         }
+                        churnCycleCount.incrementAndGet();
                         if (retainedHeapBlocks == null || retainedHeapBlocks.isEmpty()) {
                             allocateSafeWorkingChurn();
                         }
                     } catch (OutOfMemoryError ignored) {
                         retainedHeapBlocks = null;
+                        retainedHeapBytes.set(0L);
                     }
                 }, 0L, CHURN_INTERVAL_MS, TimeUnit.MILLISECONDS);
             }
@@ -248,6 +265,8 @@ public final class ChaosInjectionManager {
                 churnFuture = null;
             }
             retainedHeapBlocks = null;
+            retainedHeapBytes.set(0L);
+            churnCycleCount.set(0);
             System.gc();
         }
     }
@@ -266,8 +285,10 @@ public final class ChaosInjectionManager {
                 blocks.add(block);
             }
             retainedHeapBlocks = blocks;
+            retainedHeapBytes.set((long) targetBlocks * CHURN_BLOCK_BYTES);
         } catch (OutOfMemoryError ignored) {
             retainedHeapBlocks = null;
+            retainedHeapBytes.set(0L);
         }
     }
 
@@ -377,6 +398,22 @@ public final class ChaosInjectionManager {
 
     public int getSimulatedApduPacketCount() {
         return memoryChurnAndRawPngActive ? 750 : 15;
+    }
+
+    public int getJankTickCount() {
+        return jankTickCount.get();
+    }
+
+    public long getLastJankBlockMs() {
+        return lastJankBlockMs.get();
+    }
+
+    public int getChurnCycleCount() {
+        return churnCycleCount.get();
+    }
+
+    public double getRetainedHeapMb() {
+        return retainedHeapBytes.get() / (1024.0 * 1024.0);
     }
 
     public boolean hasPlaintextLeak(Context context) {

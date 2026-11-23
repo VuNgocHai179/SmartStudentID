@@ -80,7 +80,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="3dp"
                     android:gravity="center"
-                    android:text="Vũ Ngọc Hải • CT070315 • Lớp CT7C"
+                    android:text="Vũ Ngọc Hải • CT070318 • Lớp CT7C"
                     android:textAppearance="@style/TextAppearance.SmartID.Caption" />
 
                 <FrameLayout

@@ -149,9 +149,9 @@ public class DatabaseManager {
                     + "default_pin, card_locked, training_score, attendance_count, lab_access_granted, "
                     + "public_key_modulus_hex, public_key_exponent_hex) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             try (PreparedStatement ps = conn.prepareStatement(insertCardSql)) {
-                insertSeedCard(ps, "CT070315", "Vũ Ngọc Hải", "15/08/2003", "CT7C", "An toàn Thông tin",
+                insertSeedCard(ps, "CT070318", "Vũ Ngọc Hải", "15/08/2003", "CT7C", "Công nghệ thông tin",
                         "123456", 0, 88, 12, 1, "B4F29C01A8E3...", "010001");
-                insertSeedCard(ps, "CT070301", "Nguyễn Minh Quân", "20/11/2003", "CT7C", "An toàn Thông tin",
+                insertSeedCard(ps, "CT070301", "Nguyễn Minh Quân", "20/11/2003", "CT7C", "Công nghệ thông tin",
                         "123456", 0, 85, 9, 1, "C9A14E77D20B...", "010001");
                 insertSeedCard(ps, "CT070322", "Trần Thu Hà", "05/03/2003", "CT7C", "Công nghệ Thông tin",
                         "123456", 1, 92, 15, 1, "E1883B54F912...", "010001");
@@ -171,9 +171,9 @@ public class DatabaseManager {
             String insertBookSql = "INSERT INTO book_loans (book_code, student_id, book_title, author, "
                     + "borrowed, timestamp_seconds, rsa_signature_hex) VALUES (?, ?, ?, ?, ?, ?, ?)";
             try (PreparedStatement ps = conn.prepareStatement(insertBookSql)) {
-                insertSeedBook(ps, 0x0102, "CT070315", "Java Card Technology for Smart Cards", "Zhiqun Chen",
+                insertSeedBook(ps, 0x0102, "CT070318", "Java Card Technology for Smart Cards", "Zhiqun Chen",
                         1, now - 86400, "9A4F2C81E03B7712D4A9...");
-                insertSeedBook(ps, 0x0205, "CT070315", "OWASP Mobile Security Testing Guide", "Sven Schleier",
+                insertSeedBook(ps, 0x0205, "CT070318", "OWASP Mobile Security Testing Guide", "Sven Schleier",
                         1, now - 43200, "3E81B509C2A74490F1E2...");
                 insertSeedBook(ps, 0x0309, null, "High Performance Android Apps", "Doug Sillars",
                         0, 0, "");
@@ -195,7 +195,7 @@ public class DatabaseManager {
             String insertAttSql = "INSERT INTO attendance_logs (student_id, course_code, course_name, "
                     + "timestamp_seconds, rsa_signature_hex, verified_by_server) VALUES (?, ?, ?, ?, ?, ?)";
             try (PreparedStatement ps = conn.prepareStatement(insertAttSql)) {
-                ps.setString(1, "CT070315");
+                ps.setString(1, "CT070318");
                 ps.setString(2, "AT19N01");
                 ps.setString(3, "AT19N01 - Phát triển PM Thẻ thông minh");
                 ps.setLong(4, now - 7200);
@@ -808,7 +808,7 @@ public class DatabaseManager {
 
     private static void ensureCardExists(Connection conn, String studentId) throws SQLException {
         String sql = "INSERT OR IGNORE INTO cards (student_id, full_name, dob, class_name, department) "
-                + "VALUES (?, ?, '01/01/2003', 'CT7C', 'An toàn Thông tin')";
+                + "VALUES (?, ?, '01/01/2003', 'CT7C', 'Công nghệ thông tin')";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, studentId);
             ps.setString(2, "Sinh viên " + studentId);

@@ -1,5 +1,6 @@
 package com.example.smartstudentid.ui.widget;
 
+import android.app.ActivityManager;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
@@ -20,6 +21,10 @@ import com.example.smartstudentid.optimization.DemoMetrics;
 
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Floating Live Performance & Security Profiler HUD (FPS, Frame Gap, CPU %, Java/Native RAM,
@@ -48,6 +53,8 @@ public class LivePerfHudView extends View {
     private final Paint barPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Typeface sansBold = Typeface.create(Typeface.DEFAULT, Typeface.BOLD);
+    private final Typeface monoBold = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD);
     private final RectF cardRect = new RectF();
     private final RectF trackRect = new RectF();
     private final RectF sparkRect = new RectF();
@@ -61,6 +68,12 @@ public class LivePerfHudView extends View {
     private final ChaosInjectionManager chaos = ChaosInjectionManager.getInstance();
     private final Choreographer.FrameCallback frameCallback = this::onFrame;
     private final int touchSlop;
+    private final ActivityManager activityManager;
+    private final ActivityManager.MemoryInfo sysMemInfo = new ActivityManager.MemoryInfo();
+    private final Debug.MemoryInfo procMemInfo = new Debug.MemoryInfo();
+
+    private ScheduledExecutorService ramExecutor;
+    private ScheduledFuture<?> ramFuture;
 
     private boolean expanded = true;
     private boolean running = false;
@@ -77,10 +90,10 @@ public class LivePerfHudView extends View {
     private int currentFps = 60;
     private long worstGapMs = 17L;
     private float currentCpuPct = 4f;
-    private float usedHeapMb = 12f;
-    private float nativeHeapMb = 8f;
-    private float baselineHeapMb = -1f;
-    private float peakHeapMb = 12f;
+    private volatile float appPssMb = 32f;
+    private volatile float deviceTotalRamMb = 0f;
+    private volatile float usedHeapMb = 12f;
+    private volatile float maxHeapMb = 256f;
 
     private float downRawX;
     private float downRawY;
@@ -95,6 +108,7 @@ public class LivePerfHudView extends View {
     public LivePerfHudView(Context context, AttributeSet attrs) {
         super(context, attrs);
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        activityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
 
         bgPaint.setStyle(Paint.Style.FILL);
         bgPaint.setColor(BG_DARK);
@@ -106,7 +120,7 @@ public class LivePerfHudView extends View {
 
         Arrays.fill(fpsHist, 1f);
         Arrays.fill(cpuHist, 0.05f);
-        Arrays.fill(ramHist, 0.3f);
+        Arrays.fill(ramHist, 0.02f);
 
         setClickable(true);
         setContentDescription("Popup giám sát hiệu năng CPU, RAM và FPS thời gian thực");
@@ -114,7 +128,7 @@ public class LivePerfHudView extends View {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int w = Math.round(dp(expanded ? 216f : 198f));
+        int w = Math.round(dp(expanded ? 238f : 218f));
         int h = Math.round(dp(expanded ? 156f : 34f));
         setMeasuredDimension(resolveSize(w, widthMeasureSpec), resolveSize(h, heightMeasureSpec));
     }
@@ -122,13 +136,38 @@ public class LivePerfHudView extends View {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        start();
+        updateRunningState();
     }
 
     @Override
     protected void onDetachedFromWindow() {
         stop();
+        if (ramExecutor != null) {
+            ramExecutor.shutdownNow();
+            ramExecutor = null;
+        }
         super.onDetachedFromWindow();
+    }
+
+    @Override
+    protected void onVisibilityChanged(View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
+        updateRunningState();
+    }
+
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        updateRunningState();
+    }
+
+    private void updateRunningState() {
+        boolean shouldRun = isAttachedToWindow() && getWindowVisibility() == VISIBLE && isShown();
+        if (shouldRun) {
+            start();
+        } else {
+            stop();
+        }
     }
 
     public void setExpanded(boolean expanded) {
@@ -155,13 +194,28 @@ public class LivePerfHudView extends View {
         Arrays.fill(gapRing, 0L);
         lastCpuMs = Process.getElapsedCpuTime();
         lastWallMs = SystemClock.elapsedRealtime();
-        sampleMemory();
+        seedInitialMemory();
+        if (ramExecutor == null || ramExecutor.isShutdown()) {
+            ramExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "hud-ram-sampler");
+                t.setDaemon(true);
+                return t;
+            });
+        }
+        if (ramFuture == null || ramFuture.isCancelled() || ramFuture.isDone()) {
+            ramFuture = ramExecutor.scheduleWithFixedDelay(
+                    this::samplePssAndDeviceRam, 0L, 1000L, TimeUnit.MILLISECONDS);
+        }
         Choreographer.getInstance().postFrameCallback(frameCallback);
     }
 
     private void stop() {
         running = false;
         Choreographer.getInstance().removeFrameCallback(frameCallback);
+        if (ramFuture != null) {
+            ramFuture.cancel(false);
+            ramFuture = null;
+        }
     }
 
     private void onFrame(long frameTimeNanos) {
@@ -196,27 +250,65 @@ public class LivePerfHudView extends View {
             }
             worstGapMs = worst;
 
-            sampleCpuAndMemory();
+            sampleCpu();
             pushSparklineHistory();
             invalidate();
         }
         Choreographer.getInstance().postFrameCallback(frameCallback);
     }
 
-    private void sampleMemory() {
+    private void seedInitialMemory() {
         Runtime rt = Runtime.getRuntime();
-        usedHeapMb = Math.max(0.5f, (rt.totalMemory() - rt.freeMemory()) / (1024f * 1024f));
-        nativeHeapMb = Math.max(0.5f, Debug.getNativeHeapAllocatedSize() / (1024f * 1024f));
-        if (baselineHeapMb <= 0f) {
-            baselineHeapMb = usedHeapMb;
+        float heapMb = Math.max(0.5f, (rt.totalMemory() - rt.freeMemory()) / (1024f * 1024f));
+        float maxMb = Math.max(16f, rt.maxMemory() / (1024f * 1024f));
+        float nativeMb = Math.max(0.5f, Debug.getNativeHeapAllocatedSize() / (1024f * 1024f));
+        usedHeapMb = heapMb;
+        maxHeapMb = maxMb;
+        if (deviceTotalRamMb <= 0f && activityManager != null) {
+            try {
+                activityManager.getMemoryInfo(sysMemInfo);
+                if (sysMemInfo.totalMem > 0L) {
+                    deviceTotalRamMb = sysMemInfo.totalMem / (1024f * 1024f);
+                }
+            } catch (Exception ignored) {
+            }
         }
-        if (usedHeapMb > peakHeapMb) {
-            peakHeapMb = usedHeapMb;
+        if (appPssMb <= 32f) {
+            appPssMb = Math.max(1f, heapMb + nativeMb);
         }
     }
 
-    private void sampleCpuAndMemory() {
-        sampleMemory();
+    private void samplePssAndDeviceRam() {
+        Runtime rt = Runtime.getRuntime();
+        float heapMb = Math.max(0.5f, (rt.totalMemory() - rt.freeMemory()) / (1024f * 1024f));
+        float maxMb = Math.max(16f, rt.maxMemory() / (1024f * 1024f));
+        usedHeapMb = heapMb;
+        maxHeapMb = maxMb;
+
+        if (deviceTotalRamMb <= 0f && activityManager != null) {
+            try {
+                activityManager.getMemoryInfo(sysMemInfo);
+                if (sysMemInfo.totalMem > 0L) {
+                    deviceTotalRamMb = sysMemInfo.totalMem / (1024f * 1024f);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        try {
+            Debug.getMemoryInfo(procMemInfo);
+            int pssKb = procMemInfo.getTotalPss();
+            if (pssKb > 0) {
+                appPssMb = pssKb / 1024f;
+                return;
+            }
+        } catch (Exception ignored) {
+        }
+        float nativeMb = Math.max(0.5f, Debug.getNativeHeapAllocatedSize() / (1024f * 1024f));
+        appPssMb = Math.max(1f, heapMb + nativeMb);
+    }
+
+    private void sampleCpu() {
         long cpuNow = Process.getElapsedCpuTime();
         long wallNow = SystemClock.elapsedRealtime();
         long dCpu = Math.max(0L, cpuNow - lastCpuMs);
@@ -243,8 +335,15 @@ public class LivePerfHudView extends View {
     private void pushSparklineHistory() {
         shiftPush(fpsHist, clamp01(currentFps / 60f));
         shiftPush(cpuHist, clamp01(currentCpuPct / 100f));
-        float ramNorm = clamp01(usedHeapMb / Math.max(24f, peakHeapMb * 1.15f));
-        shiftPush(ramHist, ramNorm);
+        RamMetrics.RamStatus ram = RamMetrics.evaluate(
+                appPssMb,
+                deviceTotalRamMb,
+                usedHeapMb,
+                maxHeapMb,
+                chaos.isMemoryChurnAndRawPngActive(),
+                chaos.getRetainedHeapMb()
+        );
+        shiftPush(ramHist, ram.deviceRatio);
     }
 
     private static void shiftPush(float[] arr, float val) {
@@ -330,10 +429,17 @@ public class LivePerfHudView extends View {
         float h = getHeight();
         if (w <= 0f || h <= 0f) return;
 
+        RamMetrics.RamStatus ram = RamMetrics.evaluate(
+                appPssMb,
+                deviceTotalRamMb,
+                usedHeapMb,
+                maxHeapMb,
+                chaos.isMemoryChurnAndRawPngActive(),
+                chaos.getRetainedHeapMb()
+        );
         boolean jank = currentFps < 45 || worstGapMs > 32L
                 || chaos.isUiThreadJankActive() || DemoMetrics.isMainThreadBlockedActive();
-        boolean churn = chaos.isMemoryChurnAndRawPngActive()
-                || (usedHeapMb - baselineHeapMb) >= 6.0f;
+        boolean churn = ram.churnActive;
         boolean secAlert = chaos.isAnyIssueActive() && chaos.getMasvsScore() < 5;
         boolean anyAlert = jank || churn || secAlert;
 
@@ -347,23 +453,24 @@ public class LivePerfHudView extends View {
         canvas.drawRoundRect(cardRect, radius, radius, borderPaint);
 
         if (!expanded) {
-            drawCompactPill(canvas, w, h, jank);
+            drawCompactPill(canvas, w, h, jank, ram);
             return;
         }
-        drawExpandedHud(canvas, w, h, jank, churn);
+        drawExpandedHud(canvas, w, h, jank, ram);
     }
 
-    private void drawCompactPill(Canvas canvas, float w, float h, boolean jank) {
+    private void drawCompactPill(Canvas canvas, float w, float h, boolean jank,
+                                 RamMetrics.RamStatus ram) {
         float cy = h * 0.5f;
         barPaint.setColor(jank ? COLOR_RED : COLOR_GREEN);
         canvas.drawCircle(dp(13f), cy, dp(4f), barPaint);
 
-        textPaint.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
+        textPaint.setTypeface(monoBold);
         textPaint.setTextSize(dp(10f));
         textPaint.setTextAlign(Paint.Align.LEFT);
         textPaint.setColor(TEXT_LIGHT);
-        String text = String.format(Locale.US, "%d FPS · CPU %.0f%% · %.1fM",
-                currentFps, currentCpuPct, usedHeapMb);
+        String text = String.format(Locale.US, "%d FPS · CPU %.0f%% · %s",
+                currentFps, currentCpuPct, ram.compactLabel);
         canvas.drawText(text, dp(22f), cy + dp(3.5f), textPaint);
 
         textPaint.setTextAlign(Paint.Align.RIGHT);
@@ -371,12 +478,14 @@ public class LivePerfHudView extends View {
         canvas.drawText("[+]", w - dp(10f), cy + dp(3.5f), textPaint);
     }
 
-    private void drawExpandedHud(Canvas canvas, float w, float h, boolean jank, boolean churn) {
+    private void drawExpandedHud(Canvas canvas, float w, float h, boolean jank,
+                                 RamMetrics.RamStatus ram) {
         float padX = dp(10f);
         float innerW = w - padX * 2f;
+        boolean churn = ram.churnActive;
 
         // Header
-        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        textPaint.setTypeface(sansBold);
         textPaint.setTextSize(dp(9.5f));
         textPaint.setTextAlign(Paint.Align.LEFT);
         textPaint.setColor(TEXT_LIGHT);
@@ -406,14 +515,10 @@ public class LivePerfHudView extends View {
         drawMetricRow(canvas, padX, innerW, dp(57f), "CPU",
                 clamp01(currentCpuPct / 100f), cpuColor, cpuVal);
 
-        // 3. RAM Row
-        float deltaMb = Math.max(0f, usedHeapMb - baselineHeapMb);
+        // 3. RAM Row (App PSS / Total Device RAM)
         int ramColor = churn ? COLOR_RED : COLOR_SKY;
-        String ramVal = churn
-                ? String.format(Locale.US, "%.1fM (+%.1fM)", usedHeapMb, deltaMb)
-                : String.format(Locale.US, "%.1fM (Nat %.1fM)", usedHeapMb, nativeHeapMb);
         drawMetricRow(canvas, padX, innerW, dp(80f), "RAM",
-                clamp01(usedHeapMb / Math.max(28f, peakHeapMb * 1.15f)), ramColor, ramVal);
+                ram.deviceRatio, ramColor, ram.expandedLabel);
 
         // Mini Sparklines (FPS, CPU, RAM)
         float sparkTop = dp(95f);
@@ -428,7 +533,7 @@ public class LivePerfHudView extends View {
         drawSparkline(canvas, sparkRect, ramHist, COLOR_SKY);
 
         // Footer: Security / MASVS & Drag hint
-        textPaint.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
+        textPaint.setTypeface(monoBold);
         textPaint.setTextSize(dp(8.5f));
         textPaint.setTextAlign(Paint.Align.LEFT);
         int masvs = chaos.getMasvsScore();
@@ -444,7 +549,7 @@ public class LivePerfHudView extends View {
 
     private void drawMetricRow(Canvas canvas, float padX, float innerW, float baselineY,
                                String label, float ratio, int color, String valueText) {
-        textPaint.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
+        textPaint.setTypeface(monoBold);
         textPaint.setTextSize(dp(9.5f));
         textPaint.setTextAlign(Paint.Align.LEFT);
         textPaint.setColor(TEXT_MUTED);
@@ -494,5 +599,58 @@ public class LivePerfHudView extends View {
 
     private float dp(float value) {
         return value * getResources().getDisplayMetrics().density;
+    }
+
+    /**
+     * Pure-Java RAM ratio and label formatter for unit testing without Android framework dependencies.
+     */
+    static final class RamMetrics {
+
+        static final class RamStatus {
+            final float appRamMb;
+            final float deviceTotalGb;
+            final float deviceRatio;
+            final boolean churnActive;
+            final String expandedLabel;
+            final String compactLabel;
+
+            RamStatus(float appRamMb, float deviceTotalGb, float deviceRatio,
+                      boolean churnActive, String expandedLabel, String compactLabel) {
+                this.appRamMb = appRamMb;
+                this.deviceTotalGb = deviceTotalGb;
+                this.deviceRatio = deviceRatio;
+                this.churnActive = churnActive;
+                this.expandedLabel = expandedLabel;
+                this.compactLabel = compactLabel;
+            }
+        }
+
+        private RamMetrics() {
+        }
+
+        static RamStatus evaluate(float appPssMb, float deviceTotalRamMb,
+                                  float usedHeapMb, float maxHeapMb,
+                                  boolean chaosMemoryChurnActive, double chaosRetainedMb) {
+            float safeAppMb = Math.max(1f, appPssMb);
+            float safeDeviceMb = deviceTotalRamMb > 0f
+                    ? deviceTotalRamMb
+                    : Math.max(1024f, maxHeapMb * 4f);
+            float deviceTotalGb = safeDeviceMb / 1024f;
+            float deviceRatio = clamp01(safeAppMb / safeDeviceMb);
+            float heapPressure = maxHeapMb > 0f ? (usedHeapMb / maxHeapMb) : 0f;
+            boolean churnActive = chaosMemoryChurnActive || heapPressure >= 0.75f;
+
+            String expandedLabel;
+            if (chaosMemoryChurnActive && chaosRetainedMb >= 0.5) {
+                expandedLabel = String.format(Locale.US,
+                        "App %.0fM / %.1fG (+%.0fM)", safeAppMb, deviceTotalGb, chaosRetainedMb);
+            } else {
+                expandedLabel = String.format(Locale.US,
+                        "App %.0fM / %.1fG (%.1f%%)", safeAppMb, deviceTotalGb, deviceRatio * 100f);
+            }
+            String compactLabel = String.format(Locale.US, "%.0fM/%.1fG", safeAppMb, deviceTotalGb);
+            return new RamStatus(safeAppMb, deviceTotalGb, deviceRatio,
+                    churnActive, expandedLabel, compactLabel);
+        }
     }
 }

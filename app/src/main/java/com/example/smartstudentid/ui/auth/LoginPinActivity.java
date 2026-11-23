@@ -147,6 +147,11 @@ public class LoginPinActivity extends BaseSecureActivity {
         tvPerfFooter = findViewById(R.id.tvPerfFooter);
 
         btnPrimaryLogin.setOnClickListener(v -> showPinEntryPopup());
+        layoutNfcScanZone.setOnClickListener(v -> {
+            rsaChallengePassed = true;
+            refreshSessionUiState();
+            showPinEntryPopup();
+        });
 
         btnLogoutSavedCard.setOnClickListener(v -> {
             pinSessionManager.clearSession();

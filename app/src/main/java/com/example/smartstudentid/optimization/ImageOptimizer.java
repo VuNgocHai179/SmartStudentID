@@ -34,7 +34,15 @@ public final class ImageOptimizer {
     /** Matches the smart card applet's avatarBuffer[8192] EEPROM allocation. */
     public static final int MAX_AVATAR_BYTES = 8192;
 
+    /** Fixed reusable 8 KB encode buffer to avoid repeated byte[] allocations & GC churn. */
+    private static final ByteArrayOutputStream REUSABLE_8KB_STREAM = new ByteArrayOutputStream(MAX_AVATAR_BYTES);
+    private static int reusable8KbBufferReuseCount = 0;
+
     private ImageOptimizer() {
+    }
+
+    public static synchronized int getReusable8KbBufferReuseCount() {
+        return reusable8KbBufferReuseCount;
     }
 
     /**
@@ -300,17 +308,55 @@ public final class ImageOptimizer {
                 : Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true);
 
         try {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream(4096);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                scaled.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality, bos);
-            } else {
-                scaled.compress(Bitmap.CompressFormat.WEBP, quality, bos);
+            synchronized (REUSABLE_8KB_STREAM) {
+                REUSABLE_8KB_STREAM.reset();
+                reusable8KbBufferReuseCount++;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    scaled.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality, REUSABLE_8KB_STREAM);
+                } else {
+                    scaled.compress(Bitmap.CompressFormat.WEBP, quality, REUSABLE_8KB_STREAM);
+                }
+                return REUSABLE_8KB_STREAM.toByteArray();
             }
-            return bos.toByteArray();
         } finally {
             if (scaled != source) {
                 scaled.recycle();
             }
+        }
+    }
+
+    /**
+     * Decodes a compressed WebP/AVIF portrait directly into GPU VRAM ({@link Bitmap.Config#HARDWARE})
+     * on Android 8.0+ (API 26+) so zero pixels reside on Java Heap during rendering.
+     */
+    public static DisplayBitmapResult decodeForGpuVramDisplay(byte[] encodedBytes) {
+        if (encodedBytes == null || encodedBytes.length == 0) {
+            return new DisplayBitmapResult(null, false);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                BitmapFactory.Options hwOpts = new BitmapFactory.Options();
+                hwOpts.inPreferredConfig = Bitmap.Config.HARDWARE;
+                Bitmap hwBitmap = BitmapFactory.decodeByteArray(encodedBytes, 0, encodedBytes.length, hwOpts);
+                if (hwBitmap != null) {
+                    boolean isHardware = hwBitmap.getConfig() == Bitmap.Config.HARDWARE;
+                    return new DisplayBitmapResult(hwBitmap, isHardware);
+                }
+            } catch (Exception ignored) {
+                // Fallback to software decode on devices/emulators without hardware bitmap support
+            }
+        }
+        Bitmap fallback = BitmapFactory.decodeByteArray(encodedBytes, 0, encodedBytes.length);
+        return new DisplayBitmapResult(fallback, false);
+    }
+
+    public static final class DisplayBitmapResult {
+        public final Bitmap bitmap;
+        public final boolean inGpuVram;
+
+        public DisplayBitmapResult(Bitmap bitmap, boolean inGpuVram) {
+            this.bitmap = bitmap;
+            this.inGpuVram = inGpuVram;
         }
     }
 

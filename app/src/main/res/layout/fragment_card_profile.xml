@@ -128,7 +128,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="3dp"
-                            android:text="MSSV: CT070315 • Lớp CT7C"
+                            android:text="MSSV: CT070318 • Lớp CT7C"
                             android:textColor="@color/brand_100"
                             android:textSize="12sp" />
 
@@ -137,7 +137,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
-                            android:text="Khoa An toàn Thông tin"
+                            android:text="Khoa Công nghệ thông tin"
                             android:textColor="#BFDBFE"
                             android:textSize="11sp" />
                     </LinearLayout>

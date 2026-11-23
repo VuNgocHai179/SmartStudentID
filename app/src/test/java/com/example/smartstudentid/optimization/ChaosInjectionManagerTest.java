@@ -110,4 +110,21 @@ public class ChaosInjectionManagerTest {
             manager.removeListener(listener);
         }
     }
+
+    @Test
+    public void backgroundChaosTelemetryCountersResetOnResolve() throws Exception {
+        manager.injectStep3ImageAndMemory();
+        Thread.sleep(80L);
+        assertTrue(manager.getChurnCycleCount() >= 1);
+        assertTrue(manager.getRetainedHeapMb() >= 0.0);
+
+        manager.resolveStep3ImageAndMemory();
+        assertEquals(0, manager.getChurnCycleCount());
+        assertEquals(0.0, manager.getRetainedHeapMb(), 0.001);
+
+        manager.injectStep1Threading();
+        manager.resolveStep1Threading();
+        assertEquals(0, manager.getJankTickCount());
+        assertEquals(0L, manager.getLastJankBlockMs());
+    }
 }

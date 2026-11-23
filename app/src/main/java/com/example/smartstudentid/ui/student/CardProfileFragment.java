@@ -412,8 +412,8 @@ public class CardProfileFragment extends Fragment {
     private void showEditProfileDialog() {
         StudentCardRecord current = encryptedCacheManager.getStudentProfile();
         if (current == null) {
-            current = new StudentCardRecord("CT070315", "Vũ Ngọc Hải", "15/08/2003", "CT7C",
-                    "An toàn Thông tin", "123456", false, 88, 12);
+            current = new StudentCardRecord("CT070318", "Vũ Ngọc Hải", "15/08/2003", "CT7C",
+                    "Công nghệ thông tin", "123456", false, 88, 12);
         }
 
         LinearLayout container = new LinearLayout(requireContext());

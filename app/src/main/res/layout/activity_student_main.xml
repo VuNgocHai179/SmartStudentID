@@ -116,7 +116,8 @@
             android:layout_gravity="top|end"
             android:layout_marginTop="10dp"
             android:layout_marginEnd="12dp"
-            android:elevation="12dp" />
+            android:elevation="12dp"
+            android:visibility="gone" />
     </FrameLayout>
 
     <View
@@ -161,8 +162,8 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:contentDescription="Chuyên đề 1 Điểm nghẽn"
-                    android:src="@drawable/ic_bolt"
+                    android:contentDescription="Thẻ Sinh Viên (§1)"
+                    android:src="@drawable/ic_nav_card"
                     app:tint="@color/brand_600" />
             </FrameLayout>
 
@@ -172,7 +173,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
                 android:maxLines="1"
-                android:text="§1 Nghẽn"
+                android:text="Thẻ SV"
                 android:textColor="@color/brand_600"
                 android:textSize="10sp"
                 android:textStyle="bold" />
@@ -199,8 +200,8 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:contentDescription="Chuyên đề 2 60 FPS"
-                    android:src="@drawable/ic_speed"
+                    android:contentDescription="Điểm danh QR (§2)"
+                    android:src="@drawable/ic_nav_qr"
                     app:tint="@color/slate_500" />
             </FrameLayout>
 
@@ -210,7 +211,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
                 android:maxLines="1"
-                android:text="§2 60FPS"
+                android:text="Điểm danh"
                 android:textColor="@color/slate_500"
                 android:textSize="10sp" />
         </LinearLayout>
@@ -236,7 +237,7 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:contentDescription="Chuyên đề 3 Cache"
+                    android:contentDescription="Hồ sơ ngoại tuyến (§3)"
                     android:src="@drawable/ic_cached"
                     app:tint="@color/slate_500" />
             </FrameLayout>
@@ -247,7 +248,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
                 android:maxLines="1"
-                android:text="§3 Cache"
+                android:text="Hồ sơ"
                 android:textColor="@color/slate_500"
                 android:textSize="10sp" />
         </LinearLayout>
@@ -273,7 +274,7 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:contentDescription="Chuyên đề 4 Ảnh WebP"
+                    android:contentDescription="Ảnh thẻ sinh viên (§4)"
                     android:src="@drawable/ic_image"
                     app:tint="@color/slate_500" />
             </FrameLayout>
@@ -284,7 +285,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
                 android:maxLines="1"
-                android:text="§4 WebP"
+                android:text="Ảnh thẻ"
                 android:textColor="@color/slate_500"
                 android:textSize="10sp" />
         </LinearLayout>
@@ -310,7 +311,7 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:contentDescription="Chuyên đề 5 PIN và RAM"
+                    android:contentDescription="Trung tâm bảo mật &amp; PIN (§5)"
                     android:src="@drawable/ic_shield"
                     app:tint="@color/slate_500" />
             </FrameLayout>
@@ -321,7 +322,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
                 android:maxLines="1"
-                android:text="§5 PIN"
+                android:text="Bảo mật"
                 android:textColor="@color/slate_500"
                 android:textSize="10sp" />
         </LinearLayout>

@@ -57,7 +57,7 @@
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
                 android:maxLines="2"
-                android:text="MSSV CT070315 • Lớp CT7C • An toàn Thông tin"
+                android:text="MSSV CT070318 • Lớp CT7C • Công nghệ thông tin"
                 android:textColor="@color/slate_500"
                 android:textSize="11sp" />
 

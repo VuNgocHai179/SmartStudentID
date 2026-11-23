@@ -63,6 +63,8 @@ public class RealtimeTopicChartView extends View {
     private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint barPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Typeface sansBold = Typeface.create(Typeface.DEFAULT, Typeface.BOLD);
+    private final DashPathEffect thresholdDashEffect;
     private final RectF plotRect = new RectF();
     private final RectF barRect = new RectF();
     private final Path areaPath = new Path();
@@ -86,6 +88,8 @@ public class RealtimeTopicChartView extends View {
         gridPaint.setStyle(Paint.Style.STROKE);
         gridPaint.setColor(COLOR_SLATE_200);
         thresholdPaint.setStyle(Paint.Style.STROKE);
+        thresholdDashEffect = new DashPathEffect(new float[]{dp(4f), dp(3f)}, 0f);
+        thresholdPaint.setPathEffect(thresholdDashEffect);
         linePaint.setStyle(Paint.Style.STROKE);
         linePaint.setStrokeCap(Paint.Cap.ROUND);
         linePaint.setStrokeJoin(Paint.Join.ROUND);
@@ -161,13 +165,34 @@ public class RealtimeTopicChartView extends View {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        start();
+        updateRunningState();
     }
 
     @Override
     protected void onDetachedFromWindow() {
         stop();
         super.onDetachedFromWindow();
+    }
+
+    @Override
+    protected void onVisibilityChanged(View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
+        updateRunningState();
+    }
+
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        updateRunningState();
+    }
+
+    private void updateRunningState() {
+        boolean shouldRun = isAttachedToWindow() && getWindowVisibility() == VISIBLE && isShown();
+        if (shouldRun) {
+            start();
+        } else {
+            stop();
+        }
     }
 
     private void start() {
@@ -262,7 +287,7 @@ public class RealtimeTopicChartView extends View {
         borderPaint.setStrokeWidth(dp(1f));
         gridPaint.setStrokeWidth(dp(0.8f));
         thresholdPaint.setStrokeWidth(dp(1.1f));
-        thresholdPaint.setPathEffect(new DashPathEffect(new float[]{dp(4f), dp(3f)}, 0f));
+        thresholdPaint.setPathEffect(thresholdDashEffect);
         linePaint.setStrokeWidth(dp(2f));
 
         drawTopHeader(canvas, w);
@@ -345,7 +370,7 @@ public class RealtimeTopicChartView extends View {
                 break;
         }
 
-        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        textPaint.setTypeface(sansBold);
         textPaint.setTextSize(dp(10.5f));
         textPaint.setTextAlign(Paint.Align.LEFT);
         textPaint.setColor(COLOR_SLATE_900);
@@ -456,7 +481,7 @@ public class RealtimeTopicChartView extends View {
         thresholdPaint.setColor(color);
         canvas.drawLine(rect.left, ty, rect.right, ty, thresholdPaint);
 
-        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        textPaint.setTypeface(sansBold);
         textPaint.setTextSize(dp(8.5f));
         textPaint.setTextAlign(Paint.Align.RIGHT);
         textPaint.setColor(color);
@@ -502,7 +527,7 @@ public class RealtimeTopicChartView extends View {
                 canvas.drawRoundRect(barRect, dp(4f), dp(4f), barPaint);
             }
 
-            textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+            textPaint.setTypeface(sansBold);
             textPaint.setTextAlign(Paint.Align.CENTER);
             textPaint.setTextSize(dp(9f));
             textPaint.setColor(val > 0L ? COLOR_BLUE : COLOR_SLATE_400);
@@ -554,7 +579,7 @@ public class RealtimeTopicChartView extends View {
                 barPaint.setColor(color);
                 canvas.drawRoundRect(barRect, dp(4f), dp(4f), barPaint);
 
-                textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+                textPaint.setTypeface(sansBold);
                 textPaint.setTextAlign(Paint.Align.CENTER);
                 textPaint.setTextSize(dp(8.5f));
                 textPaint.setColor(color);
@@ -614,7 +639,7 @@ public class RealtimeTopicChartView extends View {
     private void drawComparisonRow(Canvas canvas, float w, float rowTop, float rowH,
                                    String label, float ratio, String summary, int color) {
         float textBaseline = rowTop + rowH * 0.72f;
-        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        textPaint.setTypeface(sansBold);
         textPaint.setTextSize(dp(9.5f));
         textPaint.setTextAlign(Paint.Align.LEFT);
         textPaint.setColor(color);

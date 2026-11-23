@@ -12,14 +12,16 @@ import com.example.smartstudentid.model.StudentCardRecord;
 import com.example.smartstudentid.optimization.ApduThreadPool;
 import com.google.gson.Gson;
 
+import java.util.Arrays;
+
 /**
- * Implements strict OWASP MASVS-STORAGE Client-Server separation:
- * 1. The Android phone NEVER stores a shared database of all students. It ONLY caches
- *    the single currently logged-in student's active session (`KEY_STUDENT_PROFILE_SESSION`)
- *    and avatar (`KEY_AVATAR_WEBP_BASE64`) encrypted with AES-256-GCM in AndroidKeyStore,
- *    and wipes them immediately upon logout or card removal.
- * 2. All shared institutional records (`cards`, `attendance_logs`, `book_loans`, `card_audit_logs`)
- *    reside EXCLUSIVELY on the central Server SQLite Database (`bridge-server/data/smartcard.db`).
+ * Implements 2-Tier Secure Cache (L1 RAM + L2 AndroidKeyStore TEE AES-256-GCM) with strict
+ * OWASP MASVS-STORAGE Client-Server separation:
+ * 1. Tier L1 (RAM): Holds the active student's profile and WebP avatar in-memory for sub-millisecond
+ *    reads with zero disk I/O or JSON parsing overhead.
+ * 2. Tier L2 (Hardware-backed AndroidKeyStore TEE): EncryptedSharedPreferences (AES-256-SIV keys +
+ *    AES-256-GCM values) persists only the currently logged-in student's session across process restarts.
+ * 3. Both L1 RAM (zero-filled) and L2 TEE are wiped immediately upon logout or 3 wrong PIN attempts.
  */
 public class EncryptedCacheManager {
 
@@ -32,6 +34,12 @@ public class EncryptedCacheManager {
     private static EncryptedCacheManager instance;
     private final SharedPreferences securePrefs;
     private final Gson gson = new Gson();
+
+    // Tier L1: In-memory RAM cache for sub-ms reads
+    private volatile StudentCardRecord l1ProfileCache;
+    private volatile byte[] l1AvatarCache;
+    private volatile String l1AvatarOwnerId;
+    private volatile String lastReadTier = "NONE";
 
     private EncryptedCacheManager(Context context) {
         Context appContext = context.getApplicationContext();
@@ -78,6 +86,9 @@ public class EncryptedCacheManager {
                 || record.getFullName() == null || record.getFullName().trim().isEmpty()) {
             return;
         }
+        // Update Tier L1 (RAM) immediately
+        this.l1ProfileCache = record;
+        // Persist to Tier L2 (AndroidKeyStore TEE AES-256-GCM)
         securePrefs.edit().putString(KEY_STUDENT_PROFILE_SESSION, gson.toJson(record)).apply();
         // Server DB sync is a side effect, never part of the measured card work: always background it
         // so Before-mode (Main Thread) demos cannot block on HTTP timeouts and ANR.
@@ -88,36 +99,64 @@ public class EncryptedCacheManager {
     }
 
     public StudentCardRecord getStudentProfile() {
+        // Tier L1 (RAM) fast path
+        StudentCardRecord mem = this.l1ProfileCache;
+        if (mem != null && mem.getStudentId() != null && !mem.getStudentId().trim().isEmpty()
+                && mem.getFullName() != null && !mem.getFullName().trim().isEmpty()) {
+            this.lastReadTier = "L1_RAM";
+            return mem;
+        }
+        // Tier L2 (AndroidKeyStore TEE EncryptedSharedPreferences) fallback
         String raw = securePrefs.getString(KEY_STUDENT_PROFILE_SESSION, null);
         if (raw == null || raw.isEmpty()) {
+            this.lastReadTier = "MISS";
             return null;
         }
         StudentCardRecord record = gson.fromJson(raw, StudentCardRecord.class);
         // Ignore a blank/partial record left behind by a failed read while the card was locked.
         if (record == null || record.getStudentId() == null || record.getStudentId().trim().isEmpty()
                 || record.getFullName() == null || record.getFullName().trim().isEmpty()) {
+            this.lastReadTier = "MISS";
             return null;
         }
+        // Hydrate L1 RAM for subsequent sub-ms reads
+        this.l1ProfileCache = record;
+        this.lastReadTier = "L2_TEE";
         return record;
     }
 
     public void saveAvatarBytes(byte[] webpBytes) {
         if (webpBytes == null || webpBytes.length == 0) return;
+        StudentCardRecord profile = getStudentProfile();
+        String ownerId = (profile != null && profile.getStudentId() != null && !profile.getStudentId().isEmpty())
+                ? profile.getStudentId() : null;
+        // Update Tier L1 (RAM)
+        this.l1AvatarCache = Arrays.copyOf(webpBytes, webpBytes.length);
+        this.l1AvatarOwnerId = ownerId;
+        // Update Tier L2 (AndroidKeyStore TEE)
         String b64 = Base64.encodeToString(webpBytes, Base64.NO_WRAP);
         SharedPreferences.Editor editor = securePrefs.edit().putString(KEY_AVATAR_WEBP_BASE64, b64);
-        StudentCardRecord profile = getStudentProfile();
-        if (profile != null && profile.getStudentId() != null && !profile.getStudentId().isEmpty()) {
-            editor.putString(KEY_AVATAR_OWNER_STUDENT_ID, profile.getStudentId());
+        if (ownerId != null) {
+            editor.putString(KEY_AVATAR_OWNER_STUDENT_ID, ownerId);
         }
         editor.apply();
     }
 
     public byte[] getAvatarBytes() {
-        // Never show a portrait cached for a different card/student.
-        String ownerId = securePrefs.getString(KEY_AVATAR_OWNER_STUDENT_ID, null);
         StudentCardRecord profile = getStudentProfile();
-        if (ownerId != null && profile != null && profile.getStudentId() != null
-                && !ownerId.equalsIgnoreCase(profile.getStudentId())) {
+        String currentId = (profile != null) ? profile.getStudentId() : null;
+
+        // Tier L1 (RAM) fast path
+        byte[] memAvatar = this.l1AvatarCache;
+        if (memAvatar != null && memAvatar.length > 0) {
+            if (l1AvatarOwnerId == null || currentId == null || l1AvatarOwnerId.equalsIgnoreCase(currentId)) {
+                return memAvatar;
+            }
+        }
+
+        // Tier L2 (AndroidKeyStore TEE) fallback
+        String ownerId = securePrefs.getString(KEY_AVATAR_OWNER_STUDENT_ID, null);
+        if (ownerId != null && currentId != null && !ownerId.equalsIgnoreCase(currentId)) {
             return null;
         }
 
@@ -125,13 +164,45 @@ public class EncryptedCacheManager {
         if (b64 == null || b64.isEmpty()) {
             return null;
         }
-        return Base64.decode(b64, Base64.NO_WRAP);
+        byte[] decoded = Base64.decode(b64, Base64.NO_WRAP);
+        this.l1AvatarCache = decoded;
+        this.l1AvatarOwnerId = ownerId;
+        return decoded;
+    }
+
+    public String getLastReadTier() {
+        return lastReadTier;
+    }
+
+    public boolean hasL1ProfileCached() {
+        return l1ProfileCache != null;
+    }
+
+    public boolean hasL2ProfileCached() {
+        String raw = securePrefs.getString(KEY_STUDENT_PROFILE_SESSION, null);
+        return raw != null && !raw.isEmpty();
     }
 
     /**
-     * Wipes the active student's cached profile and session data (called on logout or 3 wrong PIN attempts).
+     * Evicts only Tier L1 (RAM) while keeping Tier L2 (AndroidKeyStore TEE) intact.
+     */
+    public void evictL1RamOnly() {
+        l1ProfileCache = null;
+        byte[] avatar = l1AvatarCache;
+        if (avatar != null) {
+            Arrays.fill(avatar, (byte) 0);
+        }
+        l1AvatarCache = null;
+        l1AvatarOwnerId = null;
+    }
+
+    /**
+     * Wipes both Tier L1 (RAM, zero-filled) and Tier L2 (AndroidKeyStore TEE) session cache
+     * (called on logout or 3 consecutive wrong PIN attempts).
      */
     public void wipeStudentSessionCache() {
+        evictL1RamOnly();
+        lastReadTier = "WIPED";
         securePrefs.edit()
                 .remove(KEY_STUDENT_PROFILE_SESSION)
                 .remove(KEY_AVATAR_WEBP_BASE64)

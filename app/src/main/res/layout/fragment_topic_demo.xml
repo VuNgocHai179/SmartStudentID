@@ -12,11 +12,12 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingStart="20dp"
-        android:paddingTop="16dp"
-        android:paddingEnd="20dp"
+        android:paddingStart="18dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="18dp"
         android:paddingBottom="28dp">
 
+        <!-- Screen Title Header -->
         <TextView
             android:id="@+id/tvTopicBadge"
             android:layout_width="wrap_content"
@@ -31,111 +32,348 @@
             android:layout_marginTop="2dp"
             android:textAppearance="@style/TextAppearance.SmartID.ScreenTitle" />
 
-        <!-- Before / After switch + Chaos controls -->
+        <!-- =============================================================== -->
+        <!-- LAYER 1: REAL END-USER APP EXPERIENCE (ON TOP)                  -->
+        <!-- =============================================================== -->
+
+        <!-- Tab 1 (§1): Real Digital Student Smart Card (VNeID / Wallet style) -->
+        <LinearLayout
+            android:id="@+id/panelSmartCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="@color/transparent"
+                app:cardCornerRadius="22dp"
+                app:cardElevation="6dp"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_gradient_blue"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:letterSpacing="0.06"
+                            android:text="HỌC VIỆN KỸ THUẬT MẬT MÃ"
+                            android:textColor="@color/brand_100"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:layout_width="34dp"
+                            android:layout_height="34dp"
+                            android:contentDescription="Logo Học viện"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ic_academy_logo" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.card.MaterialCardView
+                            android:layout_width="68dp"
+                            android:layout_height="84dp"
+                            app:cardBackgroundColor="#1E40AF"
+                            app:cardCornerRadius="14dp"
+                            app:cardElevation="0dp"
+                            app:strokeColor="@color/white"
+                            app:strokeWidth="2dp">
+
+                            <ImageView
+                                android:id="@+id/ivSmartCardAvatar"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:contentDescription="Ảnh thẻ sinh viên"
+                                android:padding="14dp"
+                                android:scaleType="centerCrop"
+                                android:src="@drawable/ic_person"
+                                app:tint="@color/white" />
+                        </com.google.android.material.card.MaterialCardView>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="14dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:letterSpacing="0.1"
+                                    android:text="THẺ SINH VIÊN ĐIỆN TỬ"
+                                    android:textColor="@color/brand_100"
+                                    android:textSize="9sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/tvSmartCardSourceBadge"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:background="@drawable/bg_glass_pill"
+                                    android:paddingStart="8dp"
+                                    android:paddingTop="2dp"
+                                    android:paddingEnd="8dp"
+                                    android:paddingBottom="2dp"
+                                    android:text="CACHE"
+                                    android:textColor="@color/white"
+                                    android:textSize="9sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/tvSmartCardName"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:text="Vũ Ngọc Hải"
+                                android:textColor="@color/white"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvSmartCardId"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="MSSV: CT070318 • Lớp CT7C"
+                                android:textColor="@color/brand_100"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:id="@+id/tvSmartCardDept"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="Khoa Công nghệ thông tin"
+                                android:textColor="#BFDBFE"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Compact 3-stat academic row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.card.MaterialCardView
+                    style="@style/Widget.SmartID.Card"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    app:cardCornerRadius="14dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="10dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="92 / 100"
+                            android:textColor="@color/brand_600"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Điểm rèn luyện"
+                            android:textColor="@color/slate_500"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.card.MaterialCardView
+                    style="@style/Widget.SmartID.Card"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    app:cardCornerRadius="14dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="10dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="96%"
+                            android:textColor="@color/emerald_600"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Chuyên cần"
+                            android:textColor="@color/slate_500"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.card.MaterialCardView
+                    style="@style/Widget.SmartID.Card"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    app:cardCornerRadius="14dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="10dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Đang mở"
+                            android:textColor="@color/slate_900"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Quyền phòng Lab"
+                            android:textColor="@color/slate_500"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Tab 2 (§2): Real Dynamic 30s QR Code + Live Smoothness Proof -->
         <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardDemoMode"
+            android:id="@+id/panelDynamicQr"
             style="@style/Widget.SmartID.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            app:cardCornerRadius="18dp">
+            android:visibility="gone"
+            app:cardCornerRadius="22dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
                 android:orientation="vertical"
-                android:padding="14dp">
+                android:padding="16dp">
 
-                <LinearLayout
-                    android:layout_width="match_parent"
+                <TextView
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:text="Mã QR điểm danh động 30 giây"
+                    android:textColor="@color/slate_900"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
 
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="CHẾ ĐỘ DEMO"
-                            android:textAppearance="@style/TextAppearance.SmartID.Label"
-                            android:textColor="@color/slate_500" />
-
-                        <TextView
-                            android:id="@+id/tvModeHint"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="❌ Before"
-                            android:textAppearance="@style/TextAppearance.SmartID.Micro"
-                            android:textColor="@color/red_600"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-
-                    <androidx.appcompat.widget.SwitchCompat
-                        android:id="@+id/switchDemoMode"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
-                </LinearLayout>
-
-                <!-- Explicit Chaos Tool & Step-by-Step Optimization Controls -->
-                <LinearLayout
-                    android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/tvDemoQrSubtitle"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:orientation="horizontal">
+                    android:layout_marginTop="2dp"
+                    android:text="Vũ Ngọc Hải • CT070318 • Lớp CT7C"
+                    android:textAppearance="@style/TextAppearance.SmartID.Micro" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnInjectTopicFault"
-                        style="@style/Widget.SmartID.Button.Primary"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:minHeight="44dp"
-                        android:paddingStart="8dp"
-                        android:paddingTop="8dp"
-                        android:paddingEnd="8dp"
-                        android:paddingBottom="8dp"
-                        android:text="🔥 B1. Gây lỗi"
-                        android:textSize="12sp"
-                        app:backgroundTint="@color/red_600" />
+                <FrameLayout
+                    android:layout_width="186dp"
+                    android:layout_height="186dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_qr_ring">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnApplyTopicFix"
-                        style="@style/Widget.SmartID.Button.Primary"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:layout_weight="1"
-                        android:minHeight="44dp"
-                        android:paddingStart="8dp"
-                        android:paddingTop="8dp"
-                        android:paddingEnd="8dp"
-                        android:paddingBottom="8dp"
-                        android:text="🛠 B2. Xử lý"
-                        android:textSize="12sp"
-                        app:backgroundTint="@color/emerald_600" />
-                </LinearLayout>
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="154dp"
+                        android:layout_height="154dp"
+                        android:layout_gravity="center"
+                        app:cardBackgroundColor="@color/white"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="0dp"
+                        app:strokeColor="@color/slate_200"
+                        app:strokeWidth="1dp">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnAutoDemoTopic"
-                    style="@style/Widget.SmartID.Button.Soft"
-                    android:layout_width="match_parent"
+                        <ImageView
+                            android:id="@+id/ivDemoQr"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:contentDescription="Mã QR định danh động 30 giây"
+                            android:padding="6dp"
+                            android:scaleType="fitCenter" />
+                    </com.google.android.material.card.MaterialCardView>
+                </FrameLayout>
+
+                <ProgressBar
+                    android:id="@+id/pbDemoQrCountdown"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="196dp"
+                    android:layout_height="6dp"
+                    android:layout_marginTop="12dp"
+                    android:max="30"
+                    android:progress="30"
+                    android:progressDrawable="@drawable/progress_qr" />
+
+                <TextView
+                    android:id="@+id/tvDemoQrCountdown"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:minHeight="42dp"
-                    android:paddingTop="8dp"
-                    android:paddingBottom="8dp"
-                    android:text="▶ Chạy Demo Tự động (B1 → B2)"
-                    android:textSize="12sp" />
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/bg_pill_blue"
+                    android:paddingStart="10dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="3dp"
+                    android:text="Đổi mã sau 30s"
+                    android:textColor="@color/brand_600"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- The user-facing action being demoed -->
+        <!-- Primary User Action Card (also hosts Tab 3 Offline Profile, Tab 4 Image Studio, Tab 5 Security PIN) -->
         <com.google.android.material.card.MaterialCardView
             style="@style/Widget.SmartID.Card"
             android:layout_width="match_parent"
@@ -149,98 +387,272 @@
                 android:orientation="vertical"
                 android:padding="14dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="THAO TÁC NGƯỜI DÙNG"
-                    android:textAppearance="@style/TextAppearance.SmartID.Label"
-                    android:textColor="@color/slate_500" />
-
-                <!-- Card profile panel (§1–§3) -->
+                <!-- Tab 3 (§3): Offline Student Profile + Local Storage Security Card -->
                 <LinearLayout
                     android:id="@+id/panelStudent"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:background="@drawable/bg_soft_panel"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:padding="10dp">
-
-                    <ImageView
-                        android:id="@+id/demoAvatar"
-                        android:layout_width="52dp"
-                        android:layout_height="52dp"
-                        android:background="@drawable/bg_icon_tile_blue"
-                        android:contentDescription="Ảnh thẻ sinh viên"
-                        android:padding="10dp"
-                        android:scaleType="centerCrop"
-                        android:src="@drawable/ic_person"
-                        app:tint="@color/brand_600" />
+                    android:orientation="vertical"
+                    android:visibility="gone">
 
                     <LinearLayout
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
+                        android:background="@drawable/bg_soft_panel"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:padding="12dp">
+
+                        <ImageView
+                            android:id="@+id/demoAvatar"
+                            android:layout_width="54dp"
+                            android:layout_height="54dp"
+                            android:background="@drawable/bg_icon_tile_blue"
+                            android:contentDescription="Ảnh thẻ sinh viên"
+                            android:padding="10dp"
+                            android:scaleType="centerCrop"
+                            android:src="@drawable/ic_person"
+                            app:tint="@color/brand_600" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/demoName"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:maxLines="1"
+                                android:text="Chưa có hồ sơ"
+                                android:textColor="@color/slate_900"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/demoStudentId"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="—"
+                                android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+
+                            <TextView
+                                android:id="@+id/demoDept"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:maxLines="1"
+                                android:text=""
+                                android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+                        </LinearLayout>
 
                         <TextView
-                            android:id="@+id/demoName"
-                            android:layout_width="match_parent"
+                            android:id="@+id/demoSourceBadge"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:maxLines="1"
-                            android:text="Chưa có hồ sơ"
-                            android:textColor="@color/slate_900"
-                            android:textSize="14sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/demoStudentId"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:text="—"
-                            android:textAppearance="@style/TextAppearance.SmartID.Micro" />
-
-                        <TextView
-                            android:id="@+id/demoDept"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:maxLines="1"
+                            android:layout_marginStart="8dp"
+                            android:background="@drawable/bg_pill_slate"
+                            android:paddingStart="8dp"
+                            android:paddingTop="3dp"
+                            android:paddingEnd="8dp"
+                            android:paddingBottom="3dp"
                             android:text=""
-                            android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+                            android:textColor="@color/slate_600"
+                            android:textSize="9sp"
+                            android:textStyle="bold" />
                     </LinearLayout>
 
-                    <TextView
-                        android:id="@+id/demoSourceBadge"
-                        android:layout_width="wrap_content"
+                    <!-- Visual 2-Tier Cache Pipeline (L1 RAM -> L2 TEE -> Chip Card) -->
+                    <LinearLayout
+                        android:id="@+id/panelStorageStatus"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:background="@drawable/bg_pill_slate"
-                        android:paddingStart="8dp"
-                        android:paddingTop="3dp"
-                        android:paddingEnd="8dp"
-                        android:paddingBottom="3dp"
-                        android:text=""
-                        android:textColor="@color/slate_600"
-                        android:textSize="9sp"
-                        android:textStyle="bold" />
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <LinearLayout
+                                android:id="@+id/boxTierL1"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_status_green"
+                                android:gravity="center"
+                                android:orientation="vertical"
+                                android:padding="8dp">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="⚡ L1 RAM"
+                                    android:textColor="@color/slate_700"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/tvTierL1State"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:text="HIT"
+                                    android:textColor="@color/emerald_600"
+                                    android:textSize="12sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/boxTierL2"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="6dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_status_green"
+                                android:gravity="center"
+                                android:orientation="vertical"
+                                android:padding="8dp">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="🔐 L2 TEE"
+                                    android:textColor="@color/slate_700"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/tvTierL2State"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:text="AES-GCM"
+                                    android:textColor="@color/emerald_600"
+                                    android:textSize="12sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/boxTierChip"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="6dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:gravity="center"
+                                android:orientation="vertical"
+                                android:padding="8dp">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="💳 Thẻ Chip"
+                                    android:textColor="@color/slate_700"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/tvTierChipState"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:text="0 APDU"
+                                    android:textColor="@color/slate_500"
+                                    android:textSize="12sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <!-- Side-by-side visual comparison: Plaintext Disk vs Encrypted TEE Disk -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal">
+
+                            <LinearLayout
+                                android:id="@+id/boxComparePlaintext"
+                                android:layout_width="0dp"
+                                android:layout_height="match_parent"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:orientation="vertical"
+                                android:padding="9dp">
+
+                                <TextView
+                                    android:id="@+id/tvComparePlainTitle"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="📄 Bản rõ (Không mã hóa)"
+                                    android:textColor="@color/slate_600"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/tvComparePlainValue"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:ellipsize="end"
+                                    android:fontFamily="monospace"
+                                    android:maxLines="2"
+                                    android:text="✓ 0 byte (Sạch)"
+                                    android:textColor="@color/emerald_600"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/boxCompareEncrypted"
+                                android:layout_width="0dp"
+                                android:layout_height="match_parent"
+                                android:layout_marginStart="6dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_status_green"
+                                android:orientation="vertical"
+                                android:padding="9dp">
+
+                                <TextView
+                                    android:id="@+id/tvCompareEncTitle"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="🔒 Mã hóa AES-GCM"
+                                    android:textColor="@color/emerald_700"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/tvCompareEncValue"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:ellipsize="end"
+                                    android:fontFamily="monospace"
+                                    android:maxLines="2"
+                                    android:text="Đã mã hóa"
+                                    android:textColor="@color/slate_700"
+                                    android:textSize="10sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
                 </LinearLayout>
 
-                <!-- Image feature (§4) -->
+                <!-- Tab 4 (§4): Student Portrait Studio + 8 KB Chip Capacity Bar -->
                 <LinearLayout
                     android:id="@+id/panelImage"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
                     android:orientation="vertical"
                     android:visibility="gone">
 
                     <ImageView
                         android:id="@+id/demoImagePreview"
                         android:layout_width="match_parent"
-                        android:layout_height="140dp"
+                        android:layout_height="156dp"
                         android:background="@drawable/bg_soft_panel"
                         android:contentDescription="Ảnh chân dung sẽ lưu lên thẻ"
                         android:scaleType="centerCrop"
@@ -252,8 +664,36 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:text="Ảnh mẫu — chưa chọn ảnh"
+                        android:text="Ảnh mẫu — 1200×1200 px"
                         android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/bg_soft_panel"
+                        android:orientation="vertical"
+                        android:padding="10dp">
+
+                        <TextView
+                            android:id="@+id/tvCardQuota8Kb"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Bộ nhớ ảnh trên thẻ chip: Giới hạn tối đa 8 KB"
+                            android:textColor="@color/slate_700"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+
+                        <ProgressBar
+                            android:id="@+id/pbCardQuota8Kb"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="6dp"
+                            android:layout_marginTop="6dp"
+                            android:max="100"
+                            android:progress="0"
+                            android:progressDrawable="@drawable/progress_metric_blue" />
+                    </LinearLayout>
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnPickImage"
@@ -265,19 +705,154 @@
                         app:icon="@drawable/ic_image" />
                 </LinearLayout>
 
-                <!-- PIN feature (§5) -->
+                <!-- Tab 5 (§5): Security Center & PIN Verification -->
                 <LinearLayout
                     android:id="@+id/panelPin"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
                     android:orientation="vertical"
                     android:visibility="gone">
+
+                    <!-- Visual Security Center: 5-segment MASVS meter + 6-cell RAM PIN visualizer -->
+                    <LinearLayout
+                        android:id="@+id/panelSecurityShield"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_status_green"
+                        android:orientation="vertical"
+                        android:padding="12dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tvSecurityShieldTitle"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Bảo vệ bộ nhớ PIN &amp; Thiết bị"
+                                android:textColor="@color/emerald_600"
+                                android:textSize="12sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvSecurityShieldScore"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/bg_pill_green"
+                                android:paddingStart="8dp"
+                                android:paddingTop="3dp"
+                                android:paddingEnd="8dp"
+                                android:paddingBottom="3dp"
+                                android:text="MASVS 5/5"
+                                android:textColor="@color/emerald_600"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <!-- 5-segment visual MASVS bar -->
+                        <LinearLayout
+                            android:id="@+id/llMasvsSegments"
+                            android:layout_width="match_parent"
+                            android:layout_height="6dp"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal" />
+
+                        <!-- 6-cell visual Heap RAM PIN memory inspector -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Ô NHỚ RAM CHỨA PIN"
+                                android:textColor="@color/slate_600"
+                                android:textSize="9sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvPinRamExposureBadge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="0% phơi nhiễm"
+                                android:textColor="@color/emerald_600"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/llPinRamCells"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:orientation="horizontal" />
+
+                        <!-- 3 visual status pills: RAM PIN | RSA-1024 | Root/Debug -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tvChipPinType"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_pill_green"
+                                android:gravity="center"
+                                android:paddingTop="4dp"
+                                android:paddingBottom="4dp"
+                                android:text="✓ char[]"
+                                android:textColor="@color/emerald_600"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvChipRsaState"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="6dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_pill_green"
+                                android:gravity="center"
+                                android:paddingTop="4dp"
+                                android:paddingBottom="4dp"
+                                android:text="✓ RSA-1024"
+                                android:textColor="@color/emerald_600"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvChipEnvState"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="6dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_pill_green"
+                                android:gravity="center"
+                                android:paddingTop="4dp"
+                                android:paddingBottom="4dp"
+                                android:text="✓ An toàn"
+                                android:textColor="@color/emerald_600"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Nhập PIN để mô phỏng đăng nhập"
+                        android:layout_marginTop="10dp"
+                        android:text="Nhập mã PIN thẻ sinh viên (4–8 chữ số)"
                         android:textAppearance="@style/TextAppearance.SmartID.Micro" />
 
                     <EditText
@@ -296,6 +871,7 @@
                         android:textSize="16sp" />
                 </LinearLayout>
 
+                <!-- Primary User Action Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnDemoAction"
                     style="@style/Widget.SmartID.Button.Primary"
@@ -313,23 +889,28 @@
                     android:indeterminate="true"
                     android:visibility="gone" />
 
-                <TextView
-                    android:id="@+id/tvDemoStatus"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSimulateWrongPin3x"
+                    style="@style/Widget.SmartID.Button.Outline"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:lineSpacingExtra="3dp"
-                    android:text=""
-                    android:textAppearance="@style/TextAppearance.SmartID.Micro"
-                    android:visibility="gone" />
+                    android:minHeight="42dp"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
+                    android:text="🔐 Nhập PIN mở khóa (Sai 3 lần tự hủy L1 + L2)"
+                    android:textColor="@color/red_600"
+                    android:visibility="gone"
+                    app:strokeColor="#FCA5A5" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnResetCache"
                     style="@style/Widget.SmartID.Button.Pill"
                     android:layout_width="wrap_content"
-                    android:layout_height="38dp"
+                    android:layout_height="36dp"
                     android:layout_gravity="end"
-                    android:text="Xóa cache (mô phỏng lần đầu)"
+                    android:layout_marginTop="6dp"
+                    android:text="Xóa bộ nhớ đệm"
                     android:textSize="11sp"
                     android:visibility="gone" />
 
@@ -339,81 +920,451 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:minHeight="44dp"
-                    android:paddingTop="8dp"
-                    android:paddingBottom="8dp"
+                    android:minHeight="42dp"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
                     android:text="Kiểm chứng dữ liệu &amp; bảo mật"
                     android:visibility="gone"
                     app:icon="@drawable/ic_lock" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Realtime telemetry chart for every topic (§1–§5) -->
+        <!-- =============================================================== -->
+        <!-- COMPACT DEMO MODE STRIP (UNOBTRUSIVE)                           -->
+        <!-- =============================================================== -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardDemoMode"
             style="@style/Widget.SmartID.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            app:cardCornerRadius="20dp">
+            app:cardCornerRadius="18dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="14dp">
-
-                <TextView
-                    android:id="@+id/tvRealtimeChartTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="ĐỒ THỊ REALTIME"
-                    android:textAppearance="@style/TextAppearance.SmartID.Label"
-                    android:textColor="@color/slate_500" />
-
-                <com.example.smartstudentid.ui.widget.UiHeartbeatView
-                    android:id="@+id/demoHeartbeat"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:layout_marginTop="8dp"
-                    android:visibility="gone" />
-
-                <com.example.smartstudentid.ui.widget.RealtimeTopicChartView
-                    android:id="@+id/demoRealtimeChart"
-                    android:layout_width="match_parent"
-                    android:layout_height="172dp"
-                    android:layout_marginTop="8dp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Before / After comparison filled by running each mode -->
-        <com.google.android.material.card.MaterialCardView
-            style="@style/Widget.SmartID.Card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            app:cardCornerRadius="20dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="14dp">
-
-                <TextView
-                    android:id="@+id/tvComparisonTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="SO SÁNH BEFORE / AFTER"
-                    android:textAppearance="@style/TextAppearance.SmartID.Label"
-                    android:textColor="@color/slate_500" />
+                android:padding="12dp">
 
                 <LinearLayout
-                    android:id="@+id/llComparison"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:orientation="vertical" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="CHẾ ĐỘ THỬ NGHIỆM"
+                        android:textAppearance="@style/TextAppearance.SmartID.Label"
+                        android:textColor="@color/slate_500" />
+
+                    <TextView
+                        android:id="@+id/tvModeHint"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="Chưa tối ưu"
+                        android:textColor="@color/red_600"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchDemoMode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnInjectTopicFault"
+                        style="@style/Widget.SmartID.Button.Primary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="40dp"
+                        android:paddingStart="6dp"
+                        android:paddingTop="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingBottom="6dp"
+                        android:text="Chưa tối ưu"
+                        android:textSize="11sp"
+                        app:backgroundTint="@color/red_600" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnApplyTopicFix"
+                        style="@style/Widget.SmartID.Button.Primary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:minHeight="40dp"
+                        android:paddingStart="6dp"
+                        android:paddingTop="6dp"
+                        android:paddingEnd="6dp"
+                        android:paddingBottom="6dp"
+                        android:text="Đã tối ưu"
+                        android:textSize="11sp"
+                        app:backgroundTint="@color/emerald_600" />
+                </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        <!-- =============================================================== -->
+        <!-- LAYER 2: COLLAPSIBLE TECHNICAL INSPECTOR & CHARTS (§1–§5)       -->
+        <!-- =============================================================== -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/btnToggleTechInspector"
+            style="@style/Widget.SmartID.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:clickable="true"
+            android:focusable="true"
+            app:cardCornerRadius="18dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="14dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tvTechHeaderTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🔬 Chi tiết kỹ thuật &amp; Đồ thị"
+                        android:textColor="@color/slate_900"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvTechSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Bấm để xem luồng thực thi, đồ thị &amp; bảng Before/After"
+                        android:textColor="@color/slate_500"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvTechToggleBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_pill_blue"
+                    android:paddingStart="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="4dp"
+                    android:text="Mở xem ▾"
+                    android:textColor="@color/brand_600"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Collapsible Technical Details Container (collapsed by default) -->
+        <LinearLayout
+            android:id="@+id/panelTechInspector"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Active Mechanism Card (hidden across topics; presented verbally by the student) -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardMechanism"
+                style="@style/Widget.SmartID.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:visibility="gone"
+                app:cardCornerRadius="18dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="CƠ CHẾ ĐANG HOẠT ĐỘNG"
+                        android:textAppearance="@style/TextAppearance.SmartID.Label"
+                        android:textColor="@color/slate_500" />
+
+                    <TextView
+                        android:id="@+id/tvMechanismHeadline"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="@color/red_600"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvMechanismBadge1"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_pill_red"
+                            android:paddingStart="8dp"
+                            android:paddingTop="3dp"
+                            android:paddingEnd="8dp"
+                            android:paddingBottom="3dp"
+                            android:textColor="@color/red_600"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvMechanismBadge2"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:background="@drawable/bg_pill_slate"
+                            android:paddingStart="8dp"
+                            android:paddingTop="3dp"
+                            android:paddingEnd="8dp"
+                            android:paddingBottom="3dp"
+                            android:textColor="@color/slate_700"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/panelMechanismDetail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/bg_status_red"
+                        android:orientation="vertical"
+                        android:padding="10dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="App đang làm gì:"
+                            android:textColor="@color/slate_800"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvMechanismWhat"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:lineSpacingExtra="2dp"
+                            android:textColor="@color/slate_700"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Tác động trực tiếp:"
+                            android:textColor="@color/slate_800"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvMechanismWhy"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:lineSpacingExtra="2dp"
+                            android:textColor="@color/slate_700"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/tvMechanismLiveCounter"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:fontFamily="monospace"
+                            android:textColor="@color/red_600"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:visibility="gone" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Live Execution Trace -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardExecutionTrace"
+                style="@style/Widget.SmartID.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                app:cardCornerRadius="18dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvTraceHeaderTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="NHẬT KÝ THỰC THI (LIVE TRACE)"
+                            android:textAppearance="@style/TextAppearance.SmartID.Label"
+                            android:textColor="@color/slate_500" />
+
+                        <TextView
+                            android:id="@+id/tvToggleTrace"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_pill_slate"
+                            android:paddingStart="8dp"
+                            android:paddingTop="3dp"
+                            android:paddingEnd="8dp"
+                            android:paddingBottom="3dp"
+                            android:text="Thu gọn"
+                            android:textColor="@color/slate_600"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <com.example.smartstudentid.ui.widget.ExecutionWaterfallView
+                        android:id="@+id/executionWaterfall"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone" />
+
+                    <com.example.smartstudentid.ui.widget.ThreadingLaneView
+                        android:id="@+id/threadingLaneView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone" />
+
+                    <com.example.smartstudentid.ui.widget.CacheFlowView
+                        android:id="@+id/cacheFlowView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone" />
+
+                    <com.example.smartstudentid.ui.widget.ImagePipelineView
+                        android:id="@+id/imagePipelineView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone" />
+
+                    <com.example.smartstudentid.ui.widget.SecurityAuditFlowView
+                        android:id="@+id/securityAuditFlowView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tvExecutionTrace"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/bg_trace_console"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="3dp"
+                        android:padding="10dp"
+                        android:text="Chưa chạy — bấm Chưa tối ưu hoặc Đã tối ưu để xem từng bước thực thi."
+                        android:textColor="#CBD5E1"
+                        android:textSize="10sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Realtime telemetry chart -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.SmartID.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                app:cardCornerRadius="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:id="@+id/tvRealtimeChartTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ĐỒ THỊ REALTIME"
+                        android:textAppearance="@style/TextAppearance.SmartID.Label"
+                        android:textColor="@color/slate_500" />
+
+                    <com.example.smartstudentid.ui.widget.RealtimeTopicChartView
+                        android:id="@+id/demoRealtimeChart"
+                        android:layout_width="match_parent"
+                        android:layout_height="172dp"
+                        android:layout_marginTop="8dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Before / After comparison table -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.SmartID.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                app:cardCornerRadius="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:id="@+id/tvComparisonTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="SO SÁNH BEFORE / AFTER"
+                        android:textAppearance="@style/TextAppearance.SmartID.Label"
+                        android:textColor="@color/slate_500" />
+
+                    <LinearLayout
+                        android:id="@+id/llComparison"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:orientation="vertical" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

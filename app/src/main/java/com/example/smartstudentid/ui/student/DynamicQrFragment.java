@@ -131,7 +131,7 @@ public class DynamicQrFragment extends Fragment {
     private void refreshDynamicQrBitmap(long windowEpoch) {
         StudentCardRecord profile = cacheManager.getStudentProfile();
         String studentId = (profile != null && profile.getStudentId() != null)
-                ? profile.getStudentId() : "CT070315";
+                ? profile.getStudentId() : "CT070318";
         String className = (profile != null && profile.getClassName() != null)
                 ? profile.getClassName() : "CT7C";
 
@@ -194,7 +194,7 @@ public class DynamicQrFragment extends Fragment {
             if (!isAdded()) return;
             if (resp.isSuccess()) {
                 StudentCardRecord profile = cacheManager.getStudentProfile();
-                String studentId = "CT070315";
+                String studentId = "CT070318";
                 if (profile != null) {
                     studentId = profile.getStudentId();
                     profile.setAttendanceCount(profile.getAttendanceCount() + 1);
@@ -230,7 +230,7 @@ public class DynamicQrFragment extends Fragment {
     private void renderAttendanceHistory() {
         StudentCardRecord profile = cacheManager.getStudentProfile();
         final String studentId = (profile != null && profile.getStudentId() != null)
-                ? profile.getStudentId() : "CT070315";
+                ? profile.getStudentId() : "CT070318";
 
         ApduThreadPool.getInstance().execute(
                 () -> ApduClient.getInstance().fetchAttendanceByStudentFromServerDb(studentId),

@@ -424,7 +424,7 @@ public class BridgeServer {
                             if (!info.isEmpty() && !info.equals(lastObservedJcideInfo) && info.contains("|")) {
                                 lastObservedJcideInfo = info;
                                 String[] parts = info.split("\\|");
-                                String sid = parts.length > 0 ? parts[0] : "CT070315";
+                                String sid = parts.length > 0 ? parts[0] : "CT070318";
                                 virtualCard.loadSnapshot(sid, info, "123456");
                                 syncActiveCardInfoToDatabase();
                                 tapEventId = System.currentTimeMillis();
@@ -675,8 +675,8 @@ public class BridgeServer {
     }
 
     static class VirtualSmartCardEmulator {
-        String activeCardId = "CT070315";
-        String activeInfoUtf8 = "CT070315|Vũ Ngọc Hải|15/08/2003|CT7C|An toàn Thông tin";
+        String activeCardId = "CT070318";
+        String activeInfoUtf8 = "CT070318|Vũ Ngọc Hải|15/08/2003|CT7C|Công nghệ thông tin";
         String currentPin = "123456";
         final String adminPuk = "88888888";
         int pinTriesRemaining = 3;
@@ -706,7 +706,7 @@ public class BridgeServer {
                 KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
                 kpg.initialize(1024);
                 rsaKeyPair = kpg.generateKeyPair();
-                loadSnapshot("CT070315", "CT070315|Vũ Ngọc Hải|15/08/2003|CT7C|An toàn Thông tin", "123456");
+                loadSnapshot("CT070318", "CT070318|Vũ Ngọc Hải|15/08/2003|CT7C|Công nghệ thông tin", "123456");
             } catch (Exception ignored) {
             }
         }

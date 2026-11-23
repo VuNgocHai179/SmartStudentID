@@ -75,7 +75,8 @@ public class StudentMainActivity extends BaseSecureActivity {
 
         livePerfHud = findViewById(R.id.livePerfHud);
         btnTogglePerfHud = findViewById(R.id.btnTogglePerfHud);
-        updateHudToggleButtonStyle(true);
+        livePerfHud.setVisibility(View.GONE);
+        updateHudToggleButtonStyle(false);
         btnTogglePerfHud.setOnClickListener(v -> {
             boolean show = livePerfHud.getVisibility() != View.VISIBLE;
             livePerfHud.setVisibility(show ? View.VISIBLE : View.GONE);

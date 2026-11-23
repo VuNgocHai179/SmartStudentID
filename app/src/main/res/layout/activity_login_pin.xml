@@ -184,7 +184,7 @@
                                 android:id="@+id/tvCardHolderName"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Vũ Ngọc Hải • CT070315"
+                                android:text="Vũ Ngọc Hải • CT070318"
                                 android:textColor="@color/slate_900"
                                 android:textSize="15sp"
                                 android:textStyle="bold" />
@@ -194,7 +194,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
-                                android:text="An toàn Thông tin"
+                                android:text="Công nghệ thông tin"
                                 android:textColor="@color/slate_500"
                                 android:textSize="12sp" />
                         </LinearLayout>
