@@ -2,9 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Network permissions for communicating with the PC Bridge & Card Management Server -->
+    <!-- Network & Camera permissions for communicating with Bridge Server and scanning lecturer QR -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:allowBackup="false"
@@ -53,6 +55,11 @@
         <activity
             android:name=".ui.student.StudentMainActivity"
             android:exported="false" />
+
+        <activity
+            android:name=".ui.student.QrScannerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
     </application>
 

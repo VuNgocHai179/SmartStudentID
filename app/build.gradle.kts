@@ -56,6 +56,12 @@ dependencies {
     implementation(libs.zxing.core)
     implementation(libs.gson)
 
+    // CameraX for live lecturer QR scanning
+    implementation(libs.camera.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.ext.junit)

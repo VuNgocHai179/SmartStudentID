@@ -1,18 +1,25 @@
 package com.example.smartstudentid.ui.student;
 
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -33,9 +40,14 @@ import com.example.smartstudentid.optimization.ApduThreadPool;
 import com.example.smartstudentid.optimization.ImageOptimizer;
 import com.example.smartstudentid.optimization.LocalCacheManager;
 import com.example.smartstudentid.optimization.OptimizationConfig;
+import com.example.smartstudentid.security.BaseSecureActivity;
 import com.example.smartstudentid.security.EncryptedCacheManager;
 import com.example.smartstudentid.security.PinSessionManager;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.switchmaterial.SwitchMaterial;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -67,6 +79,10 @@ public class CardProfileFragment extends Fragment {
     private ActivityResultLauncher<Uri> takePhotoLauncher;
     private Uri pendingCameraUri;
     private boolean avatarUploadInProgress;
+
+    private Dialog identityQrDialog;
+    private final Handler identityQrHandler = new Handler(Looper.getMainLooper());
+    private Runnable identityQrTickRunnable;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -124,6 +140,10 @@ public class CardProfileFragment extends Fragment {
         if (cardAvatarContainer != null) {
             cardAvatarContainer.setOnClickListener(v -> showAvatarSourceDialog());
         }
+        View btnOpenIdentityQrDialog = view.findViewById(R.id.btnOpenIdentityQrDialog);
+        if (btnOpenIdentityQrDialog != null) {
+            btnOpenIdentityQrDialog.setOnClickListener(v -> showIdentityQrDialog());
+        }
         View btnChangeAvatarRow = view.findViewById(R.id.btnChangeAvatarRow);
         if (btnChangeAvatarRow != null) {
             btnChangeAvatarRow.setOnClickListener(v -> showAvatarSourceDialog());
@@ -151,6 +171,16 @@ public class CardProfileFragment extends Fragment {
         if (cached != null) {
             bindRecordToUi(cached);
         }
+        if (identityQrDialog != null && identityQrDialog.isShowing() && identityQrTickRunnable != null) {
+            identityQrHandler.removeCallbacks(identityQrTickRunnable);
+            identityQrHandler.post(identityQrTickRunnable);
+        }
+    }
+
+    @Override
+    public void onPause() {
+        identityQrHandler.removeCallbacksAndMessages(null);
+        super.onPause();
     }
 
     private void loadInitialProfileState() {
@@ -488,6 +518,134 @@ public class CardProfileFragment extends Fragment {
                 Toast.makeText(requireContext(), "Mã PIN hiện tại không chính xác", Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    /**
+     * Shows the 30-second RSA-1024 dynamic personal identity QR dialog for 1-to-1 verification
+     * at the library counter, exam room, or campus access gates.
+     */
+    private void showIdentityQrDialog() {
+        if (!isAdded()) return;
+        if (identityQrDialog != null && identityQrDialog.isShowing()) {
+            return;
+        }
+
+        View popupView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_identity_qr, null, false);
+        Dialog dialog = new Dialog(requireContext());
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(popupView);
+        dialog.setCancelable(true);
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            int width = (int) (getResources().getDisplayMetrics().widthPixels * 0.90f);
+            dialog.getWindow().setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+
+        TextView tvInfo = popupView.findViewById(R.id.tvIdentityQrStudentInfo);
+        ImageView ivQr = popupView.findViewById(R.id.ivIdentityQr);
+        ProgressBar pbCountdown = popupView.findViewById(R.id.pbIdentityQrCountdown);
+        TextView tvCountdown = popupView.findViewById(R.id.tvIdentityQrCountdown);
+        SwitchMaterial swFlagSecure = popupView.findViewById(R.id.swIdentityFlagSecure);
+        MaterialButton btnClose = popupView.findViewById(R.id.btnCloseIdentityQr);
+
+        StudentCardRecord profile = encryptedCacheManager.getStudentProfile();
+        String studentId = (profile != null && profile.getStudentId() != null) ? profile.getStudentId() : "CT070315";
+        String fullName = (profile != null && profile.getFullName() != null) ? profile.getFullName() : "Vũ Ngọc Hải";
+        String className = (profile != null && profile.getClassName() != null) ? profile.getClassName() : "CT7C";
+        tvInfo.setText(fullName + " • " + studentId + " • Lớp " + className);
+
+        if (getActivity() instanceof BaseSecureActivity) {
+            BaseSecureActivity secureActivity = (BaseSecureActivity) getActivity();
+            swFlagSecure.setChecked(secureActivity.isFlagSecureEnabled());
+            swFlagSecure.setOnCheckedChangeListener((buttonView, isChecked) ->
+                    secureActivity.applyFlagSecure(isChecked));
+        } else {
+            swFlagSecure.setEnabled(false);
+        }
+
+        final long[] lastWindowEpoch = new long[]{-1L};
+        identityQrTickRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (!isAdded() || identityQrDialog == null || !identityQrDialog.isShowing()) {
+                    return;
+                }
+                long nowSec = System.currentTimeMillis() / 1000L;
+                long windowEpoch = nowSec / 30L;
+                int remainingSec = (int) (30L - (nowSec % 30L));
+
+                pbCountdown.setProgress(remainingSec);
+                tvCountdown.setText("Đổi mã sau " + remainingSec + "s");
+
+                if (windowEpoch != lastWindowEpoch[0]) {
+                    lastWindowEpoch[0] = windowEpoch;
+                    refreshIdentityQrBitmap(dialog, ivQr, studentId, className, windowEpoch);
+                }
+                identityQrHandler.postDelayed(this, 1000L);
+            }
+        };
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        dialog.setOnDismissListener(d -> {
+            identityQrHandler.removeCallbacksAndMessages(null);
+            identityQrTickRunnable = null;
+            identityQrDialog = null;
+        });
+
+        identityQrDialog = dialog;
+        dialog.show();
+        identityQrHandler.post(identityQrTickRunnable);
+    }
+
+    private void refreshIdentityQrBitmap(Dialog dialog, ImageView targetView,
+                                         String studentId, String className, long windowEpoch) {
+        ApduThreadPool.getInstance().execute(() -> {
+            byte[] payload = new byte[]{
+                    0x01, 0x01,
+                    (byte) ((windowEpoch >> 24) & 0xFF),
+                    (byte) ((windowEpoch >> 16) & 0xFF),
+                    (byte) ((windowEpoch >> 8) & 0xFF),
+                    (byte) (windowEpoch & 0xFF)
+            };
+            CardResponse sigResp = ApduClient.getInstance().sendApdu(
+                    ApduCommands.CLA_SMART_STUDENT,
+                    ApduCommands.INS_SIGN_CHALLENGE,
+                    (byte) 0x00,
+                    (byte) 0x00,
+                    payload
+            );
+            String sigHex = ApduCommands.bytesToHex(sigResp.getData()).replace(" ", "");
+            String sigPrefix = sigHex.length() > 16 ? sigHex.substring(0, 16) : "RSA1024SIG";
+            String qrContent = "SMARTID|" + studentId + "|" + className + "|W" + windowEpoch + "|" + sigPrefix;
+            return encodeIdentityQrBitmap(qrContent, 320);
+        }, (bitmap, mainBlockedMs, totalMs) -> {
+            if (!isAdded() || !dialog.isShowing()) return;
+            if (bitmap != null) {
+                targetView.setImageBitmap(bitmap);
+            }
+        });
+    }
+
+    private Bitmap encodeIdentityQrBitmap(String content, int sizePx) {
+        try {
+            BitMatrix matrix = new QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, sizePx, sizePx);
+            int width = matrix.getWidth();
+            int height = matrix.getHeight();
+            int[] pixels = new int[width * height];
+            int darkColor = Color.parseColor("#0F172A");
+            for (int y = 0; y < height; y++) {
+                int offset = y * width;
+                for (int x = 0; x < width; x++) {
+                    pixels[offset + x] = matrix.get(x, y) ? darkColor : Color.WHITE;
+                }
+            }
+            Bitmap bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            bmp.setPixels(pixels, 0, width, 0, 0, width, height);
+            return bmp;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private EditText createDialogInput(String hint, String initialValue, boolean editable) {

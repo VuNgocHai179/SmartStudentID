@@ -8,6 +8,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * ============================================================================
@@ -138,18 +140,61 @@ public class DatabaseManager {
                         + "FOREIGN KEY (student_id) REFERENCES cards(student_id) ON DELETE CASCADE"
                         + ");");
 
+                // 7. Table: courses (Semester courses catalog)
+                stmt.execute("CREATE TABLE IF NOT EXISTS courses ("
+                        + "course_code VARCHAR(30) PRIMARY KEY, "
+                        + "course_name VARCHAR(150) NOT NULL, "
+                        + "lecturer_name VARCHAR(100) NOT NULL, "
+                        + "room VARCHAR(50) NOT NULL, "
+                        + "semester VARCHAR(30) DEFAULT 'HK1 2026-2027', "
+                        + "schedule_text VARCHAR(100) DEFAULT '', "
+                        + "total_sessions INTEGER DEFAULT 15"
+                        + ");");
+
+                // 8. Table: enrollments (Student semester course registrations)
+                stmt.execute("CREATE TABLE IF NOT EXISTS enrollments ("
+                        + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        + "student_id VARCHAR(20) NOT NULL, "
+                        + "course_code VARCHAR(30) NOT NULL, "
+                        + "semester VARCHAR(30) DEFAULT 'HK1 2026-2027', "
+                        + "UNIQUE(student_id, course_code, semester), "
+                        + "FOREIGN KEY (student_id) REFERENCES cards(student_id) ON DELETE CASCADE, "
+                        + "FOREIGN KEY (course_code) REFERENCES courses(course_code) ON DELETE CASCADE"
+                        + ");");
+
+                // 9. Table: attendance_sessions (Lecturer-opened class check-in sessions)
+                stmt.execute("CREATE TABLE IF NOT EXISTS attendance_sessions ("
+                        + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        + "course_code VARCHAR(30) NOT NULL, "
+                        + "course_name VARCHAR(150) NOT NULL, "
+                        + "room VARCHAR(50) DEFAULT '', "
+                        + "lecturer_name VARCHAR(100) DEFAULT '', "
+                        + "opened_at INTEGER NOT NULL, "
+                        + "expires_at INTEGER NOT NULL, "
+                        + "rotation_seconds INTEGER DEFAULT 20, "
+                        + "session_secret VARCHAR(64) NOT NULL, "
+                        + "status VARCHAR(16) DEFAULT 'OPEN', "
+                        + "FOREIGN KEY (course_code) REFERENCES courses(course_code) ON DELETE CASCADE"
+                        + ");");
+
                 // Indexes for fast relational lookup
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance_logs(student_id);");
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_books_student ON book_loans(student_id);");
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_audit_student ON card_audit_logs(student_id);");
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_accounts(username);");
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_wallet_student ON wallet_transactions(student_id);");
+                stmt.execute("CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollments(student_id);");
+                stmt.execute("CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_code);");
+                stmt.execute("CREATE INDEX IF NOT EXISTS idx_sessions_course_status ON attendance_sessions(course_code, status);");
             }
 
             ensureAvatarColumnExists(conn);
             ensureWalletColumnExists(conn);
             ensureWalletTxColumnsExists(conn);
+            ensureAttendanceSessionColumnsExists(conn);
+            ensureCourseTotalSessionsColumnExists(conn);
             seedDefaultDataIfEmpty(conn);
+            seedCoursesAndEnrollmentsIfEmpty(conn);
             conn.commit();
             System.out.println("[SQLite DB] Initialized relational database at: " + DB_FILE.getAbsolutePath());
         } catch (Exception e) {
@@ -236,6 +281,52 @@ public class DatabaseManager {
                     + "tx_ref = 'FT' || printf('%010d', ABS((timestamp_seconds * 100 + (amount / 1000)) % 10000000000)), "
                     + "counterparty = CASE WHEN tx_type = 'CREDIT' THEN 'Vietcombank • *8829 (Napas 247)' ELSE 'POS Dịch vụ Smart Campus' END "
                     + "WHERE tx_ref IS NULL OR tx_ref = ''");
+        }
+    }
+
+    private static void ensureAttendanceSessionColumnsExists(Connection conn) throws SQLException {
+        boolean hasSessionId = false;
+        boolean hasCheckinMethod = false;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(attendance_logs)")) {
+            while (rs.next()) {
+                String col = rs.getString("name");
+                if ("session_id".equalsIgnoreCase(col)) hasSessionId = true;
+                else if ("checkin_method".equalsIgnoreCase(col)) hasCheckinMethod = true;
+            }
+        }
+        try (Statement stmt = conn.createStatement()) {
+            if (!hasSessionId) {
+                stmt.execute("ALTER TABLE attendance_logs ADD COLUMN session_id INTEGER DEFAULT 0");
+                System.out.println("[SQLite DB] Migrated `attendance_logs`: added column `session_id`.");
+            }
+            if (!hasCheckinMethod) {
+                stmt.execute("ALTER TABLE attendance_logs ADD COLUMN checkin_method VARCHAR(20) DEFAULT 'CARD_READER'");
+                System.out.println("[SQLite DB] Migrated `attendance_logs`: added column `checkin_method`.");
+            }
+            stmt.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_unique_session_student "
+                    + "ON attendance_logs(session_id, student_id) WHERE session_id > 0");
+        }
+    }
+
+    private static void ensureCourseTotalSessionsColumnExists(Connection conn) throws SQLException {
+        boolean hasTotalSessions = false;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(courses)")) {
+            while (rs.next()) {
+                if ("total_sessions".equalsIgnoreCase(rs.getString("name"))) {
+                    hasTotalSessions = true;
+                    break;
+                }
+            }
+        }
+        if (!hasTotalSessions) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("ALTER TABLE courses ADD COLUMN total_sessions INTEGER DEFAULT 15");
+                stmt.executeUpdate("UPDATE courses SET total_sessions = 15 WHERE total_sessions IS NULL OR total_sessions <= 0");
+                stmt.executeUpdate("UPDATE courses SET total_sessions = 12 WHERE course_code = 'AT19N03' AND total_sessions = 15");
+                System.out.println("[SQLite DB] Migrated `courses`: added column `total_sessions`.");
+            }
         }
     }
 
@@ -400,6 +491,70 @@ public class DatabaseManager {
         }
     }
 
+    private static void seedCoursesAndEnrollmentsIfEmpty(Connection conn) throws SQLException {
+        int courseCount = 0;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM courses")) {
+            if (rs.next()) {
+                courseCount = rs.getInt(1);
+            }
+        }
+        if (courseCount == 0) {
+            String insertCourseSql = "INSERT INTO courses (course_code, course_name, lecturer_name, room, semester, schedule_text, total_sessions) "
+                    + "VALUES (?, ?, ?, ?, 'HK1 2026-2027', ?, ?)";
+            try (PreparedStatement ps = conn.prepareStatement(insertCourseSql)) {
+                insertSeedCourse(ps, "AT19N01", "Phát triển PM Thẻ thông minh", "TS. Nguyễn Văn An", "Phòng Lab 302-TA1", "Thứ 3, Tiết 1-3 (07:00 - 09:30)", 15);
+                insertSeedCourse(ps, "AT19N02", "An toàn Hệ điều hành Di động", "ThS. Lê Thị Bình", "Phòng Lab 405-TA1", "Thứ 4, Tiết 4-6 (09:40 - 12:10)", 15);
+                insertSeedCourse(ps, "AT19N03", "Tối ưu Phần mềm Di động", "TS. Phạm Minh Cường", "Phòng Máy 201-TA2", "Thứ 5, Tiết 7-9 (12:30 - 15:00)", 12);
+                insertSeedCourse(ps, "CN19N04", "Kiến trúc Hướng Dịch vụ", "TS. Trần Quang Dũng", "Giảng đường 102-TA2", "Thứ 6, Tiết 1-3 (07:00 - 09:30)", 15);
+            }
+        }
+
+        int enrollCount = 0;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM enrollments")) {
+            if (rs.next()) {
+                enrollCount = rs.getInt(1);
+            }
+        }
+        if (enrollCount == 0) {
+            String insertEnrollSql = "INSERT OR IGNORE INTO enrollments (student_id, course_code, semester) "
+                    + "SELECT ?, ?, 'HK1 2026-2027' "
+                    + "WHERE EXISTS (SELECT 1 FROM cards WHERE student_id = ?) "
+                    + "AND EXISTS (SELECT 1 FROM courses WHERE course_code = ?)";
+            try (PreparedStatement ps = conn.prepareStatement(insertEnrollSql)) {
+                String[][] pairs = {
+                        {"CT070315", "AT19N01"},
+                        {"CT070315", "AT19N02"},
+                        {"CT070315", "AT19N03"},
+                        {"CT070301", "AT19N01"},
+                        {"CT070301", "AT19N02"},
+                        {"CT070301", "AT19N03"},
+                        {"CT070322", "AT19N01"},
+                        {"CT070322", "CN19N04"}
+                };
+                for (String[] pair : pairs) {
+                    ps.setString(1, pair[0]);
+                    ps.setString(2, pair[1]);
+                    ps.setString(3, pair[0]);
+                    ps.setString(4, pair[1]);
+                    ps.executeUpdate();
+                }
+            }
+        }
+    }
+
+    private static void insertSeedCourse(PreparedStatement ps, String code, String name, String lecturer,
+                                         String room, String schedule, int totalSessions) throws SQLException {
+        ps.setString(1, code);
+        ps.setString(2, name);
+        ps.setString(3, lecturer);
+        ps.setString(4, room);
+        ps.setString(5, schedule);
+        ps.setInt(6, totalSessions);
+        ps.executeUpdate();
+    }
+
     private static void insertSeedCard(PreparedStatement ps, String id, String name, String dob,
                                        String cls, String dept, String pin, int locked,
                                        int score, int attCount, int labOk,
@@ -519,6 +674,31 @@ public class DatabaseManager {
 
             insertAuditLogInternal(conn, studentId.trim(), "ISSUE_OR_SYNC_CARD", 0x0020,
                     "Phát hành / cập nhật hồ sơ thẻ sinh viên: " + fullName, "");
+
+            int existingEnrollments = 0;
+            try (PreparedStatement eps = conn.prepareStatement("SELECT COUNT(*) FROM enrollments WHERE student_id = ?")) {
+                eps.setString(1, studentId.trim());
+                try (ResultSet rs = eps.executeQuery()) {
+                    if (rs.next()) existingEnrollments = rs.getInt(1);
+                }
+            }
+            if (existingEnrollments == 0) {
+                boolean isSecurityDept = department != null && department.toLowerCase(java.util.Locale.ROOT).contains("an toàn");
+                String[] defaultCourses = isSecurityDept
+                        ? new String[]{"AT19N01", "AT19N02", "AT19N03"}
+                        : new String[]{"AT19N01", "CN19N04"};
+                String enrollSql = "INSERT OR IGNORE INTO enrollments (student_id, course_code, semester) "
+                        + "SELECT ?, ?, 'HK1 2026-2027' WHERE EXISTS (SELECT 1 FROM courses WHERE course_code = ?)";
+                try (PreparedStatement eps = conn.prepareStatement(enrollSql)) {
+                    for (String cCode : defaultCourses) {
+                        eps.setString(1, studentId.trim());
+                        eps.setString(2, cCode);
+                        eps.setString(3, cCode);
+                        eps.executeUpdate();
+                    }
+                }
+            }
+
             conn.commit();
             return true;
         } catch (Exception e) {
@@ -651,6 +831,10 @@ public class DatabaseManager {
                     ps.setString(1, studentId.trim());
                     ps.executeUpdate();
                 }
+                try (PreparedStatement ps = conn.prepareStatement("DELETE FROM enrollments WHERE student_id = ?")) {
+                    ps.setString(1, studentId.trim());
+                    ps.executeUpdate();
+                }
                 try (PreparedStatement ps = conn.prepareStatement("UPDATE book_loans SET student_id = NULL, borrowed = 0 WHERE student_id = ?")) {
                     ps.setString(1, studentId.trim());
                     ps.executeUpdate();
@@ -685,7 +869,9 @@ public class DatabaseManager {
         StringBuilder sb = new StringBuilder("[");
         boolean hasFilter = studentIdFilter != null && !studentIdFilter.trim().isEmpty();
         String sql = "SELECT student_id, course_code, course_name, timestamp_seconds, "
-                + "rsa_signature_hex, verified_by_server "
+                + "rsa_signature_hex, verified_by_server, "
+                + "COALESCE(session_id, 0) AS session_id, "
+                + "COALESCE(checkin_method, 'CARD_READER') AS checkin_method "
                 + "FROM attendance_logs "
                 + (hasFilter ? "WHERE student_id = ? " : "")
                 + "ORDER BY timestamp_seconds DESC, id DESC";
@@ -705,7 +891,9 @@ public class DatabaseManager {
                             .append("\"courseName\":\"").append(esc(rs.getString("course_name"))).append("\",")
                             .append("\"timestampSeconds\":").append(rs.getLong("timestamp_seconds")).append(",")
                             .append("\"rsaSignatureHex\":\"").append(esc(rs.getString("rsa_signature_hex"))).append("\",")
-                            .append("\"verifiedByServer\":").append(rs.getInt("verified_by_server") != 0)
+                            .append("\"verifiedByServer\":").append(rs.getInt("verified_by_server") != 0).append(",")
+                            .append("\"sessionId\":").append(rs.getInt("session_id")).append(",")
+                            .append("\"checkinMethod\":\"").append(esc(rs.getString("checkin_method"))).append("\"")
                             .append("}");
                 }
             }
@@ -1222,6 +1410,558 @@ public class DatabaseManager {
             ps.setString(5, sigHex != null ? sigHex : "");
             ps.setLong(6, System.currentTimeMillis() / 1000L);
             ps.executeUpdate();
+        }
+    }
+
+    // =========================================================================
+    // REAL-WORLD ATTENDANCE SESSIONS, COURSES, ENROLLMENTS & RSA KEY LOOKUP
+    // =========================================================================
+
+    public static class AttendanceSession {
+        public int id;
+        public String courseCode;
+        public String courseName;
+        public String room;
+        public String lecturerName;
+        public long openedAt;
+        public long expiresAt;
+        public int rotationSeconds;
+        public String sessionSecret;
+        public String status;
+    }
+
+    public static class CardPublicKeyRecord {
+        public String modulusHex;
+        public String exponentHex;
+
+        public CardPublicKeyRecord(String modulusHex, String exponentHex) {
+            this.modulusHex = modulusHex != null ? modulusHex : "";
+            this.exponentHex = exponentHex != null ? exponentHex : "";
+        }
+    }
+
+    public static class SessionCheckInInfo {
+        public long timestampSeconds;
+        public String checkinMethod;
+
+        public SessionCheckInInfo(long timestampSeconds, String checkinMethod) {
+            this.timestampSeconds = timestampSeconds;
+            this.checkinMethod = checkinMethod != null ? checkinMethod : "CARD_READER";
+        }
+    }
+
+    public static class CheckInCommitResult {
+        public boolean saved;
+        public boolean duplicate;
+        public int attendanceCount;
+        public int trainingScore;
+        public String errorMessage;
+
+        public CheckInCommitResult(boolean saved, boolean duplicate, int attendanceCount,
+                                   int trainingScore, String errorMessage) {
+            this.saved = saved;
+            this.duplicate = duplicate;
+            this.attendanceCount = attendanceCount;
+            this.trainingScore = trainingScore;
+            this.errorMessage = errorMessage != null ? errorMessage : "";
+        }
+    }
+
+    public static synchronized CardPublicKeyRecord getCardPublicKey(String studentId) {
+        if (studentId == null || studentId.trim().isEmpty()) return null;
+        String sql = "SELECT public_key_modulus_hex, public_key_exponent_hex FROM cards WHERE student_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return new CardPublicKeyRecord(
+                            rs.getString("public_key_modulus_hex"),
+                            rs.getString("public_key_exponent_hex")
+                    );
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error reading card public key: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public static synchronized boolean updateCardPublicKey(String studentId, String modulusHex, String exponentHex) {
+        if (studentId == null || studentId.trim().isEmpty()
+                || modulusHex == null || modulusHex.trim().isEmpty()
+                || exponentHex == null || exponentHex.trim().isEmpty()) {
+            return false;
+        }
+        String sql = "UPDATE cards SET public_key_modulus_hex = ?, public_key_exponent_hex = ?, "
+                + "updated_at = CURRENT_TIMESTAMP WHERE student_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, modulusHex.trim());
+            ps.setString(2, exponentHex.trim());
+            ps.setString(3, studentId.trim());
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error updating card public key: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public static synchronized String getAllCoursesJson() {
+        StringBuilder sb = new StringBuilder("[");
+        String sql = "SELECT c.course_code, c.course_name, c.lecturer_name, c.room, c.semester, c.schedule_text, "
+                + "COALESCE(c.total_sessions, 15) AS total_sessions, "
+                + "(SELECT COUNT(*) FROM enrollments e WHERE e.course_code = c.course_code) AS enrolled_count "
+                + "FROM courses c ORDER BY c.course_code ASC";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            boolean first = true;
+            while (rs.next()) {
+                if (!first) sb.append(",");
+                first = false;
+                sb.append("{")
+                        .append("\"courseCode\":\"").append(esc(rs.getString("course_code"))).append("\",")
+                        .append("\"courseName\":\"").append(esc(rs.getString("course_name"))).append("\",")
+                        .append("\"lecturerName\":\"").append(esc(rs.getString("lecturer_name"))).append("\",")
+                        .append("\"room\":\"").append(esc(rs.getString("room"))).append("\",")
+                        .append("\"semester\":\"").append(esc(rs.getString("semester"))).append("\",")
+                        .append("\"scheduleText\":\"").append(esc(rs.getString("schedule_text"))).append("\",")
+                        .append("\"totalSessions\":").append(rs.getInt("total_sessions")).append(",")
+                        .append("\"enrolledCount\":").append(rs.getInt("enrolled_count"))
+                        .append("}");
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error querying courses: " + e.getMessage());
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public static synchronized String getEnrolledCoursesJson(String studentId) {
+        StringBuilder sb = new StringBuilder("[");
+        if (studentId == null || studentId.trim().isEmpty()) {
+            sb.append("]");
+            return sb.toString();
+        }
+        String sql = "SELECT c.course_code, c.course_name, c.lecturer_name, c.room, c.semester, c.schedule_text, "
+                + "COALESCE(c.total_sessions, 15) AS total_sessions, "
+                + "(SELECT COUNT(*) FROM attendance_logs a "
+                + " WHERE a.student_id = e.student_id AND a.course_code = c.course_code) AS attended_sessions, "
+                + "(SELECT COALESCE(MAX(a.timestamp_seconds), 0) FROM attendance_logs a "
+                + " WHERE a.student_id = e.student_id AND a.course_code = c.course_code) AS last_attended_at "
+                + "FROM enrollments e "
+                + "JOIN courses c ON c.course_code = e.course_code "
+                + "WHERE e.student_id = ? "
+                + "ORDER BY c.course_code ASC";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) sb.append(",");
+                    first = false;
+                    sb.append("{")
+                            .append("\"courseCode\":\"").append(esc(rs.getString("course_code"))).append("\",")
+                            .append("\"courseName\":\"").append(esc(rs.getString("course_name"))).append("\",")
+                            .append("\"lecturerName\":\"").append(esc(rs.getString("lecturer_name"))).append("\",")
+                            .append("\"room\":\"").append(esc(rs.getString("room"))).append("\",")
+                            .append("\"semester\":\"").append(esc(rs.getString("semester"))).append("\",")
+                            .append("\"scheduleText\":\"").append(esc(rs.getString("schedule_text"))).append("\",")
+                            .append("\"totalSessions\":").append(rs.getInt("total_sessions")).append(",")
+                            .append("\"attendedSessions\":").append(rs.getInt("attended_sessions")).append(",")
+                            .append("\"lastAttendedAt\":").append(rs.getLong("last_attended_at"))
+                            .append("}");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error querying enrolled courses: " + e.getMessage());
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public static synchronized boolean isStudentEnrolled(String studentId, String courseCode) {
+        if (studentId == null || studentId.trim().isEmpty()
+                || courseCode == null || courseCode.trim().isEmpty()) {
+            return false;
+        }
+        String sql = "SELECT 1 FROM enrollments WHERE student_id = ? AND course_code = ? LIMIT 1";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            ps.setString(2, courseCode.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error checking enrollment: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public static synchronized void closeExpiredSessions(long nowSec) {
+        String sql = "UPDATE attendance_sessions SET status = 'CLOSED' WHERE status = 'OPEN' AND expires_at <= ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, nowSec);
+            ps.executeUpdate();
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error closing expired sessions: " + e.getMessage());
+        }
+    }
+
+    public static synchronized AttendanceSession openAttendanceSession(String courseCode, int durationMinutes, int rotationSeconds) {
+        if (courseCode == null || courseCode.trim().isEmpty()) return null;
+        String code = courseCode.trim();
+        int safeDuration = Math.max(1, Math.min(180, durationMinutes));
+        int safeRotation = Math.max(10, Math.min(60, rotationSeconds));
+        long nowSec = System.currentTimeMillis() / 1000L;
+        long expiresAt = nowSec + safeDuration * 60L;
+
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+
+            String courseName = "";
+            String room = "";
+            String lecturerName = "";
+            String findCourseSql = "SELECT course_name, room, lecturer_name FROM courses WHERE course_code = ?";
+            try (PreparedStatement ps = conn.prepareStatement(findCourseSql)) {
+                ps.setString(1, code);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        conn.rollback();
+                        return null;
+                    }
+                    courseName = rs.getString("course_name");
+                    room = rs.getString("room");
+                    lecturerName = rs.getString("lecturer_name");
+                }
+            }
+
+            try (PreparedStatement closeOld = conn.prepareStatement(
+                    "UPDATE attendance_sessions SET status = 'CLOSED' WHERE course_code = ? AND status = 'OPEN'")) {
+                closeOld.setString(1, code);
+                closeOld.executeUpdate();
+            }
+
+            byte[] secretBytes = new byte[32];
+            new SecureRandom().nextBytes(secretBytes);
+            StringBuilder secretHex = new StringBuilder(64);
+            for (byte b : secretBytes) {
+                secretHex.append(String.format("%02x", b));
+            }
+
+            String insertSql = "INSERT INTO attendance_sessions "
+                    + "(course_code, course_name, room, lecturer_name, opened_at, expires_at, rotation_seconds, session_secret, status) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')";
+            int newId = 0;
+            try (PreparedStatement ins = conn.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)) {
+                ins.setString(1, code);
+                ins.setString(2, courseName);
+                ins.setString(3, room);
+                ins.setString(4, lecturerName);
+                ins.setLong(5, nowSec);
+                ins.setLong(6, expiresAt);
+                ins.setInt(7, safeRotation);
+                ins.setString(8, secretHex.toString());
+                ins.executeUpdate();
+                try (ResultSet gk = ins.getGeneratedKeys()) {
+                    if (gk.next()) newId = gk.getInt(1);
+                }
+            }
+            if (newId <= 0) {
+                try (Statement st = conn.createStatement();
+                     ResultSet rs = st.executeQuery("SELECT last_insert_rowid()")) {
+                    if (rs.next()) newId = rs.getInt(1);
+                }
+            }
+
+            conn.commit();
+
+            AttendanceSession session = new AttendanceSession();
+            session.id = newId;
+            session.courseCode = code;
+            session.courseName = courseName;
+            session.room = room;
+            session.lecturerName = lecturerName;
+            session.openedAt = nowSec;
+            session.expiresAt = expiresAt;
+            session.rotationSeconds = safeRotation;
+            session.sessionSecret = secretHex.toString();
+            session.status = "OPEN";
+            return session;
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error opening attendance session: " + e.getMessage());
+            return null;
+        }
+    }
+
+    public static synchronized boolean closeAttendanceSession(int sessionId) {
+        if (sessionId <= 0) return false;
+        String sql = "UPDATE attendance_sessions SET status = 'CLOSED' WHERE id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, sessionId);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error closing attendance session: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static AttendanceSession mapSessionRow(ResultSet rs) throws SQLException {
+        AttendanceSession s = new AttendanceSession();
+        s.id = rs.getInt("id");
+        s.courseCode = rs.getString("course_code");
+        s.courseName = rs.getString("course_name");
+        s.room = rs.getString("room");
+        s.lecturerName = rs.getString("lecturer_name");
+        s.openedAt = rs.getLong("opened_at");
+        s.expiresAt = rs.getLong("expires_at");
+        s.rotationSeconds = rs.getInt("rotation_seconds");
+        s.sessionSecret = rs.getString("session_secret");
+        s.status = rs.getString("status");
+        return s;
+    }
+
+    public static synchronized AttendanceSession getAttendanceSessionById(int sessionId) {
+        if (sessionId <= 0) return null;
+        long nowSec = System.currentTimeMillis() / 1000L;
+        closeExpiredSessions(nowSec);
+        String sql = "SELECT id, course_code, course_name, room, lecturer_name, opened_at, expires_at, "
+                + "rotation_seconds, session_secret, status FROM attendance_sessions WHERE id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, sessionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapSessionRow(rs);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error reading attendance session: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public static synchronized List<AttendanceSession> getAllAttendanceSessions() {
+        long nowSec = System.currentTimeMillis() / 1000L;
+        closeExpiredSessions(nowSec);
+        List<AttendanceSession> list = new ArrayList<>();
+        String sql = "SELECT id, course_code, course_name, room, lecturer_name, opened_at, expires_at, "
+                + "rotation_seconds, session_secret, status FROM attendance_sessions ORDER BY id DESC LIMIT 20";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                list.add(mapSessionRow(rs));
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error listing attendance sessions: " + e.getMessage());
+        }
+        return list;
+    }
+
+    public static synchronized List<AttendanceSession> getActiveSessionsForStudent(String studentId) {
+        long nowSec = System.currentTimeMillis() / 1000L;
+        closeExpiredSessions(nowSec);
+        List<AttendanceSession> list = new ArrayList<>();
+        if (studentId == null || studentId.trim().isEmpty()) return list;
+        String sql = "SELECT s.id, s.course_code, s.course_name, s.room, s.lecturer_name, "
+                + "s.opened_at, s.expires_at, s.rotation_seconds, s.session_secret, s.status "
+                + "FROM attendance_sessions s "
+                + "JOIN enrollments e ON e.course_code = s.course_code "
+                + "WHERE e.student_id = ? AND s.status = 'OPEN' AND s.expires_at > ? "
+                + "ORDER BY s.id DESC";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, studentId.trim());
+            ps.setLong(2, nowSec);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapSessionRow(rs));
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error querying active sessions for student: " + e.getMessage());
+        }
+        return list;
+    }
+
+    public static synchronized boolean hasStudentCheckedIn(int sessionId, String studentId) {
+        return getStudentSessionCheckInInfo(sessionId, studentId) != null;
+    }
+
+    public static synchronized SessionCheckInInfo getStudentSessionCheckInInfo(int sessionId, String studentId) {
+        if (sessionId <= 0 || studentId == null || studentId.trim().isEmpty()) return null;
+        String sql = "SELECT timestamp_seconds, COALESCE(checkin_method, 'CARD_READER') AS checkin_method "
+                + "FROM attendance_logs WHERE session_id = ? AND student_id = ? LIMIT 1";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, sessionId);
+            ps.setString(2, studentId.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return new SessionCheckInInfo(rs.getLong("timestamp_seconds"), rs.getString("checkin_method"));
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error checking session check-in: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public static synchronized int countCheckedInForSession(int sessionId) {
+        if (sessionId <= 0) return 0;
+        String sql = "SELECT COUNT(*) FROM attendance_logs WHERE session_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, sessionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error counting checked-in students: " + e.getMessage());
+        }
+        return 0;
+    }
+
+    public static synchronized int countEnrolledForCourse(String courseCode) {
+        if (courseCode == null || courseCode.trim().isEmpty()) return 0;
+        String sql = "SELECT COUNT(*) FROM enrollments WHERE course_code = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, courseCode.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error counting enrolled students: " + e.getMessage());
+        }
+        return 0;
+    }
+
+    public static synchronized String getSessionRosterJson(int sessionId) {
+        AttendanceSession session = getAttendanceSessionById(sessionId);
+        if (session == null) {
+            return "[]";
+        }
+        StringBuilder sb = new StringBuilder("[");
+        String sql = "SELECT e.student_id, c.full_name, c.class_name, c.department, "
+                + "a.timestamp_seconds, COALESCE(a.checkin_method, '') AS checkin_method, "
+                + "COALESCE(a.verified_by_server, 0) AS verified_by_server "
+                + "FROM enrollments e "
+                + "JOIN cards c ON c.student_id = e.student_id "
+                + "LEFT JOIN attendance_logs a ON a.student_id = e.student_id AND a.session_id = ? "
+                + "WHERE e.course_code = ? "
+                + "ORDER BY (CASE WHEN a.id IS NOT NULL THEN 0 ELSE 1 END) ASC, e.student_id ASC";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, sessionId);
+            ps.setString(2, session.courseCode);
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) sb.append(",");
+                    first = false;
+                    long ts = rs.getLong("timestamp_seconds");
+                    boolean checkedIn = !rs.wasNull() && ts > 0;
+                    sb.append("{")
+                            .append("\"studentId\":\"").append(esc(rs.getString("student_id"))).append("\",")
+                            .append("\"fullName\":\"").append(esc(rs.getString("full_name"))).append("\",")
+                            .append("\"className\":\"").append(esc(rs.getString("class_name"))).append("\",")
+                            .append("\"department\":\"").append(esc(rs.getString("department"))).append("\",")
+                            .append("\"checkedIn\":").append(checkedIn).append(",")
+                            .append("\"timestampSeconds\":").append(checkedIn ? ts : 0L).append(",")
+                            .append("\"checkinMethod\":\"").append(esc(rs.getString("checkin_method"))).append("\",")
+                            .append("\"verifiedByServer\":").append(rs.getInt("verified_by_server") != 0)
+                            .append("}");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error querying session roster: " + e.getMessage());
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public static synchronized CheckInCommitResult insertVerifiedSessionAttendance(
+            int sessionId, String studentId, String courseCode, String courseName,
+            long timestampSeconds, String rsaSignatureHex, String checkinMethod) {
+        if (sessionId <= 0 || studentId == null || studentId.trim().isEmpty()) {
+            return new CheckInCommitResult(false, false, 0, 0, "Thông tin điểm danh không hợp lệ.");
+        }
+        String sid = studentId.trim();
+        String methodNorm = (checkinMethod != null && !checkinMethod.trim().isEmpty())
+                ? checkinMethod.trim().toUpperCase(java.util.Locale.ROOT)
+                : "QR_SCAN";
+        long ts = timestampSeconds > 0 ? timestampSeconds : (System.currentTimeMillis() / 1000L);
+        String sigHex = rsaSignatureHex != null ? rsaSignatureHex : "";
+        String fullCourseDisplay = (courseName != null && !courseName.trim().isEmpty())
+                ? (courseName.startsWith(courseCode) ? courseName : (courseCode + " - " + courseName))
+                : courseCode;
+
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                String insertSql = "INSERT INTO attendance_logs "
+                        + "(student_id, course_code, course_name, timestamp_seconds, rsa_signature_hex, "
+                        + "verified_by_server, session_id, checkin_method) "
+                        + "VALUES (?, ?, ?, ?, ?, 1, ?, ?)";
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setString(1, sid);
+                    ps.setString(2, courseCode);
+                    ps.setString(3, fullCourseDisplay);
+                    ps.setLong(4, ts);
+                    ps.setString(5, sigHex);
+                    ps.setInt(6, sessionId);
+                    ps.setString(7, methodNorm);
+                    ps.executeUpdate();
+                }
+
+                String updateCardSql = "UPDATE cards SET attendance_count = attendance_count + 1, "
+                        + "training_score = MIN(100, training_score + 1), updated_at = CURRENT_TIMESTAMP "
+                        + "WHERE student_id = ?";
+                try (PreparedStatement ps = conn.prepareStatement(updateCardSql)) {
+                    ps.setString(1, sid);
+                    ps.executeUpdate();
+                }
+
+                int attCount = 0;
+                int score = 85;
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "SELECT attendance_count, training_score FROM cards WHERE student_id = ?")) {
+                    ps.setString(1, sid);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            attCount = rs.getInt("attendance_count");
+                            score = rs.getInt("training_score");
+                        }
+                    }
+                }
+
+                insertAuditLogInternal(conn, sid, "ATTENDANCE_" + methodNorm, sessionId,
+                        "Điểm danh [" + methodNorm + "] môn " + courseCode + " (Phiên #" + sessionId + ")", sigHex);
+
+                conn.commit();
+                return new CheckInCommitResult(true, false, attCount, score, "");
+            } catch (SQLException sqle) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ignored) {
+                }
+                String msg = sqle.getMessage() != null ? sqle.getMessage().toUpperCase(java.util.Locale.ROOT) : "";
+                if (msg.contains("UNIQUE") || msg.contains("CONSTRAINT")) {
+                    return new CheckInCommitResult(false, true, 0, 0, "Bạn đã điểm danh buổi học này rồi.");
+                }
+                System.err.println("[SQLite DB] SQL error inserting session attendance: " + sqle.getMessage());
+                return new CheckInCommitResult(false, false, 0, 0, "Lỗi ghi nhận điểm danh: " + sqle.getMessage());
+            }
+        } catch (Exception e) {
+            System.err.println("[SQLite DB] Error inserting verified session attendance: " + e.getMessage());
+            return new CheckInCommitResult(false, false, 0, 0, "Lỗi kết nối cơ sở dữ liệu.");
         }
     }
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Tab 2: Dynamic 30-Second Anti-Replay QR & RSA-1024 Class Attendance in spacious Light Mode -->
+<!-- Tab 2: Real-World Class Session Attendance (Lecturer Rotating QR + Backup OTP + Card Reader) -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -18,131 +18,50 @@
         android:paddingEnd="20dp"
         android:paddingBottom="24dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Điểm danh lớp học"
-            android:textAppearance="@style/TextAppearance.SmartID.ScreenTitle" />
-
-        <!-- QR hero card -->
-        <com.google.android.material.card.MaterialCardView
-            style="@style/Widget.SmartID.Card"
+        <!-- Screen header -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardCornerRadius="24dp">
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:gravity="center_horizontal"
-                android:orientation="vertical"
-                android:padding="20dp">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_pill_blue"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingStart="10dp"
-                    android:paddingTop="5dp"
-                    android:paddingEnd="10dp"
-                    android:paddingBottom="5dp">
-
-                    <ImageView
-                        android:layout_width="13dp"
-                        android:layout_height="13dp"
-                        android:contentDescription="Bảo mật"
-                        android:src="@drawable/ic_shield"
-                        app:tint="@color/brand_600" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="5dp"
-                        android:text="Bảo mật"
-                        android:textAppearance="@style/TextAppearance.SmartID.Pill" />
-                </LinearLayout>
+                android:layout_weight="1"
+                android:orientation="vertical">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:text="Mã QR định danh động"
-                    android:textColor="@color/slate_900"
-                    android:textSize="17sp"
-                    android:textStyle="bold" />
+                    android:text="Điểm danh lớp học"
+                    android:textAppearance="@style/TextAppearance.SmartID.ScreenTitle" />
 
                 <TextView
                     android:id="@+id/tvQrStudentSubtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:gravity="center"
+                    android:layout_marginTop="2dp"
                     android:text="Vũ Ngọc Hải • CT070315 • Lớp CT7C"
                     android:textAppearance="@style/TextAppearance.SmartID.Caption" />
-
-                <FrameLayout
-                    android:layout_width="242dp"
-                    android:layout_height="242dp"
-                    android:layout_marginTop="16dp"
-                    android:background="@drawable/bg_qr_ring">
-
-                    <com.google.android.material.card.MaterialCardView
-                        android:layout_width="198dp"
-                        android:layout_height="198dp"
-                        android:layout_gravity="center"
-                        app:cardBackgroundColor="@color/white"
-                        app:cardCornerRadius="20dp"
-                        app:cardElevation="0dp"
-                        app:strokeColor="@color/slate_200"
-                        app:strokeWidth="1dp">
-
-                        <ImageView
-                            android:id="@+id/ivDynamicQr"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:contentDescription="Mã QR định danh động 30 giây"
-                            android:padding="8dp"
-                            android:scaleType="fitCenter" />
-                    </com.google.android.material.card.MaterialCardView>
-                </FrameLayout>
-
-                <ProgressBar
-                    android:id="@+id/pbQrCountdown"
-                    style="?android:attr/progressBarStyleHorizontal"
-                    android:layout_width="220dp"
-                    android:layout_height="6dp"
-                    android:layout_marginTop="16dp"
-                    android:max="30"
-                    android:progress="30"
-                    android:progressDrawable="@drawable/progress_qr" />
-
-                <TextView
-                    android:id="@+id/tvQrCountdown"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:background="@drawable/bg_pill_blue"
-                    android:paddingStart="12dp"
-                    android:paddingTop="5dp"
-                    android:paddingEnd="12dp"
-                    android:paddingBottom="5dp"
-                    android:text="Đổi mã sau 30s"
-                    android:textColor="@color/brand_600"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
 
-        <!-- RSA attendance card -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRefreshSessions"
+                style="@style/Widget.SmartID.Button.Pill"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:text="Làm mới"
+                app:icon="@drawable/ic_refresh" />
+        </LinearLayout>
+
+        <!-- Card 1: Quick QR Scan & Open Class Sessions -->
         <com.google.android.material.card.MaterialCardView
             style="@style/Widget.SmartID.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            app:cardCornerRadius="20dp">
+            app:cardCornerRadius="22dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -159,15 +78,15 @@
                     <LinearLayout
                         android:layout_width="38dp"
                         android:layout_height="38dp"
-                        android:background="@drawable/bg_icon_tile_green"
+                        android:background="@drawable/bg_icon_tile_blue"
                         android:gravity="center">
 
                         <ImageView
-                            android:layout_width="19dp"
-                            android:layout_height="19dp"
-                            android:contentDescription="Điểm danh"
-                            android:src="@drawable/ic_verified"
-                            app:tint="@color/emerald_600" />
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="Quét QR điểm danh"
+                            android:src="@drawable/ic_nav_qr"
+                            app:tint="@color/brand_600" />
                     </LinearLayout>
 
                     <LinearLayout
@@ -180,38 +99,67 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Điểm danh buổi học"
+                            android:text="Quét QR từ màn chiếu giảng viên"
                             android:textColor="@color/slate_900"
                             android:textSize="15sp"
                             android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Quét mã QR hoặc chọn ca học đang mở bên dưới"
+                            android:textAppearance="@style/TextAppearance.SmartID.Micro" />
                     </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvAttendanceServerPill"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_pill_green"
+                        android:paddingStart="10dp"
+                        android:paddingTop="4dp"
+                        android:paddingEnd="10dp"
+                        android:paddingBottom="4dp"
+                        android:text="● Sẵn sàng"
+                        android:textColor="@color/emerald_700"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <EditText
-                    android:id="@+id/etAttendanceCourse"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="14dp"
-                    android:background="@drawable/bg_input"
-                    android:hint="Mã học phần (VD: AT19N01)"
-                    android:importantForAutofill="no"
-                    android:inputType="text"
-                    android:paddingStart="14dp"
-                    android:paddingEnd="14dp"
-                    android:singleLine="true"
-                    android:text="AT19N01 - Phát triển PM Thẻ thông minh"
-                    android:textColor="@color/slate_900"
-                    android:textColorHint="@color/slate_400"
-                    android:textSize="13sp" />
-
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnSignAttendance"
+                    android:id="@+id/btnScanClassQr"
                     style="@style/Widget.SmartID.Button.Primary"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:layout_marginTop="12dp"
-                    android:text="Xác nhận điểm danh"
-                    app:icon="@drawable/ic_verified" />
+                    android:layout_marginTop="14dp"
+                    android:text="Quét QR trên màn chiếu"
+                    app:icon="@drawable/ic_nav_qr" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:text="Ca học đang mở điểm danh"
+                    android:textAppearance="@style/TextAppearance.SmartID.SectionTitle" />
+
+                <LinearLayout
+                    android:id="@+id/llActiveSessions"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/tvNoActiveSessionHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_soft_panel"
+                    android:lineSpacingExtra="3dp"
+                    android:padding="12dp"
+                    android:text="Đang kiểm tra các ca học đang mở điểm danh..."
+                    android:textAppearance="@style/TextAppearance.SmartID.Caption" />
 
                 <TextView
                     android:id="@+id/tvAttendanceSignResult"
@@ -219,14 +167,15 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:background="@drawable/bg_soft_panel"
-                    android:lineSpacingExtra="2dp"
+                    android:lineSpacingExtra="3dp"
                     android:padding="12dp"
-                    android:text="Nhấn xác nhận để điểm danh buổi học."
-                    android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+                    android:text=""
+                    android:textAppearance="@style/TextAppearance.SmartID.Micro"
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Attendance history -->
+        <!-- Card 2: Per-Course Attendance Progress -->
         <com.google.android.material.card.MaterialCardView
             style="@style/Widget.SmartID.Card"
             android:layout_width="match_parent"
@@ -249,38 +198,73 @@
                     <LinearLayout
                         android:layout_width="38dp"
                         android:layout_height="38dp"
-                        android:background="@drawable/bg_icon_tile_slate"
+                        android:background="@drawable/bg_icon_tile_blue"
                         android:gravity="center">
 
                         <ImageView
                             android:layout_width="19dp"
                             android:layout_height="19dp"
-                            android:contentDescription="Lịch sử điểm danh"
+                            android:contentDescription="Tiến độ điểm danh"
                             android:src="@drawable/ic_history"
-                            app:tint="@color/slate_600" />
+                            app:tint="@color/brand_600" />
                     </LinearLayout>
 
-                    <TextView
+                    <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="12dp"
                         android:layout_weight="1"
-                        android:text="Lịch sử điểm danh"
-                        android:textColor="@color/slate_900"
-                        android:textSize="15sp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tiến độ điểm danh"
+                            android:textColor="@color/slate_900"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:text="Chạm vào từng môn để xem chi tiết các buổi đã học"
+                            android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvAttendanceSummaryPill"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_pill_blue"
+                        android:paddingStart="10dp"
+                        android:paddingTop="4dp"
+                        android:paddingEnd="10dp"
+                        android:paddingBottom="4dp"
+                        android:text="Đang tải..."
+                        android:textColor="@color/brand_600"
+                        android:textSize="11sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
+                <LinearLayout
+                    android:id="@+id/llCourseProgressList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:orientation="vertical" />
+
                 <TextView
-                    android:id="@+id/tvAttendanceHistoryList"
+                    android:id="@+id/tvCourseProgressEmpty"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:background="@drawable/bg_soft_panel"
-                    android:lineSpacingExtra="2dp"
+                    android:lineSpacingExtra="3dp"
                     android:padding="12dp"
-                    android:text="Chưa có dữ liệu."
-                    android:textAppearance="@style/TextAppearance.SmartID.Micro" />
+                    android:text="Đang tải danh sách môn học..."
+                    android:textAppearance="@style/TextAppearance.SmartID.Micro"
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>

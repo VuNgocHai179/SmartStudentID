@@ -1,10 +1,15 @@
 package com.example.smartstudentid.apdu;
 
+import com.example.smartstudentid.model.AttendanceCheckInResult;
 import com.example.smartstudentid.model.AttendanceRecord;
+import com.example.smartstudentid.model.AttendanceSessionRecord;
 import com.example.smartstudentid.model.BookLoanRecord;
+import com.example.smartstudentid.model.CourseAttendanceProgress;
 import com.example.smartstudentid.model.StudentCardRecord;
 import com.example.smartstudentid.model.WalletTransactionRecord;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
@@ -15,6 +20,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -289,6 +295,138 @@ public class ApduClient {
         try {
             Type type = new TypeToken<ArrayList<AttendanceRecord>>() {}.getType();
             return gson.fromJson(resp, type);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public static class ActiveSessionsPayload {
+        public boolean serverReachable;
+        public long serverNowSec;
+        public final List<String> enrolledCourseCodes = new ArrayList<>();
+        public final List<String> enrolledCourseLabels = new ArrayList<>();
+        public final List<CourseAttendanceProgress> enrolledCourseProgress = new ArrayList<>();
+        public final List<AttendanceSessionRecord> activeSessions = new ArrayList<>();
+    }
+
+    public ActiveSessionsPayload fetchActiveAttendanceSessions(String studentId) {
+        ActiveSessionsPayload payload = new ActiveSessionsPayload();
+        String sid = (studentId != null && !studentId.trim().isEmpty()) ? studentId.trim() : "";
+        String encodedSid;
+        try {
+            encodedSid = URLEncoder.encode(sid, "UTF-8");
+        } catch (Exception e) {
+            encodedSid = sid;
+        }
+        String resp = getJsonSilently("/api/attendance/active-sessions?studentId=" + encodedSid);
+        if (resp == null || resp.isEmpty()) {
+            payload.serverReachable = false;
+            return payload;
+        }
+        try {
+            JsonObject root = JsonParser.parseString(resp).getAsJsonObject();
+            payload.serverReachable = true;
+            if (root.has("serverNowSec") && !root.get("serverNowSec").isJsonNull()) {
+                payload.serverNowSec = root.get("serverNowSec").getAsLong();
+            }
+            if (root.has("enrolledCourses") && root.get("enrolledCourses").isJsonArray()) {
+                Type courseListType = new TypeToken<ArrayList<CourseAttendanceProgress>>() {}.getType();
+                List<CourseAttendanceProgress> courseList = gson.fromJson(root.get("enrolledCourses"), courseListType);
+                if (courseList != null) {
+                    payload.enrolledCourseProgress.addAll(courseList);
+                    for (CourseAttendanceProgress c : courseList) {
+                        String code = c.getCourseCode() != null ? c.getCourseCode() : "";
+                        String name = c.getCourseName() != null ? c.getCourseName() : "";
+                        if (!code.isEmpty()) {
+                            payload.enrolledCourseCodes.add(code);
+                            payload.enrolledCourseLabels.add(name.isEmpty() ? code : (code + " - " + name));
+                        }
+                    }
+                }
+            }
+            if (root.has("activeSessions") && root.get("activeSessions").isJsonArray()) {
+                Type type = new TypeToken<ArrayList<AttendanceSessionRecord>>() {}.getType();
+                List<AttendanceSessionRecord> sessions = gson.fromJson(root.get("activeSessions"), type);
+                if (sessions != null) {
+                    payload.activeSessions.addAll(sessions);
+                }
+            }
+        } catch (Exception e) {
+            payload.serverReachable = false;
+        }
+        return payload;
+    }
+
+    public AttendanceCheckInResult precheckAttendance(String studentId, int sessionId, String method,
+                                                      String qrPayload, String otpCode) {
+        JsonObject body = new JsonObject();
+        body.addProperty("studentId", studentId != null ? studentId : "");
+        body.addProperty("sessionId", sessionId);
+        body.addProperty("method", method != null ? method : "");
+        body.addProperty("qrPayload", qrPayload != null ? qrPayload : "");
+        body.addProperty("otpCode", otpCode != null ? otpCode : "");
+        return postAttendanceCheckInJson("/api/attendance/precheck", body.toString());
+    }
+
+    public AttendanceCheckInResult submitVerifiedAttendanceCheckIn(
+            String studentId, int sessionId, String method, String qrPayload, String otpCode,
+            long timeSlot, long timestampSeconds, String fullRsaSignatureHex) {
+        JsonObject body = new JsonObject();
+        body.addProperty("studentId", studentId != null ? studentId : "");
+        body.addProperty("sessionId", sessionId);
+        body.addProperty("method", method != null ? method : "");
+        body.addProperty("qrPayload", qrPayload != null ? qrPayload : "");
+        body.addProperty("otpCode", otpCode != null ? otpCode : "");
+        body.addProperty("timeSlot", timeSlot);
+        body.addProperty("timestampSeconds", timestampSeconds);
+        body.addProperty("rsaSignatureHex", fullRsaSignatureHex != null ? fullRsaSignatureHex : "");
+        return postAttendanceCheckInJson("/api/attendance/checkin", body.toString());
+    }
+
+    private AttendanceCheckInResult postAttendanceCheckInJson(String path, String jsonBody) {
+        AttendanceCheckInResult res = tryPostAttendanceCheckIn(serverBaseUrl + path, jsonBody);
+        if (res != null) return res;
+
+        for (String candidate : CANDIDATE_BASE_URLS) {
+            if (candidate.equalsIgnoreCase(serverBaseUrl)) continue;
+            res = tryPostAttendanceCheckIn(candidate + path, jsonBody);
+            if (res != null) {
+                this.serverBaseUrl = candidate;
+                return res;
+            }
+        }
+        return AttendanceCheckInResult.error("OFFLINE",
+                "Không thể kết nối đến Máy chủ BridgeServer (cổng 8080). Vui lòng kết nối cùng mạng phòng học hoặc cáp USB.");
+    }
+
+    private AttendanceCheckInResult tryPostAttendanceCheckIn(String fullUrl, String jsonBody) {
+        try {
+            URL url = new URL(fullUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(2500);
+            conn.setReadTimeout(4000);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setDoOutput(true);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
+            }
+
+            int responseCode = conn.getResponseCode();
+            InputStream is = (responseCode >= 200 && responseCode < 300)
+                    ? conn.getInputStream()
+                    : conn.getErrorStream();
+            if (is == null) {
+                return AttendanceCheckInResult.error("HTTP_" + responseCode,
+                        "Lỗi máy chủ (Mã " + responseCode + ").");
+            }
+            String respStr = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            AttendanceCheckInResult parsed = gson.fromJson(respStr, AttendanceCheckInResult.class);
+            if (parsed == null) {
+                return AttendanceCheckInResult.error("PARSE_ERROR",
+                        "Phản hồi máy chủ không hợp lệ (Mã " + responseCode + ").");
+            }
+            return parsed;
         } catch (Exception e) {
             return null;
         }

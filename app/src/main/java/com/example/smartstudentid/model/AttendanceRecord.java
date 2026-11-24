@@ -10,6 +10,8 @@ public class AttendanceRecord {
     private long timestampSeconds;
     private String rsaSignatureHex;
     private boolean verifiedByServer;
+    private int sessionId;
+    private String checkinMethod;
 
     public AttendanceRecord() {
     }
@@ -70,5 +72,21 @@ public class AttendanceRecord {
 
     public void setVerifiedByServer(boolean verifiedByServer) {
         this.verifiedByServer = verifiedByServer;
+    }
+
+    public int getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(int sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    public String getCheckinMethod() {
+        return checkinMethod;
+    }
+
+    public void setCheckinMethod(String checkinMethod) {
+        this.checkinMethod = checkinMethod;
     }
 }

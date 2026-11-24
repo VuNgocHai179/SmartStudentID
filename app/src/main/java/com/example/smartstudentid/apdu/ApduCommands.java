@@ -101,6 +101,39 @@ public final class ApduCommands {
     }
 
     /**
+     * Builds the canonical 10-byte attendance payload signed by RSA-1024 on the chip (INS 0x31, P1=0x01):
+     * [SessionId (2B)][TimestampSeconds (4B)][TimeSlot (4B)].
+     */
+    public static byte[] buildCanonicalAttendancePayload(int sessionId, int timestampSeconds, int timeSlot) {
+        return new byte[]{
+                (byte) ((sessionId >> 8) & 0xFF),
+                (byte) (sessionId & 0xFF),
+                (byte) ((timestampSeconds >> 24) & 0xFF),
+                (byte) ((timestampSeconds >> 16) & 0xFF),
+                (byte) ((timestampSeconds >> 8) & 0xFF),
+                (byte) (timestampSeconds & 0xFF),
+                (byte) ((timeSlot >> 24) & 0xFF),
+                (byte) ((timeSlot >> 16) & 0xFF),
+                (byte) ((timeSlot >> 8) & 0xFF),
+                (byte) (timeSlot & 0xFF)
+        };
+    }
+
+    /**
+     * Converts a byte array into a compact uppercase hexadecimal string without spaces.
+     */
+    public static String bytesToHexCompact(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02X", b & 0xFF));
+        }
+        return sb.toString();
+    }
+
+    /**
      * Converts a byte array into a space-separated uppercase hex string.
      */
     public static String bytesToHex(byte[] bytes) {

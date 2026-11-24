@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F172A">
+
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewViewQr"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:implementationMode="compatible"
+        app:scaleType="fillCenter" />
+
+    <!-- Top translucent control bar -->
+    <LinearLayout
+        android:id="@+id/scannerTopBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:background="#880F172A"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="14dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnScannerBack"
+            style="@style/Widget.SmartID.Button.Pill"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:contentDescription="Đóng camera"
+            app:backgroundTint="#33FFFFFF"
+            app:icon="@drawable/ic_close"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:iconTint="@color/white" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Quét QR buổi học"
+            android:textColor="@color/white"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnScannerTorch"
+            style="@style/Widget.SmartID.Button.Pill"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:contentDescription="Bật hoặc tắt đèn flash"
+            app:backgroundTint="#33FFFFFF"
+            app:icon="@drawable/ic_bolt"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:iconTint="@color/white" />
+    </LinearLayout>
+
+    <!-- Center viewfinder frame & hint -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp">
+
+        <View
+            android:layout_width="250dp"
+            android:layout_height="250dp"
+            android:background="@drawable/bg_scan_frame" />
+
+        <TextView
+            android:id="@+id/tvScannerHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:background="#AA0F172A"
+            android:gravity="center"
+            android:paddingStart="16dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="8dp"
+            android:text="Hướng camera vào mã QR động trên màn chiếu giảng viên"
+            android:textColor="@color/white"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- Bottom OTP fallback bar -->
+    <LinearLayout
+        android:id="@+id/scannerBottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="#880F172A"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="18dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnScannerUseOtp"
+            style="@style/Widget.SmartID.Button.Pill"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:text="Camera mờ? Nhập mã 6 số dự phòng"
+            android:textColor="@color/white"
+            app:backgroundTint="#33FFFFFF"
+            app:icon="@drawable/ic_key"
+            app:iconTint="@color/white" />
+    </LinearLayout>
+</FrameLayout>
