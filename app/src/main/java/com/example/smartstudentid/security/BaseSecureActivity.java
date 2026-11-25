@@ -1,10 +1,13 @@
 package com.example.smartstudentid.security;
 
+import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -14,16 +17,21 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.example.smartstudentid.BuildConfig;
+import com.example.smartstudentid.optimization.ApduThreadPool;
+import com.example.smartstudentid.ui.auth.LoginPinActivity;
+
 /**
  * Base activity enforcing Light Mode and MASVS-PLATFORM UI security (SEC-05).
- * Automatically sets WindowManager.LayoutParams.FLAG_SECURE to prevent screenshots,
- * screen recording, and sensitive information leakage in the Recent Apps switcher.
- *
- * It also enables edge-to-edge rendering and exposes {@link #applySafeAreaPadding(View, boolean, boolean)}
- * so screens can keep their headers and bottom bars outside the status bar, notch/punch-hole camera,
- * and gesture navigation area (the Android equivalent of Unity's Screen.safeArea).
+ * Automatically sets WindowManager.LayoutParams.FLAG_SECURE in Release builds to prevent
+ * screenshots, screen recording, and sensitive information leakage in Recent Apps,
+ * while keeping Debug builds mirror-friendly. Also enforces background session auto-lock,
+ * runtime anti-hooking / APK integrity defense, and tapjacking touch filtering.
  */
 public abstract class BaseSecureActivity extends AppCompatActivity {
+
+    private static int startedActivityCount = 0;
+    private static long appBackgroundedAtElapsedMs = 0L;
 
     private boolean flagSecureEnabled = false;
 
@@ -33,9 +41,103 @@ public abstract class BaseSecureActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         configureEdgeToEdgeSystemBars();
-        // Keep FLAG_SECURE off by default during development/projector live demo so Android Studio
-        // Device Mirroring & Scrcpy can display the UI instead of a black screen.
-        applyFlagSecure(false);
+        // Enforce FLAG_SECURE automatically in Release; allow live mirroring in Debug builds.
+        applyFlagSecure(!BuildConfig.DEBUG);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        boolean returningFromBackground = (startedActivityCount == 0 && appBackgroundedAtElapsedMs > 0L);
+        long bgStart = appBackgroundedAtElapsedMs;
+        startedActivityCount++;
+        if (returningFromBackground) {
+            appBackgroundedAtElapsedMs = 0L;
+            if (PinSessionManager.shouldAutoLockAfterBackground(
+                    bgStart,
+                    SystemClock.elapsedRealtime(),
+                    PinSessionManager.BACKGROUND_LOCK_TIMEOUT_MS)
+                    && requiresActiveSessionLock()) {
+                new PinSessionManager(this).lockSessionAndEvictRam();
+                onSessionAutoLocked();
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        ApduThreadPool.getInstance().executeAsyncOnPool(
+                () -> SecurityEnvironmentChecker.inspectEnvironment(getApplicationContext()),
+                new ApduThreadPool.TaskCallback<SecurityEnvironmentChecker.SecurityAuditReport>() {
+                    @Override
+                    public void onComplete(SecurityEnvironmentChecker.SecurityAuditReport report,
+                                           long mainBlockedMs, long totalMs) {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
+                        if (SecurityEnvironmentChecker.enforceActiveDefense(
+                                BaseSecureActivity.this, report, BuildConfig.DEBUG)) {
+                            Toast.makeText(
+                                    BaseSecureActivity.this,
+                                    "Cảnh báo bảo mật: " + report.buildThreatSummary(BuildConfig.DEBUG),
+                                    Toast.LENGTH_LONG
+                            ).show();
+                            if (requiresActiveSessionLock()) {
+                                onSessionAutoLocked();
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void onError(Exception e) {
+                    }
+                }
+        );
+    }
+
+    @Override
+    protected void onStop() {
+        startedActivityCount = Math.max(0, startedActivityCount - 1);
+        if (isChangingConfigurations()) {
+            appBackgroundedAtElapsedMs = 0L;
+        } else if (startedActivityCount == 0) {
+            appBackgroundedAtElapsedMs = SystemClock.elapsedRealtime();
+        }
+        super.onStop();
+    }
+
+    /**
+     * Subclasses holding authenticated student data override this to return true so returning from
+     * background after timeout or detecting a runtime threat locks the session.
+     */
+    protected boolean requiresActiveSessionLock() {
+        return false;
+    }
+
+    /**
+     * Redirects back to the lock screen when an active session is auto-locked.
+     */
+    protected void onSessionAutoLocked() {
+        Intent intent = new Intent(this, LoginPinActivity.class);
+        intent.putExtra(LoginPinActivity.EXTRA_SESSION_LOCKED_TIMEOUT, true);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
+    }
+
+    /**
+     * Drops touch events while the window is obscured by another overlay (Tapjacking defense).
+     */
+    protected static void applyTapjackingProtection(View... views) {
+        if (views == null) {
+            return;
+        }
+        for (View view : views) {
+            if (view != null) {
+                view.setFilterTouchesWhenObscured(true);
+            }
+        }
     }
 
     @SuppressWarnings("deprecation")

@@ -51,11 +51,15 @@ public final class CryptoManager {
                 PBKDF2_ITERATIONS,
                 KEY_LENGTH_BITS
         );
+        byte[] rawKey = null;
         try {
             SecretKeyFactory factory = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM);
-            byte[] rawKey = factory.generateSecret(spec).getEncoded();
+            rawKey = factory.generateSecret(spec).getEncoded();
             return new SecretKeySpec(rawKey, "AES");
         } finally {
+            if (rawKey != null) {
+                Arrays.fill(rawKey, (byte) 0);
+            }
             spec.clearPassword();
             if (pinChars != null) {
                 Arrays.fill(pinChars, '\0');
@@ -68,13 +72,19 @@ public final class CryptoManager {
      * The supplied char[] is wiped in-place (see {@link #deriveKeyFromPin(char[], byte[])}).
      */
     public static String computePinVerifierHash(char[] pinChars, byte[] salt) {
+        byte[] keyBytes = null;
         try {
             SecretKey key = deriveKeyFromPin(pinChars, salt);
+            keyBytes = key.getEncoded();
             MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-            byte[] digest = sha256.digest(key.getEncoded());
+            byte[] digest = sha256.digest(keyBytes);
             return Base64.encodeToString(digest, Base64.NO_WRAP);
         } catch (Exception e) {
             return "";
+        } finally {
+            if (keyBytes != null) {
+                Arrays.fill(keyBytes, (byte) 0);
+            }
         }
     }
 

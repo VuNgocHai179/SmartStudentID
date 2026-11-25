@@ -213,9 +213,22 @@
                         android:layout_width="match_parent"
                         android:layout_height="54dp"
                         android:layout_marginTop="20dp"
+                        android:filterTouchesWhenObscured="true"
                         android:text="Mở khóa ứng dụng"
                         android:textSize="15sp"
                         app:icon="@drawable/ic_login" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnBiometricUnlock"
+                        style="@style/Widget.SmartID.Button.Soft"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="10dp"
+                        android:filterTouchesWhenObscured="true"
+                        android:text="Mở khóa sinh trắc học (TEE)"
+                        android:textSize="14sp"
+                        android:visibility="gone"
+                        app:icon="@drawable/ic_fingerprint" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnLogoutSavedCard"

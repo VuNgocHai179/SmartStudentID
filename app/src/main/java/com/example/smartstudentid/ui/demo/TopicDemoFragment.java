@@ -38,6 +38,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.fragment.app.Fragment;
 
+import com.example.smartstudentid.BuildConfig;
 import com.example.smartstudentid.R;
 import com.example.smartstudentid.apdu.ApduClient;
 import com.example.smartstudentid.apdu.ApduCommands;
@@ -48,6 +49,8 @@ import com.example.smartstudentid.optimization.ChaosInjectionManager;
 import com.example.smartstudentid.optimization.DemoMetrics;
 import com.example.smartstudentid.optimization.ImageOptimizer;
 import com.example.smartstudentid.optimization.LocalCacheManager;
+import com.example.smartstudentid.security.BaseSecureActivity;
+import com.example.smartstudentid.security.BiometricKeyManager;
 import com.example.smartstudentid.security.CryptoManager;
 import com.example.smartstudentid.security.EncryptedCacheManager;
 import com.example.smartstudentid.security.PinSessionManager;
@@ -57,6 +60,7 @@ import com.example.smartstudentid.ui.widget.ExecutionWaterfallView;
 import com.example.smartstudentid.ui.widget.ImagePipelineView;
 import com.example.smartstudentid.ui.widget.RealtimeTopicChartView;
 import com.example.smartstudentid.ui.widget.SecurityAuditFlowView;
+import com.example.smartstudentid.ui.widget.SecurityDefensePopupDialog;
 import com.example.smartstudentid.ui.widget.ThreadingLaneView;
 import com.google.android.material.button.MaterialButton;
 import com.google.zxing.BarcodeFormat;
@@ -544,7 +548,7 @@ public class TopicDemoFragment extends Fragment {
                 title.setText("Bảo mật & Xác thực PIN");
                 realtimeChart.setColdStartMs(DemoMetrics.getColdStartMs());
                 btnAction.setText("Xác thực đăng nhập");
-                btnInspectTopicSecurity.setText("Kiểm chứng RAM PIN, AES-128 EEPROM & MASVS");
+                btnInspectTopicSecurity.setText("Mở Popup Đo kiểm Phòng thủ Bảo mật");
                 tvRealtimeChartTitle.setText("ĐỒ THỊ REALTIME • PHƠI NHIỄM PIN TRÊN RAM");
                 break;
 
@@ -594,7 +598,14 @@ public class TopicDemoFragment extends Fragment {
                 .build()));
         btnSimulateWrongPin3x.setOnClickListener(v -> simulateWrongPin3xAutoWipe());
         btnResetCache.setOnClickListener(v -> resetCache());
-        btnInspectTopicSecurity.setOnClickListener(v -> showTopicSecurityInspector());
+        btnInspectTopicSecurity.setOnClickListener(v -> {
+            if (topic == TOPIC_STARTUP && getActivity() instanceof BaseSecureActivity) {
+                SecurityDefensePopupDialog.show((BaseSecureActivity) getActivity(),
+                        this::showTopicSecurityInspector);
+            } else {
+                showTopicSecurityInspector();
+            }
+        });
         tvToggleTrace.setOnClickListener(v -> {
             traceExpanded = !traceExpanded;
             View traceBody = getActiveTraceBodyView();
@@ -1997,6 +2008,8 @@ public class TopicDemoFragment extends Fragment {
                     metrics.put("Zeroize PIN", result.remaining < 0
                             ? "Không (String 100%)" : result.remaining + "/" + result.length + " ký tự còn");
                     metrics.put("MASVS", afterMode ? "5/5 (An toàn)" : chaosManager.getMasvsScore() + "/5 (Rủi ro)");
+                    metrics.put("Phòng thủ runtime", afterMode
+                            ? "Anti-Hook + APK SHA-256 + Tapjack" : "Chưa bật");
                     String status = afterMode
                             ? "✓ After (" + result.ms + " ms): đăng nhập xong, PIN đã zeroize ("
                             + (result.length - result.remaining) + "/" + result.length + " ký tự) • MASVS 5/5."
@@ -2347,6 +2360,8 @@ public class TopicDemoFragment extends Fragment {
     private void showTopicSecurityInspector() {
         final Context appCtx = appContext();
         final boolean isCacheTopic = (topic == TOPIC_CACHE);
+        final boolean flagSecureActive = (getActivity() instanceof BaseSecureActivity)
+                && ((BaseSecureActivity) getActivity()).isFlagSecureEnabled();
         ApduThreadPool.getInstance().executeAsyncOnPool(() -> {
             CardResponse plainResp = ApduClient.getInstance().sendApdu(
                     ApduCommands.CLA_SMART_STUDENT,
@@ -2369,8 +2384,13 @@ public class TopicDemoFragment extends Fragment {
             boolean hasEncryptedProfile = encryptedCache.getStudentProfile() != null;
             boolean keystoreOk = SecurityEnvironmentChecker.isAndroidKeyStoreAvailable();
             int remainingPinTries = pinSessionManager.getRemainingUnlockAttempts();
+            SecurityEnvironmentChecker.SecurityAuditReport auditReport =
+                    SecurityEnvironmentChecker.inspectEnvironment(appCtx);
+            boolean bioStrong = BiometricKeyManager.isBiometricStrongAvailable(appCtx);
+            String bioBacking = new BiometricKeyManager(appCtx).getBackingStoreLabel();
             return new InspectorData(plainText, cipherHex, leakContent, exposedPin,
-                    hasEncryptedProfile, keystoreOk, remainingPinTries);
+                    hasEncryptedProfile, keystoreOk, remainingPinTries,
+                    auditReport, bioStrong, bioBacking, flagSecureActive);
         }, (data, mainBlockedMs, totalMs) -> {
             if (!isAdded()) return;
             StringBuilder sb = new StringBuilder();
@@ -2402,6 +2422,24 @@ public class TopicDemoFragment extends Fragment {
                         .append((chaosManager.isSimulatedRootDetected() || chaosManager.isSimulatedDebuggerDetected())
                                 ? "❌ Phát hiện đe dọa!" : "✓ An toàn")
                         .append(" • PIN còn ").append(data.remainingPinTries).append("/3 lần thử\n\n");
+                if (data.auditReport != null) {
+                    sb.append("=== PHÒNG THỦ CHIỀU SÂU (MASVS-RESILIENCE & PLATFORM) ===\n");
+                    sb.append("• Anti-Hooking (/proc/self/maps): ")
+                            .append(data.auditReport.hookingDetected ? "❌ Phát hiện Frida/Xposed!" : "✓ Sạch")
+                            .append("\n• Native Debugger (TracerPid): ")
+                            .append(data.auditReport.nativeDebugger ? "❌ Đang attach!" : "✓ TracerPid = 0")
+                            .append("\n• Toàn vẹn APK (SHA-256): ")
+                            .append(data.auditReport.apkSignatureValid ? "✓ Khớp " : "❌ Sai lệch ")
+                            .append(data.auditReport.getShortApkCertHex())
+                            .append("\n• Bề mặt UI: Tapjacking Filter ON • FLAG_SECURE=")
+                            .append(data.flagSecureActive ? "ON (Release)" : (BuildConfig.DEBUG ? "OFF (Debug demo)" : "OFF"))
+                            .append("\n• Tự khóa nền: sau 120s xóa PIN tạm + L1 RAM")
+                            .append("\n• Sinh trắc học phần cứng: ")
+                            .append(data.biometricStrongAvailable
+                                    ? "BIOMETRIC_STRONG + CryptoObject (" + data.biometricBacking + ")"
+                                    : "Chưa đăng ký trên thiết bị")
+                            .append("\n\n");
+                }
             }
             sb.append("=== ĐỐI CHIẾU MÃ HÓA AES-128 TRÊN EEPROM ===\n");
             sb.append("• Bản rõ (INS 0x21 • P1=0x00):\n  ").append(data.plainUtf8).append("\n\n");
@@ -2547,9 +2585,15 @@ public class TopicDemoFragment extends Fragment {
         final boolean hasEncryptedProfile;
         final boolean keystoreOk;
         final int remainingPinTries;
+        final SecurityEnvironmentChecker.SecurityAuditReport auditReport;
+        final boolean biometricStrongAvailable;
+        final String biometricBacking;
+        final boolean flagSecureActive;
 
         InspectorData(String plainUtf8, String cipherHex, String leakContent, String exposedPin,
-                      boolean hasEncryptedProfile, boolean keystoreOk, int remainingPinTries) {
+                      boolean hasEncryptedProfile, boolean keystoreOk, int remainingPinTries,
+                      SecurityEnvironmentChecker.SecurityAuditReport auditReport,
+                      boolean biometricStrongAvailable, String biometricBacking, boolean flagSecureActive) {
             this.plainUtf8 = plainUtf8;
             this.cipherHex = cipherHex;
             this.leakContent = leakContent;
@@ -2557,6 +2601,10 @@ public class TopicDemoFragment extends Fragment {
             this.hasEncryptedProfile = hasEncryptedProfile;
             this.keystoreOk = keystoreOk;
             this.remainingPinTries = remainingPinTries;
+            this.auditReport = auditReport;
+            this.biometricStrongAvailable = biometricStrongAvailable;
+            this.biometricBacking = biometricBacking;
+            this.flagSecureActive = flagSecureActive;
         }
     }
 }

@@ -22,6 +22,7 @@ import com.example.smartstudentid.security.BaseSecureActivity;
 import com.example.smartstudentid.security.EncryptedCacheManager;
 import com.example.smartstudentid.ui.demo.TopicDemoFragment;
 import com.example.smartstudentid.ui.widget.LivePerfHudView;
+import com.example.smartstudentid.ui.widget.SecurityDefensePopupDialog;
 import com.google.android.material.button.MaterialButton;
 
 /**
@@ -41,6 +42,11 @@ public class StudentMainActivity extends BaseSecureActivity {
     private final TextView[] navLabels = new TextView[TOPIC_TAB_COUNT];
     private final ImageView[] navIcons = new ImageView[TOPIC_TAB_COUNT];
     private final FrameLayout[] navIconBgs = new FrameLayout[TOPIC_TAB_COUNT];
+
+    @Override
+    protected boolean requiresActiveSessionLock() {
+        return true;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,6 +88,11 @@ public class StudentMainActivity extends BaseSecureActivity {
             livePerfHud.setVisibility(show ? View.VISIBLE : View.GONE);
             updateHudToggleButtonStyle(show);
         });
+
+        MaterialButton btnOpenSecurityPopup = findViewById(R.id.btnOpenSecurityPopup);
+        if (btnOpenSecurityPopup != null) {
+            btnOpenSecurityPopup.setOnClickListener(v -> SecurityDefensePopupDialog.show(this));
+        }
 
         MaterialButton btnHeaderSwitchCard = findViewById(R.id.btnHeaderSwitchCard);
         btnHeaderSwitchCard.setOnClickListener(v -> logoutCurrentCard());

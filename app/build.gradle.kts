@@ -22,6 +22,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     buildTypes {
@@ -51,6 +52,7 @@ dependencies {
 
     // Mobile Security (MASVS-STORAGE): EncryptedSharedPreferences + MasterKey AES-256-GCM
     implementation(libs.security.crypto)
+    implementation(libs.androidx.biometric)
 
     // Mobile Optimization & Dynamic 30s QR: ZXing Core + lightweight Gson
     implementation(libs.zxing.core)

@@ -8,6 +8,7 @@ material = "1.14.0"
 activityKtx = "1.13.0"
 constraintlayout = "2.2.2"
 securityCrypto = "1.1.0-alpha06"
+biometric = "1.1.0"
 zxing = "3.5.3"
 gson = "2.11.0"
 viewpager2 = "1.1.0"
@@ -22,6 +23,7 @@ material = { group = "com.google.android.material", name = "material", version.r
 activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "activityKtx" }
 constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "viewpager2" }

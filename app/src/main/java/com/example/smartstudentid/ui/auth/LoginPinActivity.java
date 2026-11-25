@@ -7,15 +7,22 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.os.Process;
 import android.os.SystemClock;
+import android.security.keystore.KeyPermanentlyInvalidatedException;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
+import androidx.core.content.ContextCompat;
 
 import com.example.smartstudentid.R;
 import com.example.smartstudentid.apdu.ApduClient;
@@ -26,6 +33,7 @@ import com.example.smartstudentid.optimization.ApduThreadPool;
 import com.example.smartstudentid.optimization.DemoMetrics;
 import com.example.smartstudentid.optimization.LocalCacheManager;
 import com.example.smartstudentid.security.BaseSecureActivity;
+import com.example.smartstudentid.security.BiometricKeyManager;
 import com.example.smartstudentid.security.EncryptedCacheManager;
 import com.example.smartstudentid.security.PinSessionManager;
 import com.example.smartstudentid.security.RsaCardVerifier;
@@ -35,6 +43,9 @@ import com.example.smartstudentid.ui.student.StudentMainActivity;
 
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.concurrent.Executor;
+
+import javax.crypto.Cipher;
 
 /**
  * NFC Smart Student Card Login Screen:
@@ -54,13 +65,17 @@ public class LoginPinActivity extends BaseSecureActivity {
     private TextView tvCardHolderName;
     private TextView tvRsaChallengeStatus;
     private TextView tvLoginFeedback;
+    public static final String EXTRA_SESSION_LOCKED_TIMEOUT = "SESSION_LOCKED_TIMEOUT";
+
     private Button btnPrimaryLogin;
+    private Button btnBiometricUnlock;
     private Button btnLogoutSavedCard;
 
     private static final int STANDARD_PIN_LENGTH = 6;
     private static final int MAX_PIN_LENGTH = 8;
 
     private PinSessionManager pinSessionManager;
+    private BiometricKeyManager biometricKeyManager;
     private LocalCacheManager localCacheManager;
     private EncryptedCacheManager encryptedCacheManager;
     private RsaCardVerifier rsaCardVerifier;
@@ -107,6 +122,7 @@ public class LoginPinActivity extends BaseSecureActivity {
         findViewById(R.id.loginRoot).setVerticalScrollBarEnabled(false);
 
         pinSessionManager = new PinSessionManager(this);
+        biometricKeyManager = new BiometricKeyManager(this);
         localCacheManager = new LocalCacheManager(this);
         encryptedCacheManager = EncryptedCacheManager.getInstance(this);
         rsaCardVerifier = new RsaCardVerifier();
@@ -114,6 +130,22 @@ public class LoginPinActivity extends BaseSecureActivity {
         bindViews();
         measureColdStart();
         refreshSessionUiState();
+        handleLockoutIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        refreshSessionUiState();
+        handleLockoutIntent(intent);
+    }
+
+    private void handleLockoutIntent(Intent intent) {
+        if (intent != null && intent.getBooleanExtra(EXTRA_SESSION_LOCKED_TIMEOUT, false)) {
+            intent.removeExtra(EXTRA_SESSION_LOCKED_TIMEOUT);
+            showMainFeedback("Phiên đã tự khóa sau khi chạy nền — L1 RAM & PIN tạm đã được xóa.");
+        }
     }
 
     @Override
@@ -142,11 +174,15 @@ public class LoginPinActivity extends BaseSecureActivity {
         tvRsaChallengeStatus = findViewById(R.id.tvRsaChallengeStatus);
         tvLoginFeedback = findViewById(R.id.tvLoginFeedback);
         btnPrimaryLogin = findViewById(R.id.btnPrimaryLogin);
+        btnBiometricUnlock = findViewById(R.id.btnBiometricUnlock);
         btnLogoutSavedCard = findViewById(R.id.btnLogoutSavedCard);
         View btnOpenAdminDashboard = findViewById(R.id.btnOpenAdminDashboard);
         tvPerfFooter = findViewById(R.id.tvPerfFooter);
 
+        applyTapjackingProtection(btnPrimaryLogin, btnBiometricUnlock, btnLogoutSavedCard);
+
         btnPrimaryLogin.setOnClickListener(v -> showPinEntryPopup());
+        btnBiometricUnlock.setOnClickListener(v -> launchBiometricHardwareFlow());
         layoutNfcScanZone.setOnClickListener(v -> {
             rsaChallengePassed = true;
             refreshSessionUiState();
@@ -155,6 +191,7 @@ public class LoginPinActivity extends BaseSecureActivity {
 
         btnLogoutSavedCard.setOnClickListener(v -> {
             pinSessionManager.clearSession();
+            biometricKeyManager.clearBinding();
             rsaChallengePassed = false;
             refreshSessionUiState();
             hideMainFeedback();
@@ -241,6 +278,7 @@ public class LoginPinActivity extends BaseSecureActivity {
             tvCardHolderName.setText(name + " • " + id);
             tvRsaChallengeStatus.setText(resolveDepartmentForStudent(id));
             btnPrimaryLogin.setText("Mở khóa ứng dụng");
+            updateBiometricButtonState(id, true);
         } else if (rsaChallengePassed) {
             layoutNfcScanZone.setVisibility(View.GONE);
             layoutSavedCardZone.setVisibility(View.VISIBLE);
@@ -249,12 +287,115 @@ public class LoginPinActivity extends BaseSecureActivity {
             tvCardHolderName.setText(activeCard.getFullName() + " • " + activeCard.getStudentId());
             tvRsaChallengeStatus.setText(activeCard.getDepartment());
             btnPrimaryLogin.setText("Mở khóa ứng dụng");
+            updateBiometricButtonState(activeCard.getStudentId(), false);
         } else {
             layoutSavedCardZone.setVisibility(View.GONE);
             layoutNfcScanZone.setVisibility(View.VISIBLE);
             tvNfcPromptTitle.setText("Đưa thẻ sinh viên lại gần NFC thiết bị");
             tvNfcPromptSubtitle.setText("Áp mặt thẻ sinh viên vào lưng điện thoại để tự động nhận diện");
         }
+    }
+
+    private void updateBiometricButtonState(String studentId, boolean hasSavedSession) {
+        if (btnBiometricUnlock == null) {
+            return;
+        }
+        if (hasSavedSession && BiometricKeyManager.isBiometricStrongAvailable(this)) {
+            btnBiometricUnlock.setVisibility(View.VISIBLE);
+            if (biometricKeyManager.isEnrolledForStudent(studentId)) {
+                btnBiometricUnlock.setText("Mở khóa sinh trắc học (" + biometricKeyManager.getBackingStoreLabel() + ")");
+            } else {
+                btnBiometricUnlock.setText("Gắn mở khóa sinh trắc học (TEE)");
+            }
+        } else {
+            btnBiometricUnlock.setVisibility(View.GONE);
+        }
+    }
+
+    private void launchBiometricHardwareFlow() {
+        if (!pinSessionManager.hasActiveSession()) {
+            showMainFeedback("Cần đăng nhập thẻ bằng PIN lần đầu trước khi dùng sinh trắc học.");
+            return;
+        }
+        if (!BiometricKeyManager.isBiometricStrongAvailable(this)) {
+            showMainFeedback("Thiết bị chưa cấu hình sinh trắc học mức BIOMETRIC_STRONG.");
+            return;
+        }
+        final String studentId = pinSessionManager.getActiveStudentId();
+        final boolean isEnrolled = biometricKeyManager.isEnrolledForStudent(studentId);
+        final long startNs = System.nanoTime();
+        final Cipher hwCipher;
+        try {
+            hwCipher = isEnrolled
+                    ? biometricKeyManager.initDecryptCipher()
+                    : biometricKeyManager.initEncryptCipher();
+        } catch (KeyPermanentlyInvalidatedException invalidated) {
+            biometricKeyManager.clearBinding();
+            refreshSessionUiState();
+            showMainFeedback("Sinh trắc học trên thiết bị đã thay đổi — khóa phần cứng bị vô hiệu, vui lòng nhập PIN.");
+            return;
+        } catch (Exception e) {
+            showMainFeedback("Không khởi tạo được khóa sinh trắc học phần cứng: " + e.getMessage());
+            return;
+        }
+
+        Executor mainExecutor = ContextCompat.getMainExecutor(this);
+        BiometricPrompt prompt = new BiometricPrompt(this, mainExecutor,
+                new BiometricPrompt.AuthenticationCallback() {
+                    @Override
+                    public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
+                        Cipher authenticatedCipher = result.getCryptoObject() != null
+                                ? result.getCryptoObject().getCipher() : null;
+                        byte[] sessionNonce = pinSessionManager.getOrCreateSessionUnlockNonce();
+                        try {
+                            if (isEnrolled) {
+                                boolean ok = biometricKeyManager.verifyDecryptedNonce(authenticatedCipher, sessionNonce);
+                                if (!ok) {
+                                    biometricKeyManager.clearBinding();
+                                    refreshSessionUiState();
+                                    showMainFeedback("Token sinh trắc học không khớp — vui lòng xác thực lại bằng PIN.");
+                                    return;
+                                }
+                                long elapsedMs = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
+                                openStudentMainScreen(elapsedMs, true);
+                            } else {
+                                biometricKeyManager.completeBinding(studentId, authenticatedCipher, sessionNonce);
+                                refreshSessionUiState();
+                                Toast.makeText(
+                                        LoginPinActivity.this,
+                                        "Đã gắn khóa AES-256-GCM sinh trắc học ("
+                                                + biometricKeyManager.getBackingStoreLabel() + ")",
+                                        Toast.LENGTH_SHORT
+                                ).show();
+                                long elapsedMs = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
+                                openStudentMainScreen(elapsedMs, true);
+                            }
+                        } catch (Exception e) {
+                            showMainFeedback("Lỗi xác thực CryptoObject: " + e.getMessage());
+                        } finally {
+                            Arrays.fill(sessionNonce, (byte) 0);
+                        }
+                    }
+
+                    @Override
+                    public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
+                        if (errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
+                                && errorCode != BiometricPrompt.ERROR_USER_CANCELED
+                                && errorCode != BiometricPrompt.ERROR_CANCELED) {
+                            showMainFeedback("Sinh trắc học bị hủy: " + errString);
+                        }
+                    }
+                });
+
+        BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
+                .setTitle(isEnrolled ? "Mở khóa thẻ sinh viên" : "Gắn khóa sinh trắc học TEE")
+                .setSubtitle(isEnrolled
+                        ? "Xác thực sinh trắc học để mở khóa AES-256-GCM trong AndroidKeyStore"
+                        : "Ràng buộc sinh trắc học với CryptoObject phần cứng")
+                .setNegativeButtonText("Dùng mã PIN")
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                .build();
+        prompt.authenticate(promptInfo, new BiometricPrompt.CryptoObject(hwCipher));
     }
 
     /**
@@ -280,6 +421,12 @@ public class LoginPinActivity extends BaseSecureActivity {
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             int width = (int) (getResources().getDisplayMetrics().widthPixels * 0.90f);
             dialog.getWindow().setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (isFlagSecureEnabled()) {
+                dialog.getWindow().setFlags(
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                        WindowManager.LayoutParams.FLAG_SECURE
+                );
+            }
         }
 
         TextView tvSubtitle = popupView.findViewById(R.id.tvPinPopupSubtitle);
@@ -288,6 +435,8 @@ public class LoginPinActivity extends BaseSecureActivity {
         LinearLayout dotsContainer = popupView.findViewById(R.id.pinDotsContainer);
         View btnClose = popupView.findViewById(R.id.btnClosePinPopup);
         Button btnConfirm = popupView.findViewById(R.id.btnConfirmPinPopup);
+        View btnBackspace = popupView.findViewById(R.id.btnPinBackspace);
+        applyTapjackingProtection(popupView, btnConfirm, btnBackspace);
 
         String targetHolder;
         if (pinSessionManager.hasActiveSession()) {
@@ -308,6 +457,7 @@ public class LoginPinActivity extends BaseSecureActivity {
         for (int i = 0; i < digitIds.length; i++) {
             final char digitChar = (char) ('0' + i);
             View keyBtn = popupView.findViewById(digitIds[i]);
+            keyBtn.setFilterTouchesWhenObscured(true);
             keyBtn.setOnClickListener(v -> {
                 if (pinSubmitInProgress || pinLength >= MAX_PIN_LENGTH) {
                     return;
@@ -324,7 +474,6 @@ public class LoginPinActivity extends BaseSecureActivity {
             });
         }
 
-        View btnBackspace = popupView.findViewById(R.id.btnPinBackspace);
         btnBackspace.setOnClickListener(v -> {
             if (pinSubmitInProgress) {
                 return;

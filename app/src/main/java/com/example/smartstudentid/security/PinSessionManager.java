@@ -25,8 +25,10 @@ public class PinSessionManager {
     private static final String KEY_PIN_SALT_B64 = "session_pin_salt_b64";
     private static final String KEY_PIN_HASH_B64 = "session_pin_hash_b64";
     private static final String KEY_FAILED_UNLOCK_COUNT = "session_failed_unlock_count";
+    private static final String KEY_SESSION_UNLOCK_NONCE_B64 = "session_unlock_nonce_b64";
 
     public static final int MAX_LOCAL_UNLOCK_ATTEMPTS = 3;
+    public static final long BACKGROUND_LOCK_TIMEOUT_MS = 120_000L;
 
     private final EncryptedCacheManager cacheManager;
     private final SharedPreferences prefs;
@@ -46,15 +48,20 @@ public class PinSessionManager {
     public void createPinSession(String studentId, String studentName, char[] pin) {
         byte[] salt = CryptoManager.generateRandomBytes(16);
         String saltB64 = Base64.encodeToString(salt, Base64.NO_WRAP);
+        byte[] unlockNonce = CryptoManager.generateRandomBytes(32);
+        String unlockNonceB64 = Base64.encodeToString(unlockNonce, Base64.NO_WRAP);
+        Arrays.fill(unlockNonce, (byte) 0);
         setTransientPin(pin);
         String verifierHash = CryptoManager.computePinVerifierHash(pin, salt);
 
+        BiometricKeyManager.clearBindingPrefs(prefs);
         prefs.edit()
                 .putBoolean(KEY_HAS_ACTIVE_SESSION, true)
                 .putString(KEY_ACTIVE_STUDENT_ID, studentId)
                 .putString(KEY_ACTIVE_STUDENT_NAME, studentName)
                 .putString(KEY_PIN_SALT_B64, saltB64)
                 .putString(KEY_PIN_HASH_B64, verifierHash)
+                .putString(KEY_SESSION_UNLOCK_NONCE_B64, unlockNonceB64)
                 .putInt(KEY_FAILED_UNLOCK_COUNT, 0)
                 .apply();
     }
@@ -147,16 +154,62 @@ public class PinSessionManager {
     }
 
     /**
+     * Returns the 32-byte session unlock nonce used to bind hardware Biometric CryptoObject keys.
+     * Callers must zero-fill the returned byte[] after use.
+     */
+    public byte[] getOrCreateSessionUnlockNonce() {
+        String existing = prefs.getString(KEY_SESSION_UNLOCK_NONCE_B64, null);
+        if (existing != null && !existing.isEmpty()) {
+            return Base64.decode(existing, Base64.NO_WRAP);
+        }
+        byte[] fresh = CryptoManager.generateRandomBytes(32);
+        prefs.edit()
+                .putString(KEY_SESSION_UNLOCK_NONCE_B64, Base64.encodeToString(fresh, Base64.NO_WRAP))
+                .apply();
+        return fresh;
+    }
+
+    /**
+     * Clears only the transient in-memory PIN char[] without ending the persisted session.
+     */
+    public static void clearTransientPinOnly() {
+        clearTransientPin();
+    }
+
+    /**
+     * Locks an active session after background timeout or threat detection:
+     * wipes transient RAM PIN and evicts L1 RAM cache while retaining L2 TEE verification state.
+     */
+    public void lockSessionAndEvictRam() {
+        clearTransientPin();
+        cacheManager.evictL1RamOnly();
+    }
+
+    /**
+     * Pure-Java evaluation of whether background duration exceeded the auto-lock threshold.
+     */
+    public static boolean shouldAutoLockAfterBackground(long backgroundStartElapsedMs,
+                                                        long resumeElapsedMs,
+                                                        long timeoutMs) {
+        if (backgroundStartElapsedMs <= 0L || timeoutMs <= 0L || resumeElapsedMs < backgroundStartElapsedMs) {
+            return false;
+        }
+        return (resumeElapsedMs - backgroundStartElapsedMs) >= timeoutMs;
+    }
+
+    /**
      * Completely wipes the active PIN session and cached student profile ("Switch Card" or Auto-Wipe).
      */
     public void clearSession() {
         clearTransientPin();
+        BiometricKeyManager.clearBindingPrefs(prefs);
         prefs.edit()
                 .remove(KEY_HAS_ACTIVE_SESSION)
                 .remove(KEY_ACTIVE_STUDENT_ID)
                 .remove(KEY_ACTIVE_STUDENT_NAME)
                 .remove(KEY_PIN_SALT_B64)
                 .remove(KEY_PIN_HASH_B64)
+                .remove(KEY_SESSION_UNLOCK_NONCE_B64)
                 .remove(KEY_FAILED_UNLOCK_COUNT)
                 .apply();
         cacheManager.wipeStudentSessionCache();
