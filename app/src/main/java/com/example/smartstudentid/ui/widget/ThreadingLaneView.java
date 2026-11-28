@@ -45,6 +45,12 @@ public class ThreadingLaneView extends View {
     private static final int COLOR_GREEN_BG = 0xFFECFDF5;
     private static final int COLOR_GREEN_BORDER = 0xFFA7F3D0;
     private static final int COLOR_WHITE = 0xFFFFFFFF;
+    private static final int[] WORKER_COLORS = {
+            COLOR_GREEN_BAR,
+            COLOR_BLUE,
+            0xFF0D9488,
+            0xFF6366F1
+    };
 
     private final ThreadingState state = new ThreadingState();
     private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -123,10 +129,17 @@ public class ThreadingLaneView extends View {
         invalidate();
     }
 
+    public void finishAfterRun(long blockedMs, long wallMs,
+                               String[] labels, String[] threadNames,
+                               long[] startOffsetsMs, long[] durationsMs) {
+        state.finishAfterRun(blockedMs, wallMs, labels, threadNames, startOffsetsMs, durationsMs);
+        invalidate();
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int desiredW = Math.round(dp(320f));
-        int desiredH = Math.round(dp(344f));
+        int desiredH = Math.round(dp(416f));
         setMeasuredDimension(
                 resolveSize(desiredW, widthMeasureSpec),
                 resolveSize(desiredH, heightMeasureSpec)
@@ -151,9 +164,9 @@ public class ThreadingLaneView extends View {
         float mainH = dp(82f);
         drawMainThreadLane(canvas, w, mainTop, mainH, nowMs);
 
-        // 3. Swimlane 2: Worker Thread Pool (68dp)
+        // 3. Swimlane 2: Worker Thread Pool 4T (140dp)
         float workerTop = mainTop + mainH + dp(10f);
-        float workerH = dp(68f);
+        float workerH = dp(140f);
         drawWorkerThreadLane(canvas, w, workerTop, workerH, nowMs);
 
         // 4. Bottom 3-step execution flow list
@@ -194,7 +207,7 @@ public class ThreadingLaneView extends View {
                     ? "0 ms"
                     : (state.mainBlockedMs <= 0L ? "<1 ms" : state.mainBlockedMs + " ms");
             droppedVal = state.droppedFrames + " khung";
-            threadVal = "Worker Pool";
+            threadVal = "Pool 4T";
 
             blockedBg = COLOR_GREEN_BG;
             blockedBorder = COLOR_GREEN_BORDER;
@@ -387,25 +400,24 @@ public class ThreadingLaneView extends View {
         textPaint.setTextSize(dp(10.5f));
         textPaint.setTextAlign(Paint.Align.LEFT);
         textPaint.setColor(COLOR_SLATE_900);
-        canvas.drawText("WORKER POOL (ApduThreadPool)", padX, headerY, textPaint);
+        canvas.drawText("WORKER POOL (ApduThreadPool · 4T)", padX, headerY, textPaint);
 
         if (!state.hasRun) {
             drawInlinePill(canvas, w - padX, headerY, "Sẵn sàng · 4T",
                     COLOR_WHITE, COLOR_SLATE_200, COLOR_SLATE_500);
         } else if (!state.afterMode) {
-            drawInlinePill(canvas, w - padX, headerY, "NHÀN RỖI",
+            drawInlinePill(canvas, w - padX, headerY, "NHÀN RỖI · 0/4T",
                     COLOR_WHITE, COLOR_AMBER_BORDER, COLOR_AMBER);
         } else if (state.runInProgress) {
-            drawInlinePill(canvas, w - padX, headerY, "Đang đọc thẻ...",
+            drawInlinePill(canvas, w - padX, headerY, "Đang chạy 4T...",
                     COLOR_WHITE, COLOR_SLATE_200, COLOR_BLUE);
         } else {
-            drawInlinePill(canvas, w - padX, headerY, "Xong " + state.workerReadMs + " ms",
+            drawInlinePill(canvas, w - padX, headerY, state.workerHeaderPillText,
                     COLOR_WHITE, COLOR_GREEN_BORDER, COLOR_GREEN);
         }
 
-        float trackTop = top + dp(28f);
+        float trackTop = top + dp(26f);
         float trackBottom = top + laneH - dp(10f);
-        float trackH = Math.max(dp(18f), trackBottom - trackTop);
         float trackRadius = dp(7f);
         trackRect.set(padX, trackTop, w - padX, trackBottom);
 
@@ -420,7 +432,7 @@ public class ThreadingLaneView extends View {
             textPaint.setTextSize(dp(9.5f));
             textPaint.setTextAlign(Paint.Align.CENTER);
             textPaint.setColor(COLOR_SLATE_500);
-            canvas.drawText("Chờ tác vụ nền...", trackRect.centerX(),
+            canvas.drawText("Sẵn sàng 4 luồng nền (T1–T4)...", trackRect.centerX(),
                     trackRect.centerY() + dp(3.5f), textPaint);
             return;
         }
@@ -436,32 +448,68 @@ public class ThreadingLaneView extends View {
             textPaint.setTextSize(dp(9.5f));
             textPaint.setTextAlign(Paint.Align.CENTER);
             textPaint.setColor(COLOR_AMBER);
-            canvas.drawText("Không dùng luồng nền — dồn lên Main Thread",
+            canvas.drawText("0/4 luồng nền hoạt động — dồn lên Main Thread",
                     trackRect.centerX(), trackRect.centerY() + dp(3.5f), textPaint);
             return;
         }
 
-        // After mode: active worker bar
-        fillPaint.setColor(COLOR_WHITE);
-        canvas.drawRoundRect(trackRect, trackRadius, trackRadius, fillPaint);
+        // After mode: 4 parallel worker swimlanes (T1–T4), zero allocations
+        float rowH = dp(24f);
+        float rowGap = dp(4f);
+        float labelColW = dp(104f);
+        float durColW = dp(44f);
+        float laneTrackLeft = padX + labelColW;
+        float laneTrackRight = Math.max(laneTrackLeft + dp(40f), w - padX - durColW);
+        float laneTrackW = laneTrackRight - laneTrackLeft;
+        float barRadius = dp(5f);
 
-        float trackW = trackRect.width();
-        float fillRatio = state.runInProgress
-                ? (0.35f + 0.45f * (0.5f + 0.5f * (float) Math.sin(nowMs / 180.0)))
-                : 1f;
-        barRect.set(trackRect.left, trackRect.top,
-                trackRect.left + Math.max(dp(24f), trackW * fillRatio), trackRect.bottom);
-        fillPaint.setColor(state.runInProgress ? COLOR_BLUE : COLOR_GREEN_BAR);
-        canvas.drawRoundRect(barRect, trackRadius, trackRadius, fillPaint);
+        for (int i = 0; i < ThreadingState.WORKER_COUNT; i++) {
+            float rTop = trackTop + i * (rowH + rowGap);
+            float rBottom = rTop + rowH;
+            float baseline = rTop + rowH * 0.5f + dp(3.2f);
+            int accent = WORKER_COLORS[i];
 
-        textPaint.setTypeface(sansBold);
-        textPaint.setTextSize(dp(9.5f));
-        textPaint.setTextAlign(Paint.Align.CENTER);
-        textPaint.setColor(COLOR_WHITE);
-        String workerText = state.runInProgress
-                ? "fetchFromCard() · Đang chạy nền..."
-                : "fetchFromCard() · APDU nền · 0 chặn UI";
-        canvas.drawText(workerText, trackRect.centerX(), trackRect.centerY() + dp(3.5f), textPaint);
+            textPaint.setTypeface(sansBold);
+            textPaint.setTextSize(dp(9f));
+            textPaint.setTextAlign(Paint.Align.LEFT);
+            textPaint.setColor(COLOR_SLATE_700);
+            String rowTitle = state.workerRowTitles[i] != null ? state.workerRowTitles[i] : "";
+            canvas.drawText(rowTitle, padX, baseline, textPaint);
+
+            trackRect.set(laneTrackLeft, rTop + dp(4f), laneTrackRight, rBottom - dp(4f));
+            fillPaint.setColor(COLOR_WHITE);
+            canvas.drawRoundRect(trackRect, barRadius, barRadius, fillPaint);
+            strokePaint.setStrokeWidth(dp(0.8f));
+            strokePaint.setColor(COLOR_SLATE_200);
+            canvas.drawRoundRect(trackRect, barRadius, barRadius, strokePaint);
+
+            if (state.runInProgress) {
+                float phase = 0.5f + 0.5f * (float) Math.sin(nowMs / 160.0 + i * 0.8);
+                float animW = Math.max(dp(12f), laneTrackW * (0.28f + 0.52f * phase));
+                barRect.set(laneTrackLeft, trackRect.top, laneTrackLeft + animW, trackRect.bottom);
+                fillPaint.setColor(COLOR_BLUE);
+                canvas.drawRoundRect(barRect, barRadius, barRadius, fillPaint);
+            } else {
+                float startRatio = state.getWorkerStartRatio(i);
+                float endRatio = state.getWorkerEndRatio(i);
+                float bLeft = laneTrackLeft + laneTrackW * startRatio;
+                float bRight = Math.max(bLeft + dp(8f), laneTrackLeft + laneTrackW * endRatio);
+                if (bRight > laneTrackRight) {
+                    bRight = laneTrackRight;
+                    bLeft = Math.max(laneTrackLeft, bRight - dp(8f));
+                }
+                barRect.set(bLeft, trackRect.top, bRight, trackRect.bottom);
+                fillPaint.setColor(accent);
+                canvas.drawRoundRect(barRect, barRadius, barRadius, fillPaint);
+            }
+
+            textPaint.setTypeface(monoBold);
+            textPaint.setTextSize(dp(9f));
+            textPaint.setTextAlign(Paint.Align.RIGHT);
+            textPaint.setColor(state.runInProgress ? COLOR_BLUE : accent);
+            String durText = state.workerDurationTexts[i] != null ? state.workerDurationTexts[i] : "—";
+            canvas.drawText(durText, w - padX, baseline, textPaint);
+        }
     }
 
     private void drawExecutionSteps(Canvas canvas, float w, float stepsTop, float h, long nowMs) {
@@ -587,6 +635,7 @@ public class ThreadingLaneView extends View {
      */
     static final class ThreadingState {
         static final int TOTAL_BURST_FRAMES = 18;
+        static final int WORKER_COUNT = 4;
         static final int STEP_COUNT = 3;
         static final int STEP_IDLE = 0;
         static final int STEP_RUNNING = 1;
@@ -598,11 +647,20 @@ public class ThreadingLaneView extends View {
         boolean afterMode;
         boolean runInProgress;
         boolean backgroundJankActive;
+        boolean hasWorkerDetails;
         long mainBlockedMs;
         long workerReadMs;
+        long workerSumMs;
         int droppedFrames;
         int completedBurstFrames;
         final long[] burstFrameMs = new long[TOTAL_BURST_FRAMES];
+        final String[] workerLabels = {"APDU thẻ", "Sinh QR 30s", "Băm PBKDF2", "Cache L2 TEE"};
+        final String[] workerThreadNames = {"Worker-T1", "Worker-T2", "Worker-T3", "Worker-T4"};
+        final String[] workerRowTitles = {"T1 · APDU thẻ", "T2 · Sinh QR 30s", "T3 · Băm PBKDF2", "T4 · Cache L2 TEE"};
+        final String[] workerDurationTexts = {"—", "—", "—", "—"};
+        final long[] workerStartOffsetMs = new long[WORKER_COUNT];
+        final long[] workerDurationMs = new long[WORKER_COUNT];
+        String workerHeaderPillText = "Sẵn sàng · 4T";
         final int[] stepState = new int[STEP_COUNT];
         final String[] stepLabels = {
                 "1. Gọi tác vụ đọc thẻ",
@@ -622,6 +680,7 @@ public class ThreadingLaneView extends View {
             droppedFrames = 0;
             completedBurstFrames = 0;
             Arrays.fill(burstFrameMs, 0L);
+            resetWorkerTelemetry();
             runStartClockMs = nowMs;
 
             stepLabels[0] = "1. Gọi fetchFromCard() đồng bộ trên main";
@@ -663,6 +722,7 @@ public class ThreadingLaneView extends View {
             mainBlockedMs = Math.max(1L, totalBlockedMs);
             workerReadMs = 0L;
             droppedFrames = computeDroppedFrames(mainBlockedMs);
+            resetWorkerTelemetry();
 
             for (int i = 0; i < TOTAL_BURST_FRAMES; i++) {
                 if (burstFrameMs[i] <= 0L) {
@@ -688,10 +748,15 @@ public class ThreadingLaneView extends View {
             droppedFrames = 0;
             completedBurstFrames = 0;
             Arrays.fill(burstFrameMs, 0L);
+            resetWorkerTelemetry();
+            for (int i = 0; i < WORKER_COUNT; i++) {
+                workerDurationTexts[i] = "...";
+            }
+            workerHeaderPillText = "Đang chạy 4T...";
             runStartClockMs = nowMs;
 
             stepLabels[0] = "1. Hủy jankRunnable (Gỡ chặn UI)";
-            stepLabels[1] = "2. Đẩy đọc APDU sang ApduThreadPool";
+            stepLabels[1] = "2. Chạy song song 4 luồng nền (T1–T4)";
             stepLabels[2] = "3. Callback cập nhật UI trên Main";
 
             stepState[0] = STEP_DONE_OK;
@@ -707,9 +772,23 @@ public class ThreadingLaneView extends View {
             afterMode = true;
             runInProgress = false;
             backgroundJankActive = false;
+            hasWorkerDetails = false;
             mainBlockedMs = Math.max(0L, blockedMs);
             workerReadMs = Math.max(1L, readMs);
+            workerSumMs = workerReadMs;
             droppedFrames = computeDroppedFrames(mainBlockedMs);
+
+            workerStartOffsetMs[0] = 0L;
+            workerDurationMs[0] = workerReadMs;
+            workerRowTitles[0] = "T1 · " + workerLabels[0];
+            workerDurationTexts[0] = workerReadMs + " ms";
+            for (int i = 1; i < WORKER_COUNT; i++) {
+                workerStartOffsetMs[i] = 0L;
+                workerDurationMs[i] = 0L;
+                workerRowTitles[i] = "T" + (i + 1) + " · " + workerLabels[i];
+                workerDurationTexts[i] = "—";
+            }
+            workerHeaderPillText = "Xong " + workerReadMs + " ms · 4T";
 
             stepState[0] = STEP_DONE_OK;
             stepValues[0] = "Xong";
@@ -717,6 +796,102 @@ public class ThreadingLaneView extends View {
             stepValues[1] = workerReadMs + " ms";
             stepState[2] = STEP_DONE_OK;
             stepValues[2] = mainBlockedMs <= 0L ? "<1 ms" : mainBlockedMs + " ms";
+        }
+
+        void finishAfterRun(long blockedMs, long wallMs,
+                            String[] labels, String[] threadNames,
+                            long[] startOffsetsMs, long[] durationsMs) {
+            hasRun = true;
+            afterMode = true;
+            runInProgress = false;
+            backgroundJankActive = false;
+            hasWorkerDetails = true;
+            mainBlockedMs = Math.max(0L, blockedMs);
+            workerReadMs = Math.max(1L, wallMs);
+            workerSumMs = 0L;
+            droppedFrames = computeDroppedFrames(mainBlockedMs);
+
+            for (int i = 0; i < WORKER_COUNT; i++) {
+                if (labels != null && i < labels.length && labels[i] != null) {
+                    workerLabels[i] = labels[i];
+                }
+                if (threadNames != null && i < threadNames.length && threadNames[i] != null) {
+                    workerThreadNames[i] = threadNames[i];
+                } else {
+                    workerThreadNames[i] = "Worker-T" + (i + 1);
+                }
+                long offset = (startOffsetsMs != null && i < startOffsetsMs.length)
+                        ? Math.max(0L, startOffsetsMs[i])
+                        : 0L;
+                long dur = (durationsMs != null && i < durationsMs.length)
+                        ? Math.max(1L, durationsMs[i])
+                        : 1L;
+                workerStartOffsetMs[i] = offset;
+                workerDurationMs[i] = dur;
+                workerSumMs += dur;
+                workerRowTitles[i] = shortThreadTag(workerThreadNames[i], i) + " · " + workerLabels[i];
+                workerDurationTexts[i] = dur + " ms";
+            }
+            workerHeaderPillText = "Xong " + workerReadMs + " ms · 4T";
+
+            stepState[0] = STEP_DONE_OK;
+            stepValues[0] = "Xong";
+            stepState[1] = STEP_DONE_OK;
+            stepValues[1] = workerReadMs + " ms (4T)";
+            stepState[2] = STEP_DONE_OK;
+            stepValues[2] = mainBlockedMs <= 0L ? "<1 ms" : mainBlockedMs + " ms";
+        }
+
+        float getWorkerStartRatio(int slot) {
+            if (slot < 0 || slot >= WORKER_COUNT) return 0f;
+            long maxEnd = Math.max(1L, getWorkerTimelineMaxMs());
+            return clamp01((float) workerStartOffsetMs[slot] / maxEnd);
+        }
+
+        float getWorkerEndRatio(int slot) {
+            if (slot < 0 || slot >= WORKER_COUNT) return 0f;
+            long dur = workerDurationMs[slot];
+            if (dur <= 0L) return 0f;
+            long maxEnd = Math.max(1L, getWorkerTimelineMaxMs());
+            return clamp01((float) (workerStartOffsetMs[slot] + dur) / maxEnd);
+        }
+
+        private long getWorkerTimelineMaxMs() {
+            long maxEnd = workerReadMs;
+            for (int i = 0; i < WORKER_COUNT; i++) {
+                long end = workerStartOffsetMs[i] + workerDurationMs[i];
+                if (end > maxEnd) {
+                    maxEnd = end;
+                }
+            }
+            return maxEnd;
+        }
+
+        private void resetWorkerTelemetry() {
+            hasWorkerDetails = false;
+            workerSumMs = 0L;
+            workerLabels[0] = "APDU thẻ";
+            workerLabels[1] = "Sinh QR 30s";
+            workerLabels[2] = "Băm PBKDF2";
+            workerLabels[3] = "Cache L2 TEE";
+            for (int i = 0; i < WORKER_COUNT; i++) {
+                workerThreadNames[i] = "Worker-T" + (i + 1);
+                workerStartOffsetMs[i] = 0L;
+                workerDurationMs[i] = 0L;
+                workerRowTitles[i] = "T" + (i + 1) + " · " + workerLabels[i];
+                workerDurationTexts[i] = "—";
+            }
+            workerHeaderPillText = "NHÀN RỖI · 0/4T";
+        }
+
+        static String shortThreadTag(String threadName, int fallbackIndex) {
+            if (threadName != null) {
+                int idx = threadName.lastIndexOf('T');
+                if (idx >= 0 && idx + 1 < threadName.length()) {
+                    return threadName.substring(idx);
+                }
+            }
+            return "T" + (fallbackIndex + 1);
         }
 
         float getBurstBarHeightRatio(int slot) {

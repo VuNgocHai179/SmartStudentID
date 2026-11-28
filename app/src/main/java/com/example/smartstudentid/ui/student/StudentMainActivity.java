@@ -22,7 +22,7 @@ import com.example.smartstudentid.security.BaseSecureActivity;
 import com.example.smartstudentid.security.EncryptedCacheManager;
 import com.example.smartstudentid.ui.demo.TopicDemoFragment;
 import com.example.smartstudentid.ui.widget.LivePerfHudView;
-import com.example.smartstudentid.ui.widget.SecurityDefensePopupDialog;
+import com.example.smartstudentid.ui.widget.LiveSecurityHudView;
 import com.google.android.material.button.MaterialButton;
 
 /**
@@ -37,7 +37,9 @@ public class StudentMainActivity extends BaseSecureActivity {
     private TextView tvHeaderPerfBadge;
     private ViewPager2 viewPagerStudent;
     private LivePerfHudView livePerfHud;
+    private LiveSecurityHudView liveSecurityHud;
     private MaterialButton btnTogglePerfHud;
+    private MaterialButton btnOpenSecurityPopup;
 
     private final TextView[] navLabels = new TextView[TOPIC_TAB_COUNT];
     private final ImageView[] navIcons = new ImageView[TOPIC_TAB_COUNT];
@@ -80,6 +82,7 @@ public class StudentMainActivity extends BaseSecureActivity {
         }
 
         livePerfHud = findViewById(R.id.livePerfHud);
+        liveSecurityHud = findViewById(R.id.liveSecurityHud);
         btnTogglePerfHud = findViewById(R.id.btnTogglePerfHud);
         livePerfHud.setVisibility(View.GONE);
         updateHudToggleButtonStyle(false);
@@ -89,9 +92,15 @@ public class StudentMainActivity extends BaseSecureActivity {
             updateHudToggleButtonStyle(show);
         });
 
-        MaterialButton btnOpenSecurityPopup = findViewById(R.id.btnOpenSecurityPopup);
-        if (btnOpenSecurityPopup != null) {
-            btnOpenSecurityPopup.setOnClickListener(v -> SecurityDefensePopupDialog.show(this));
+        btnOpenSecurityPopup = findViewById(R.id.btnOpenSecurityPopup);
+        if (btnOpenSecurityPopup != null && liveSecurityHud != null) {
+            liveSecurityHud.setVisibility(View.GONE);
+            updateSecHudToggleButtonStyle(false);
+            btnOpenSecurityPopup.setOnClickListener(v -> {
+                boolean show = liveSecurityHud.getVisibility() != View.VISIBLE;
+                liveSecurityHud.setVisibility(show ? View.VISIBLE : View.GONE);
+                updateSecHudToggleButtonStyle(show);
+            });
         }
 
         MaterialButton btnHeaderSwitchCard = findViewById(R.id.btnHeaderSwitchCard);
@@ -105,6 +114,23 @@ public class StudentMainActivity extends BaseSecureActivity {
         int fg = ContextCompat.getColor(this, hudVisible ? R.color.white : R.color.brand_600);
         btnTogglePerfHud.setBackgroundTintList(ColorStateList.valueOf(bg));
         btnTogglePerfHud.setTextColor(fg);
+    }
+
+    private void updateSecHudToggleButtonStyle(boolean secVisible) {
+        if (btnOpenSecurityPopup == null) return;
+        int bg = ContextCompat.getColor(this, secVisible ? R.color.brand_600 : R.color.brand_50);
+        int fg = ContextCompat.getColor(this, secVisible ? R.color.white : R.color.brand_600);
+        btnOpenSecurityPopup.setBackgroundTintList(ColorStateList.valueOf(bg));
+        btnOpenSecurityPopup.setTextColor(fg);
+        btnOpenSecurityPopup.setIconTint(ColorStateList.valueOf(fg));
+    }
+
+    @Override
+    public void applyFlagSecure(boolean enable) {
+        super.applyFlagSecure(enable);
+        if (liveSecurityHud != null && liveSecurityHud.getVisibility() == View.VISIBLE) {
+            liveSecurityHud.refreshNow();
+        }
     }
 
     public void logoutCurrentCard() {

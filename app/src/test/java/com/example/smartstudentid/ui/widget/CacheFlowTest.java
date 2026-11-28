@@ -120,4 +120,33 @@ public class CacheFlowTest {
         assertEquals(CacheFlowView.CacheFlowState.NODE_IDLE, state.chipState);
         assertEquals(0f, state.getProgressRatio(), 0.001f);
     }
+
+    @Test
+    public void coldMissAfterWipeAndL1EvictionTrackTwoTierTransitions() {
+        CacheFlowView.CacheFlowState state = new CacheFlowView.CacheFlowState();
+
+        state.resetToEmpty();
+        state.finishAfterColdMiss(360L, 6);
+        assertFalse(state.runInProgress);
+        assertFalse(state.plaintextExposed);
+        assertEquals(6, state.apduCount);
+        assertEquals("MISS→Nạp", state.l1Badge);
+        assertEquals("Lưu TEE", state.l2Badge);
+        assertEquals("6 APDU", state.chipBadge);
+        assertEquals(CacheFlowView.CacheFlowState.STEP_DONE_OK, state.stepState[1]);
+
+        state.recordL1Evicted();
+        assertEquals(CacheFlowView.CacheFlowState.NODE_IDLE, state.l1State);
+        assertEquals("Đã xóa", state.l1Badge);
+        assertEquals(CacheFlowView.CacheFlowState.NODE_HIT, state.l2State);
+        assertEquals("AES-GCM", state.l2Badge);
+        assertEquals(0, state.apduCount);
+
+        state.finishAfterRun("L2 TEE", 4L);
+        assertEquals("Nạp L1", state.l1Badge);
+        assertEquals("HIT TEE", state.l2Badge);
+
+        state.finishAfterRun("L1 RAM", 1L);
+        assertEquals("HIT <1 ms", state.l1Badge);
+    }
 }

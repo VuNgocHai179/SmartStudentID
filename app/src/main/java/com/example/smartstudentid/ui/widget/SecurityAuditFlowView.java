@@ -110,6 +110,35 @@ public class SecurityAuditFlowView extends View {
         invalidate();
     }
 
+    public void showCustomFlow(boolean afterMode,
+                               String cardTitle,
+                               String modePill,
+                               String[] kpiLabels,
+                               String[] kpiValues,
+                               String[] nodeTitles,
+                               String[] nodeSubtitles,
+                               int[] nodeStates,
+                               String[] nodeBadges,
+                               String summary,
+                               String[] stepLabels,
+                               int[] stepStates,
+                               String[] stepValues) {
+        state.applyCustomFlow(afterMode, cardTitle, modePill, kpiLabels, kpiValues,
+                nodeTitles, nodeSubtitles, nodeStates, nodeBadges, summary,
+                stepLabels, stepStates, stepValues);
+        invalidate();
+    }
+
+    public void resetToIdleForFlow(String cardTitle,
+                                     String[] kpiLabels,
+                                     String[] nodeTitles,
+                                     String[] nodeSubtitles,
+                                     String summary,
+                                     String[] stepLabels) {
+        state.resetToIdleForFlow(cardTitle, kpiLabels, nodeTitles, nodeSubtitles, summary, stepLabels);
+        invalidate();
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int desiredW = Math.round(dp(320f));
@@ -166,6 +195,26 @@ public class SecurityAuditFlowView extends View {
         int masvsBg = COLOR_SLATE_50;
         int masvsBorder = COLOR_SLATE_200;
         int masvsColor = COLOR_SLATE_900;
+
+        if (state.useCustomDisplay) {
+            int kpiBg = !state.hasRun
+                    ? COLOR_SLATE_50
+                    : (state.mode == SecurityFlowState.MODE_BEFORE ? COLOR_RED_BG : COLOR_GREEN_BG);
+            int kpiBorder = !state.hasRun
+                    ? COLOR_SLATE_200
+                    : (state.mode == SecurityFlowState.MODE_BEFORE ? COLOR_RED_BORDER : COLOR_GREEN_BORDER);
+            int kpiColor = !state.hasRun
+                    ? COLOR_SLATE_900
+                    : (state.mode == SecurityFlowState.MODE_BEFORE ? COLOR_RED : COLOR_GREEN);
+            for (int i = 0; i < 3; i++) {
+                String label = state.kpiLabels[i] != null ? state.kpiLabels[i] : "";
+                String val = state.hasRun && state.customKpiValues[i] != null
+                        ? state.customKpiValues[i] : "—";
+                drawKpiCard(canvas, (cardW + gap) * i, cardW, kpiH,
+                        label, val, kpiBg, kpiBorder, kpiColor);
+            }
+            return;
+        }
 
         if (!state.hasRun) {
             timeVal = "—";
@@ -240,7 +289,9 @@ public class SecurityAuditFlowView extends View {
         int pillBorder = COLOR_SLATE_200;
         int pillText = COLOR_SLATE_500;
 
-        if (state.mode == SecurityFlowState.MODE_BEFORE) {
+        if (state.useCustomDisplay && state.customModePill != null && !state.customModePill.isEmpty()) {
+            modeText = state.customModePill;
+        } else if (state.mode == SecurityFlowState.MODE_BEFORE) {
             cardBg = COLOR_RED_BG;
             cardBorder = COLOR_RED_BORDER;
             modeText = "LỘ STRING · SYNC";
@@ -252,6 +303,20 @@ public class SecurityAuditFlowView extends View {
             modeText = "CHAR[] ZEROIZE";
             pillBorder = COLOR_GREEN_BORDER;
             pillText = COLOR_GREEN;
+        }
+
+        if (state.useCustomDisplay) {
+            if (state.mode == SecurityFlowState.MODE_BEFORE) {
+                cardBg = COLOR_RED_BG;
+                cardBorder = COLOR_RED_BORDER;
+                pillBorder = COLOR_RED_BORDER;
+                pillText = COLOR_RED;
+            } else if (state.mode == SecurityFlowState.MODE_AFTER) {
+                cardBg = COLOR_GREEN_BG;
+                cardBorder = COLOR_GREEN_BORDER;
+                pillBorder = COLOR_GREEN_BORDER;
+                pillText = COLOR_GREEN;
+            }
         }
 
         pipeRect.set(0f, top, w, top + pipeH);
@@ -268,7 +333,9 @@ public class SecurityAuditFlowView extends View {
         textPaint.setTextSize(dp(10.5f));
         textPaint.setTextAlign(Paint.Align.LEFT);
         textPaint.setColor(COLOR_SLATE_900);
-        canvas.drawText("LUỒNG BĂM PBKDF2 & XÓA RAM PIN", padX, headerY, textPaint);
+        String headerTitle = state.useCustomDisplay && state.cardTitle != null
+                ? state.cardTitle : "LUỒNG BĂM PBKDF2 & XÓA RAM PIN";
+        canvas.drawText(headerTitle, padX, headerY, textPaint);
 
         drawInlinePill(canvas, w - padX, headerY, modeText, COLOR_WHITE, pillBorder, pillText);
 
@@ -284,16 +351,25 @@ public class SecurityAuditFlowView extends View {
         float n3Left = n2Left + nodeW + arrowGap;
         float arrowCy = nodesTop + nodeH * 0.5f;
 
-        String initSub = state.mode == SecurityFlowState.MODE_BEFORE
-                ? "Sync Init"
-                : (state.mode == SecurityFlowState.MODE_AFTER ? "Lazy Init" : "Sync / Lazy");
+        if (state.useCustomDisplay) {
+            drawStageNode(canvas, n1Left, nodesTop, nodeW, nodeH,
+                    state.nodeTitles[0], state.nodeSubtitles[0], state.initNodeState, state.initBadge);
+            drawStageNode(canvas, n2Left, nodesTop, nodeW, nodeH,
+                    state.nodeTitles[1], state.nodeSubtitles[1], state.pbkdf2NodeState, state.pbkdf2Badge);
+            drawStageNode(canvas, n3Left, nodesTop, nodeW, nodeH,
+                    state.nodeTitles[2], state.nodeSubtitles[2], state.zeroizeNodeState, state.zeroizeBadge);
+        } else {
+            String initSub = state.mode == SecurityFlowState.MODE_BEFORE
+                    ? "Sync Init"
+                    : (state.mode == SecurityFlowState.MODE_AFTER ? "Lazy Init" : "Sync / Lazy");
 
-        drawStageNode(canvas, n1Left, nodesTop, nodeW, nodeH,
-                "KHỞI TẠO", initSub, state.initNodeState, state.initBadge);
-        drawStageNode(canvas, n2Left, nodesTop, nodeW, nodeH,
-                "BĂM PBKDF2", "10.000 vòng", state.pbkdf2NodeState, state.pbkdf2Badge);
-        drawStageNode(canvas, n3Left, nodesTop, nodeW, nodeH,
-                "ZEROIZE RAM", "Heap RAM", state.zeroizeNodeState, state.zeroizeBadge);
+            drawStageNode(canvas, n1Left, nodesTop, nodeW, nodeH,
+                    "KHỞI TẠO", initSub, state.initNodeState, state.initBadge);
+            drawStageNode(canvas, n2Left, nodesTop, nodeW, nodeH,
+                    "BĂM PBKDF2", "10.000 vòng", state.pbkdf2NodeState, state.pbkdf2Badge);
+            drawStageNode(canvas, n3Left, nodesTop, nodeW, nodeH,
+                    "ZEROIZE RAM", "Heap RAM", state.zeroizeNodeState, state.zeroizeBadge);
+        }
 
         int arrowColor = state.mode == SecurityFlowState.MODE_BEFORE
                 ? COLOR_RED
@@ -541,21 +617,21 @@ public class SecurityAuditFlowView extends View {
      * Pure-Java security authentication, char[] PIN zeroization & MASVS audit state for unit
      * testing without Android framework dependencies.
      */
-    static final class SecurityFlowState {
-        static final int MODE_IDLE = 0;
-        static final int MODE_BEFORE = 1;
-        static final int MODE_AFTER = 2;
+    public static final class SecurityFlowState {
+        public static final int MODE_IDLE = 0;
+        public static final int MODE_BEFORE = 1;
+        public static final int MODE_AFTER = 2;
 
-        static final int NODE_IDLE = 0;
-        static final int NODE_ACTIVE = 1;
-        static final int NODE_OK = 2;
-        static final int NODE_FAULT = 3;
+        public static final int NODE_IDLE = 0;
+        public static final int NODE_ACTIVE = 1;
+        public static final int NODE_OK = 2;
+        public static final int NODE_FAULT = 3;
 
-        static final int STEP_COUNT = 3;
-        static final int STEP_IDLE = 0;
-        static final int STEP_RUNNING = 1;
-        static final int STEP_DONE_FAULT = 2;
-        static final int STEP_DONE_OK = 3;
+        public static final int STEP_COUNT = 3;
+        public static final int STEP_IDLE = 0;
+        public static final int STEP_RUNNING = 1;
+        public static final int STEP_DONE_FAULT = 2;
+        public static final int STEP_DONE_OK = 3;
 
         static final long BEFORE_SYNC_TARGET_MS = 1950L;
 
@@ -577,6 +653,14 @@ public class SecurityAuditFlowView extends View {
         String zeroizeBadge = "Chờ";
         String summaryText = "Bấm Xác thực đăng nhập để kiểm chứng Zeroize PIN & MASVS";
 
+        boolean useCustomDisplay = false;
+        String cardTitle = "LUỒNG BĂM PBKDF2 & XÓA RAM PIN";
+        String customModePill = "";
+        final String[] kpiLabels = {"THỜI GIAN ĐĂNG NHẬP", "PHƠI NHIỄM PIN", "ĐIỂM MASVS"};
+        final String[] customKpiValues = {"—", "—", "—"};
+        final String[] nodeTitles = {"KHỞI TẠO", "BĂM PBKDF2", "ZEROIZE RAM"};
+        final String[] nodeSubtitles = {"Sync / Lazy", "10.000 vòng", "Heap RAM"};
+
         final int[] stepState = {STEP_IDLE, STEP_IDLE, STEP_IDLE};
         final String[] stepLabels = {
                 "1. Khởi tạo KeyStore (Sync vs Lazy)",
@@ -586,6 +670,7 @@ public class SecurityAuditFlowView extends View {
         final String[] stepValues = {"Chờ", "Chờ", "Chờ"};
 
         void beginBeforeRun(long nowMs, int pinLen, int currentMasvs) {
+            useCustomDisplay = false;
             hasRun = true;
             mode = MODE_BEFORE;
             runInProgress = true;
@@ -629,6 +714,7 @@ public class SecurityAuditFlowView extends View {
         }
 
         void finishBeforeRun(long totalMs, int pinLen, int finalMasvs) {
+            useCustomDisplay = false;
             hasRun = true;
             mode = MODE_BEFORE;
             runInProgress = false;
@@ -657,6 +743,7 @@ public class SecurityAuditFlowView extends View {
         }
 
         void beginAfterRun(long nowMs, int pinLen) {
+            useCustomDisplay = false;
             hasRun = true;
             mode = MODE_AFTER;
             runInProgress = true;
@@ -689,6 +776,7 @@ public class SecurityAuditFlowView extends View {
         }
 
         void finishAfterRun(long totalMs, int remainingChars, int pinLen, int finalMasvs) {
+            useCustomDisplay = false;
             hasRun = true;
             mode = MODE_AFTER;
             runInProgress = false;
@@ -715,6 +803,74 @@ public class SecurityAuditFlowView extends View {
             stepValues[1] = remainingPinChars + "/" + pinLength + " còn";
             stepState[2] = masvsScore == 5 ? STEP_DONE_OK : STEP_DONE_FAULT;
             stepValues[2] = "MASVS " + masvsScore + "/5";
+        }
+
+        void resetToIdleForFlow(String title,
+                                  String[] kpis,
+                                  String[] nTitles,
+                                  String[] nSubs,
+                                  String summary,
+                                  String[] sLabels) {
+            useCustomDisplay = true;
+            hasRun = false;
+            mode = MODE_IDLE;
+            runInProgress = false;
+            elapsedMs = 0L;
+            cardTitle = title;
+            customModePill = "Chờ chạy";
+            for (int i = 0; i < 3; i++) {
+                kpiLabels[i] = kpis[i];
+                customKpiValues[i] = "—";
+                nodeTitles[i] = nTitles[i];
+                nodeSubtitles[i] = nSubs[i];
+                stepLabels[i] = sLabels[i];
+                stepState[i] = STEP_IDLE;
+                stepValues[i] = "Chờ";
+            }
+            initNodeState = NODE_IDLE;
+            pbkdf2NodeState = NODE_IDLE;
+            zeroizeNodeState = NODE_IDLE;
+            initBadge = "Chờ";
+            pbkdf2Badge = "Chờ";
+            zeroizeBadge = "Chờ";
+            summaryText = summary;
+        }
+
+        void applyCustomFlow(boolean afterMode,
+                             String title,
+                             String modePill,
+                             String[] kpis,
+                             String[] kpiVals,
+                             String[] nTitles,
+                             String[] nSubs,
+                             int[] nStates,
+                             String[] nBadges,
+                             String summary,
+                             String[] sLabels,
+                             int[] sStates,
+                             String[] sVals) {
+            useCustomDisplay = true;
+            hasRun = true;
+            mode = afterMode ? MODE_AFTER : MODE_BEFORE;
+            runInProgress = false;
+            cardTitle = title;
+            customModePill = modePill;
+            for (int i = 0; i < 3; i++) {
+                kpiLabels[i] = kpis[i];
+                customKpiValues[i] = kpiVals[i];
+                nodeTitles[i] = nTitles[i];
+                nodeSubtitles[i] = nSubs[i];
+                stepLabels[i] = sLabels[i];
+                stepState[i] = sStates[i];
+                stepValues[i] = sVals[i];
+            }
+            initNodeState = nStates[0];
+            pbkdf2NodeState = nStates[1];
+            zeroizeNodeState = nStates[2];
+            initBadge = nBadges[0];
+            pbkdf2Badge = nBadges[1];
+            zeroizeBadge = nBadges[2];
+            summaryText = summary;
         }
 
         long getLiveDisplayMs(long nowMs) {

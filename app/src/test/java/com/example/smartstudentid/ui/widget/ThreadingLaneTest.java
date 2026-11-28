@@ -74,4 +74,38 @@ public class ThreadingLaneTest {
         assertEquals("185 ms", state.stepValues[1]);
         assertEquals("<1 ms", state.stepValues[2]);
     }
+
+    @Test
+    public void afterRunTracksFourParallelWorkersAndResetsOnBeforeRun() {
+        ThreadingLaneView.ThreadingState state = new ThreadingLaneView.ThreadingState();
+        state.beginAfterRun(5000L);
+
+        String[] labels = {"APDU thẻ", "Sinh QR 30s", "Băm PBKDF2", "Cache L2 TEE"};
+        String[] threadNames = {"Worker-T1", "Worker-T2", "Worker-T3", "Worker-T4"};
+        long[] startOffsets = {0L, 0L, 1L, 1L};
+        long[] durations = {38L, 18L, 14L, 3L};
+
+        state.finishAfterRun(0L, 42L, labels, threadNames, startOffsets, durations);
+
+        assertTrue(state.hasWorkerDetails);
+        assertFalse(state.runInProgress);
+        assertEquals(42L, state.workerReadMs);
+        assertEquals(73L, state.workerSumMs);
+        assertEquals(0, state.droppedFrames);
+        assertEquals("42 ms (4T)", state.stepValues[1]);
+        assertEquals("T1 · APDU thẻ", state.workerRowTitles[0]);
+        assertEquals("3 ms", state.workerDurationTexts[3]);
+
+        for (int i = 0; i < ThreadingLaneView.ThreadingState.WORKER_COUNT; i++) {
+            float startRatio = state.getWorkerStartRatio(i);
+            float endRatio = state.getWorkerEndRatio(i);
+            assertTrue(startRatio >= 0f && startRatio <= 1f);
+            assertTrue(endRatio >= 0f && endRatio <= 1f);
+            assertTrue(startRatio < endRatio);
+        }
+
+        state.beginBeforeRun(9000L);
+        assertFalse(state.hasWorkerDetails);
+        assertEquals(0L, state.workerSumMs);
+    }
 }

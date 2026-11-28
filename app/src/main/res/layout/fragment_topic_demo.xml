@@ -664,7 +664,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:text="Ảnh mẫu — 1200×1200 px"
+                        android:text="Chưa chọn ảnh — bấm Chọn ảnh từ thư viện"
                         android:textAppearance="@style/TextAppearance.SmartID.Micro" />
 
                     <LinearLayout
@@ -705,7 +705,7 @@
                         app:icon="@drawable/ic_image" />
                 </LinearLayout>
 
-                <!-- Tab 5 (§5): Security Center & PIN Verification -->
+                <!-- Tab 5 (§5): Security Center with 4 Separated Security Test Flows -->
                 <LinearLayout
                     android:id="@+id/panelPin"
                     android:layout_width="match_parent"
@@ -713,7 +713,67 @@
                     android:orientation="vertical"
                     android:visibility="gone">
 
-                    <!-- Visual Security Center: 5-segment MASVS meter + 6-cell RAM PIN visualizer -->
+                    <!-- 2x2 Flow Selector: 4 independent security flows -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSecFlowPin"
+                            style="@style/Widget.SmartID.Button.Pill"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_weight="1"
+                            android:text="1. Zeroize PIN"
+                            android:textSize="11sp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSecFlowAntiHook"
+                            style="@style/Widget.SmartID.Button.Pill"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:text="2. Anti-Hook &amp; APK"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:layout_marginBottom="10dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSecFlowUiLock"
+                            style="@style/Widget.SmartID.Button.Pill"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_weight="1"
+                            android:text="3. UI &amp; Khóa nền"
+                            android:textSize="11sp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSecFlowBiometric"
+                            style="@style/Widget.SmartID.Button.Pill"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:text="4. Sinh trắc TEE"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <!-- Sub-flow 0: Zeroize PIN -->
+                    <LinearLayout
+                        android:id="@+id/panelSecSubPin"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <!-- Visual Security Center: 5-segment MASVS meter + 6-cell RAM PIN visualizer -->
                     <LinearLayout
                         android:id="@+id/panelSecurityShield"
                         android:layout_width="match_parent"
@@ -852,24 +912,259 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
-                        android:text="Nhập mã PIN thẻ sinh viên (4–8 chữ số)"
+                        android:text="Bàn phím bảo mật char[] (4–8 chữ số — không qua EditText/IME)"
                         android:textAppearance="@style/TextAppearance.SmartID.Micro" />
 
-                    <EditText
-                        android:id="@+id/demoPinInput"
+                    <TextView
+                        android:id="@+id/tvSecurePinDisplay"
                         android:layout_width="match_parent"
-                        android:layout_height="46dp"
+                        android:layout_height="44dp"
                         android:layout_marginTop="6dp"
                         android:background="@drawable/bg_input"
                         android:filterTouchesWhenObscured="true"
-                        android:importantForAutofill="no"
-                        android:inputType="number|textPassword"
-                        android:maxLength="8"
+                        android:gravity="center"
+                        android:hint="Chạm số bên dưới để nhập PIN"
+                        android:letterSpacing="0.18"
                         android:paddingStart="12dp"
                         android:paddingEnd="12dp"
-                        android:text="123456"
+                        android:text=""
                         android:textColor="@color/slate_900"
-                        android:textSize="16sp" />
+                        android:textColorHint="@color/slate_400"
+                        android:textSize="17sp"
+                        android:textStyle="bold"
+                        android:typeface="monospace" />
+
+                    <LinearLayout
+                        android:id="@+id/llSecurePinPad"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/btnPinKey1"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="1"
+                                android:textColor="@color/slate_900"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btnPinKey2"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="2"
+                                android:textColor="@color/slate_900"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btnPinKey3"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="3"
+                                android:textColor="@color/slate_900"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btnPinKey4"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="4"
+                                android:textColor="@color/slate_900"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btnPinKey5"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="5"
+                                android:textColor="@color/slate_900"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btnPinKeyBack"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="⌫"
+                                android:textColor="@color/red_600"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/btnPinKey6"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="6"
+                                android:textColor="@color/slate_900"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btnPinKey7"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="7"
+                                android:textColor="@color/slate_900"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btnPinKey8"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="8"
+                                android:textColor="@color/slate_900"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btnPinKey9"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="9"
+                                android:textColor="@color/slate_900"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btnPinKey0"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="0"
+                                android:textColor="@color/slate_900"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btnPinKeyClear"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_soft_panel"
+                                android:clickable="true"
+                                android:filterTouchesWhenObscured="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="✕"
+                                android:textColor="@color/slate_500"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSecFlowLockNow"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="match_parent"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="4dp"
+                        android:text="Khóa phiên ngay → Màn khóa"
+                        android:textSize="11sp"
+                        android:visibility="gone" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnToggleFlagSecureDemo"
+                        style="@style/Widget.SmartID.Button.Outline"
+                        android:layout_width="match_parent"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="6dp"
+                        android:text="Tắt FLAG_SECURE tạm (Hiện lại Mirror)"
+                        android:textSize="11sp"
+                        android:visibility="gone" />
                 </LinearLayout>
 
                 <!-- Primary User Action Button -->
@@ -905,29 +1200,32 @@
                     android:visibility="gone"
                     app:strokeColor="#FCA5A5" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnResetCache"
-                    style="@style/Widget.SmartID.Button.Pill"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_gravity="end"
-                    android:layout_marginTop="6dp"
-                    android:text="Xóa bộ nhớ đệm"
-                    android:textSize="11sp"
-                    android:visibility="gone" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnInspectTopicSecurity"
-                    style="@style/Widget.SmartID.Button.Outline"
+                <LinearLayout
+                    android:id="@+id/rowCacheResetActions"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:minHeight="42dp"
-                    android:paddingTop="6dp"
-                    android:paddingBottom="6dp"
-                    android:text="Kiểm chứng dữ liệu &amp; bảo mật"
-                    android:visibility="gone"
-                    app:icon="@drawable/ic_lock" />
+                    android:layout_marginTop="6dp"
+                    android:gravity="end"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnEvictL1Only"
+                        style="@style/Widget.SmartID.Button.Pill"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:layout_marginEnd="8dp"
+                        android:text="Xóa L1 (Test L2)"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnResetCache"
+                        style="@style/Widget.SmartID.Button.Pill"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Xóa sạch L1 + L2"
+                        android:textSize="11sp" />
+                </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

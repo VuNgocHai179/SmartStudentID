@@ -9,8 +9,8 @@ import com.example.smartstudentid.security.SecurityEnvironmentChecker;
 import org.junit.Test;
 
 /**
- * Unit tests for RuntimeDefenseMonitorView.DefenseMonitorState probe mapping,
- * Frida active-defense reaction, FLAG_SECURE toggle, and background auto-lock transitions.
+ * Unit tests for RuntimeDefenseMonitorView.DefenseMonitorState live scan mapping
+ * across optimized (§5 After) and unoptimized (§5 Before) states.
  */
 public class RuntimeDefenseMonitorTest {
 
@@ -23,10 +23,11 @@ public class RuntimeDefenseMonitorTest {
                         false, false, false, false, false, true, true,
                         "9f8e7d6c5b4a3210fedcba9876543210");
 
-        state.applyLiveScan(clean, true, true, true, true, "TEE", 6L);
+        state.applyLiveScan(clean, true, false, true, true, true, "TEE", 6L);
 
         assertEquals(6, state.getPassedProbeCount());
         assertFalse(state.threatActive);
+        assertFalse(state.securityBypassActive);
         assertTrue(state.flagSecureOn);
         assertTrue(state.l1RamPresent);
         assertEquals("9F8E7D6C...", state.probeValues[2]);
@@ -42,7 +43,7 @@ public class RuntimeDefenseMonitorTest {
                 new SecurityEnvironmentChecker.SecurityAuditReport(
                         false, false, false, false, false, true, true, "abcdef12");
 
-        state.applyLiveScan(clean, false, false, false, false, "TEE", 4L);
+        state.applyLiveScan(clean, false, false, false, false, false, "TEE", 4L);
 
         assertEquals(5, state.getPassedProbeCount());
         assertEquals(RuntimeDefenseMonitorView.DefenseMonitorState.STATE_WARN, state.probeStates[5]);
@@ -51,34 +52,38 @@ public class RuntimeDefenseMonitorTest {
     }
 
     @Test
-    public void simulatedFridaDefenseMarksThreatAndEvictsL1Ram() {
+    public void unoptimizedBypassShowsZeroSafeAndAlertsAllSixProbes() {
         RuntimeDefenseMonitorView.DefenseMonitorState state =
                 new RuntimeDefenseMonitorView.DefenseMonitorState();
-        state.l1RamPresent = true;
+        SecurityEnvironmentChecker.SecurityAuditReport clean =
+                new SecurityEnvironmentChecker.SecurityAuditReport(
+                        false, false, false, false, false, true, true, "abcdef12");
 
-        state.applySimulatedFridaDefense(false, 2L);
+        state.applyLiveScan(clean, true, true, false, true, true, "TEE", 3L);
 
+        assertTrue(state.securityBypassActive);
         assertTrue(state.threatActive);
-        assertFalse(state.l1RamPresent);
-        assertEquals(RuntimeDefenseMonitorView.DefenseMonitorState.STATE_ALERT, state.probeStates[0]);
-        assertEquals("Frida Hook!", state.probeValues[0]);
-        assertTrue(state.bannerText.contains("PHẢN ỨNG CHỦ ĐỘNG"));
-        assertTrue(state.bannerText.contains("2 ms"));
+        assertEquals(0, state.getPassedProbeCount());
+        for (int s : state.probeStates) {
+            assertEquals(RuntimeDefenseMonitorView.DefenseMonitorState.STATE_ALERT, s);
+        }
+        assertTrue(state.bannerText.contains("CHƯA TỐI ƯU"));
+        assertEquals(RuntimeDefenseMonitorView.DefenseMonitorState.STATE_ALERT, state.bannerSeverity);
     }
 
     @Test
-    public void flagSecureToggleAndBackgroundLockUpdateStateCleanly() {
+    public void realFridaHookMarksThreatWhenBypassOff() {
         RuntimeDefenseMonitorView.DefenseMonitorState state =
                 new RuntimeDefenseMonitorView.DefenseMonitorState();
-        state.l1RamPresent = true;
+        SecurityEnvironmentChecker.SecurityAuditReport hooked =
+                new SecurityEnvironmentChecker.SecurityAuditReport(
+                        false, false, false, true, false, true, true, "abcdef12");
 
-        state.applyFlagSecureToggled(true);
-        assertTrue(state.flagSecureOn);
-        assertEquals(RuntimeDefenseMonitorView.DefenseMonitorState.STATE_SAFE, state.bannerSeverity);
+        state.applyLiveScan(hooked, true, false, false, false, true, "TEE", 5L);
 
-        state.applyBackgroundLockTriggered(true);
-        assertFalse(state.l1RamPresent);
-        assertEquals("Đã khóa L1", state.probeValues[4]);
-        assertEquals(RuntimeDefenseMonitorView.DefenseMonitorState.STATE_WARN, state.bannerSeverity);
+        assertTrue(state.threatActive);
+        assertEquals(RuntimeDefenseMonitorView.DefenseMonitorState.STATE_ALERT, state.probeStates[0]);
+        assertEquals("Frida Hook!", state.probeValues[0]);
+        assertEquals(RuntimeDefenseMonitorView.DefenseMonitorState.STATE_ALERT, state.bannerSeverity);
     }
 }

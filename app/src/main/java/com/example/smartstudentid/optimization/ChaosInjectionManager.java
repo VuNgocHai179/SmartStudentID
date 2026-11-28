@@ -203,20 +203,6 @@ public final class ChaosInjectionManager {
             leakPrefs.edit().putString(PLAINTEXT_LEAK_KEY, PLAINTEXT_LEAK_VALUE).commit();
         } else {
             leakPrefs.edit().clear().commit();
-            try {
-                EncryptedCacheManager cacheManager = EncryptedCacheManager.getInstance(appCtx);
-                StudentCardRecord existing = cacheManager.getStudentProfile();
-                if (existing == null) {
-                    String activeInfo = ApduClient.getInstance().getActiveCardInfo();
-                    if (activeInfo != null && activeInfo.contains("|")) {
-                        existing = StudentCardRecord.fromPipeDelimitedString(activeInfo);
-                    }
-                }
-                if (existing != null && existing.getStudentId() != null && !existing.getStudentId().isEmpty()) {
-                    cacheManager.saveStudentProfile(existing);
-                }
-            } catch (Exception ignored) {
-            }
         }
     }
 

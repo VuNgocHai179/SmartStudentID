@@ -113,6 +113,16 @@ public class CacheFlowView extends View {
         invalidate();
     }
 
+    public void finishAfterColdMiss(long totalMs, int coldApduCount) {
+        state.finishAfterColdMiss(totalMs, coldApduCount);
+        invalidate();
+    }
+
+    public void recordL1Evicted() {
+        state.recordL1Evicted();
+        invalidate();
+    }
+
     public void recordPinCheckOk() {
         state.recordPinCheckOk();
         invalidate();
@@ -823,6 +833,66 @@ public class CacheFlowView extends View {
             stepValues[1] = "Hit " + hitTierLabel;
             stepState[2] = STEP_DONE_OK;
             stepValues[2] = "0 APDU";
+        }
+
+        void finishAfterColdMiss(long totalMs, int coldApduCount) {
+            hasRun = true;
+            mode = MODE_AFTER;
+            runInProgress = false;
+            elapsedMs = Math.max(1L, totalMs);
+            apduCount = Math.max(1, coldApduCount);
+            plaintextExposed = false;
+            hitTierLabel = "THẺ → L1+L2";
+
+            l1State = NODE_ACTIVE;
+            l1Badge = "MISS→Nạp";
+            l2State = NODE_ACTIVE;
+            l2Badge = "Lưu TEE";
+            chipState = NODE_ACTIVE;
+            chipBadge = apduCount + " APDU";
+            routeSummaryText = "Cache trống (MISS) → Đọc thẻ (" + apduCount + " APDU) & nạp L2 TEE + L1 RAM";
+
+            stepLabels[0] = "1. Xóa sạch bản rõ (insecure_plaintext_leak)";
+            stepState[0] = STEP_DONE_OK;
+            stepValues[0] = "0 byte";
+
+            stepLabels[1] = "2. L1 & L2 MISS → Đọc lại từ Thẻ Chip";
+            stepState[1] = STEP_DONE_OK;
+            stepValues[1] = "Nạp L1+L2";
+
+            stepLabels[2] = "3. Lưu lượng APDU nạp lạnh (lần sau 0)";
+            stepState[2] = STEP_DONE_OK;
+            stepValues[2] = apduCount + " APDU";
+        }
+
+        void recordL1Evicted() {
+            hasRun = true;
+            mode = MODE_AFTER;
+            runInProgress = false;
+            elapsedMs = 0L;
+            apduCount = 0;
+            plaintextExposed = false;
+            hitTierLabel = "L2 TEE";
+
+            l1State = NODE_IDLE;
+            l1Badge = "Đã xóa";
+            l2State = NODE_HIT;
+            l2Badge = "AES-GCM";
+            chipState = NODE_IDLE;
+            chipBadge = "0 APDU";
+            routeSummaryText = "L1 RAM: Đã xóa · L2 TEE: Còn dữ liệu (Bấm Mở hồ sơ để test L2 Hit)";
+
+            stepLabels[0] = "1. Xóa sạch bản rõ (insecure_plaintext_leak)";
+            stepState[0] = STEP_DONE_OK;
+            stepValues[0] = "0 byte";
+
+            stepLabels[1] = "2. Đọc Cache 2 tầng (L1 RAM → L2 TEE)";
+            stepState[1] = STEP_IDLE;
+            stepValues[1] = "L1 trống · L2 sẵn";
+
+            stepLabels[2] = "3. Triệt tiêu I/O thẻ & Auto-Wipe 3x";
+            stepState[2] = STEP_IDLE;
+            stepValues[2] = "Chờ";
         }
 
         void recordPinCheckOk() {

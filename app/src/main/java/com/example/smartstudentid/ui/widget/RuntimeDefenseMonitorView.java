@@ -13,9 +13,9 @@ import com.example.smartstudentid.security.SecurityEnvironmentChecker;
 import java.util.Locale;
 
 /**
- * Interactive visual Security Defense Monitor displayed directly inside §5 (TopicDemoFragment).
- * Renders 3 top KPI cards, a 6-probe security grid (Anti-Hooking, Native Debugger, APK Integrity,
- * Tapjacking, 120s Background Lock, Hardware Biometric CryptoObject), and a live event banner.
+ * Read-only visual Security Defense Monitor widget rendered inside the SEC popup.
+ * Displays 3 KPI cards, a 6-probe security grid (Anti-Hooking, Native Debugger, APK Integrity,
+ * Tapjacking, 120s Background Lock, Hardware Biometric CryptoObject), and a live status banner.
  * Zero allocations are performed inside onDraw().
  */
 public class RuntimeDefenseMonitorView extends View {
@@ -68,28 +68,14 @@ public class RuntimeDefenseMonitorView extends View {
 
     public void showLiveScan(SecurityEnvironmentChecker.SecurityAuditReport report,
                              boolean isDebugBuild,
+                             boolean securityBypassActive,
                              boolean flagSecureOn,
                              boolean l1Present,
                              boolean bioStrongAvailable,
                              String bioBacking,
                              long scanMs) {
-        state.applyLiveScan(report, isDebugBuild, flagSecureOn, l1Present,
-                bioStrongAvailable, bioBacking, scanMs);
-        invalidate();
-    }
-
-    public void showSimulatedFridaDefense(boolean flagSecureOn, long reactionMs) {
-        state.applySimulatedFridaDefense(flagSecureOn, reactionMs);
-        invalidate();
-    }
-
-    public void onFlagSecureToggled(boolean flagSecureOn) {
-        state.applyFlagSecureToggled(flagSecureOn);
-        invalidate();
-    }
-
-    public void showBackgroundLockTriggered(boolean flagSecureOn) {
-        state.applyBackgroundLockTriggered(flagSecureOn);
+        state.applyLiveScan(report, isDebugBuild, securityBypassActive, flagSecureOn,
+                l1Present, bioStrongAvailable, bioBacking, scanMs);
         invalidate();
     }
 
@@ -131,32 +117,73 @@ public class RuntimeDefenseMonitorView extends View {
         float cardW = (w - gap * 2f) / 3f;
 
         int passed = state.getPassedProbeCount();
-        String secVal = passed + "/6 AN TOÀN";
-        int secBg = COLOR_GREEN_BG;
-        int secBorder = COLOR_GREEN_BORDER;
-        int secColor = COLOR_GREEN;
-        if (state.threatActive || passed < 4) {
+        String secVal;
+        int secBg;
+        int secBorder;
+        int secColor;
+        if (state.securityBypassActive) {
+            secVal = "0/6 RỦI RO";
             secBg = COLOR_RED_BG;
             secBorder = COLOR_RED_BORDER;
             secColor = COLOR_RED;
-            if (state.threatActive) {
-                secVal = "CẢNH BÁO!";
-            }
+        } else if (state.threatActive) {
+            secVal = "CẢNH BÁO!";
+            secBg = COLOR_RED_BG;
+            secBorder = COLOR_RED_BORDER;
+            secColor = COLOR_RED;
         } else if (passed < 6) {
+            secVal = passed + "/6 AN TOÀN";
             secBg = COLOR_AMBER_BG;
             secBorder = COLOR_AMBER_BORDER;
             secColor = COLOR_AMBER;
+        } else {
+            secVal = passed + "/6 AN TOÀN";
+            secBg = COLOR_GREEN_BG;
+            secBorder = COLOR_GREEN_BORDER;
+            secColor = COLOR_GREEN;
         }
 
-        String flagVal = state.flagSecureOn ? "FLAG_SECURE ON" : "DEBUG MIRROR";
-        int flagBg = state.flagSecureOn ? COLOR_GREEN_BG : COLOR_AMBER_BG;
-        int flagBorder = state.flagSecureOn ? COLOR_GREEN_BORDER : COLOR_AMBER_BORDER;
-        int flagColor = state.flagSecureOn ? COLOR_GREEN : COLOR_AMBER;
+        String flagVal;
+        int flagBg;
+        int flagBorder;
+        int flagColor;
+        if (state.securityBypassActive) {
+            flagVal = "TẮT (LỘ ẢNH)";
+            flagBg = COLOR_RED_BG;
+            flagBorder = COLOR_RED_BORDER;
+            flagColor = COLOR_RED;
+        } else if (state.flagSecureOn) {
+            flagVal = "FLAG_SECURE ON";
+            flagBg = COLOR_GREEN_BG;
+            flagBorder = COLOR_GREEN_BORDER;
+            flagColor = COLOR_GREEN;
+        } else {
+            flagVal = "RELEASE AUTO";
+            flagBg = COLOR_AMBER_BG;
+            flagBorder = COLOR_AMBER_BORDER;
+            flagColor = COLOR_AMBER;
+        }
 
-        String ramVal = state.l1RamPresent ? "ĐANG LƯU" : "ĐÃ XÓA SẠCH";
-        int ramBg = state.l1RamPresent ? COLOR_BLUE_BG : COLOR_GREEN_BG;
-        int ramBorder = state.l1RamPresent ? COLOR_BLUE_BORDER : COLOR_GREEN_BORDER;
-        int ramColor = state.l1RamPresent ? COLOR_BLUE : COLOR_GREEN;
+        String ramVal;
+        int ramBg;
+        int ramBorder;
+        int ramColor;
+        if (state.securityBypassActive) {
+            ramVal = "LỘ STRING";
+            ramBg = COLOR_RED_BG;
+            ramBorder = COLOR_RED_BORDER;
+            ramColor = COLOR_RED;
+        } else if (state.l1RamPresent) {
+            ramVal = "ĐANG LƯU";
+            ramBg = COLOR_BLUE_BG;
+            ramBorder = COLOR_BLUE_BORDER;
+            ramColor = COLOR_BLUE;
+        } else {
+            ramVal = "ĐÃ XÓA SẠCH";
+            ramBg = COLOR_GREEN_BG;
+            ramBorder = COLOR_GREEN_BORDER;
+            ramColor = COLOR_GREEN;
+        }
 
         drawKpiCard(canvas, 0f, cardW, kpiH, "BẢO VỆ", secVal, secBg, secBorder, secColor);
         drawKpiCard(canvas, cardW + gap, cardW, kpiH, "CHỐNG CHỤP", flagVal, flagBg, flagBorder, flagColor);
@@ -262,7 +289,6 @@ public class RuntimeDefenseMonitorView extends View {
         textPaint.setColor(COLOR_SLATE_500);
         canvas.drawText(subtitle, left + padX, top + dp(34f), textPaint);
 
-        // Right-aligned live value pill inside bottom-right or top-right? Place nicely on bottom-left/right.
         textPaint.setTypeface(monoBold);
         textPaint.setTextSize(dp(8.5f));
         float valW = textPaint.measureText(value);
@@ -364,6 +390,7 @@ public class RuntimeDefenseMonitorView extends View {
                 STATE_SAFE, STATE_SAFE, STATE_NEUTRAL
         };
 
+        public boolean securityBypassActive = false;
         public boolean flagSecureOn = false;
         public boolean l1RamPresent = false;
         public boolean threatActive = false;
@@ -372,13 +399,35 @@ public class RuntimeDefenseMonitorView extends View {
 
         public void applyLiveScan(SecurityEnvironmentChecker.SecurityAuditReport report,
                                   boolean isDebugBuild,
+                                  boolean securityBypassActive,
                                   boolean flagSecureOn,
                                   boolean l1Present,
                                   boolean bioStrongAvailable,
                                   String bioBacking,
                                   long scanMs) {
+            this.securityBypassActive = securityBypassActive;
             this.flagSecureOn = flagSecureOn;
             this.l1RamPresent = l1Present;
+
+            if (securityBypassActive) {
+                probeValues[0] = "Bỏ qua";
+                probeStates[0] = STATE_ALERT;
+                probeValues[1] = "Bỏ qua";
+                probeStates[1] = STATE_ALERT;
+                probeValues[2] = "Chưa kiểm tra";
+                probeStates[2] = STATE_ALERT;
+                probeValues[3] = "Tắt bộ lọc";
+                probeStates[3] = STATE_ALERT;
+                probeValues[4] = "Tắt khóa nền";
+                probeStates[4] = STATE_ALERT;
+                probeValues[5] = "Chỉ PIN tĩnh";
+                probeStates[5] = STATE_ALERT;
+
+                this.threatActive = true;
+                this.bannerText = "CHƯA TỐI ƯU (§5): 6/6 lớp phòng thủ tắt • Lộ PIN trên Heap";
+                this.bannerSeverity = STATE_ALERT;
+                return;
+            }
 
             boolean hooking = report != null && report.hookingDetected;
             probeValues[0] = hooking ? "Frida Hook!" : "Sạch";
@@ -419,42 +468,9 @@ public class RuntimeDefenseMonitorView extends View {
                 this.bannerSeverity = STATE_ALERT;
             } else {
                 this.bannerText = String.format(Locale.US,
-                        "Quét thực tế %d ms • Phòng thủ chủ động: Sẵn sàng", scanMs);
+                        "Quét thực tế %d ms • Phòng thủ chủ động: Đang bật", scanMs);
                 this.bannerSeverity = STATE_SAFE;
             }
-        }
-
-        public void applySimulatedFridaDefense(boolean flagSecureOn, long reactionMs) {
-            this.flagSecureOn = flagSecureOn;
-            this.l1RamPresent = false;
-            this.threatActive = true;
-
-            probeValues[0] = "Frida Hook!";
-            probeStates[0] = STATE_ALERT;
-            probeValues[4] = "Đã xóa L1+PIN";
-            probeStates[4] = STATE_WARN;
-
-            this.bannerText = String.format(Locale.US,
-                    "PHẢN ỨNG CHỦ ĐỘNG (%d ms): Đã xóa L1 RAM & PIN tạm!", reactionMs);
-            this.bannerSeverity = STATE_ALERT;
-        }
-
-        public void applyFlagSecureToggled(boolean flagSecureOn) {
-            this.flagSecureOn = flagSecureOn;
-            this.bannerText = flagSecureOn
-                    ? "FLAG_SECURE = ON • Thử chụp màn hình ngay để kiểm chứng"
-                    : "FLAG_SECURE = OFF (Chế độ chiếu demo Debug)";
-            this.bannerSeverity = flagSecureOn ? STATE_SAFE : STATE_WARN;
-        }
-
-        public void applyBackgroundLockTriggered(boolean flagSecureOn) {
-            this.flagSecureOn = flagSecureOn;
-            this.l1RamPresent = false;
-            this.threatActive = false;
-            probeValues[4] = "Đã khóa L1";
-            probeStates[4] = STATE_WARN;
-            this.bannerText = "Tự khóa nền 120s: Đã xóa PIN tạm & L1 RAM";
-            this.bannerSeverity = STATE_WARN;
         }
 
         public int getPassedProbeCount() {

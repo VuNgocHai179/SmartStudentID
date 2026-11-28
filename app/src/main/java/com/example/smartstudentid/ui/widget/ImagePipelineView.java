@@ -133,6 +133,11 @@ public class ImagePipelineView extends View {
         invalidate();
     }
 
+    public void resetToIdle() {
+        state.resetToIdle();
+        invalidate();
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int desiredW = Math.round(dp(320f));
@@ -622,6 +627,41 @@ public class ImagePipelineView extends View {
                 "3. Ghi thẻ chip (trần 8 KB) & Hiển thị"
         };
         final String[] stepValues = {"Chờ", "Chờ", "Chờ"};
+
+        void resetToIdle() {
+            hasRun = false;
+            mode = MODE_IDLE;
+            runInProgress = false;
+            sizeKb = 0.0;
+            packets = 0;
+            ramMb = 0.0;
+            inGpuVram = false;
+            sourceDims = "—";
+            inSampleSize = 1;
+            bufferReuses = 0;
+            churnAllocatedCount = 0;
+            deltaGcCount = 0L;
+            deltaGcMs = 0L;
+            cardWriteOk = false;
+
+            decodeNodeState = NODE_IDLE;
+            compressNodeState = NODE_IDLE;
+            chipNodeState = NODE_IDLE;
+            decodeBadge = "Chờ";
+            compressBadge = "Chờ";
+            chipBadge = "Trần 8 KB";
+            summaryText = "Bấm Lưu ảnh lên thẻ chip để xem luồng xử lý ảnh";
+
+            stepState[0] = STEP_IDLE;
+            stepState[1] = STEP_IDLE;
+            stepState[2] = STEP_IDLE;
+            stepLabels[0] = "1. Giải mã ảnh (Full vs Two-pass)";
+            stepLabels[1] = "2. Nén ảnh & Cấp phát bộ đệm 8 KB";
+            stepLabels[2] = "3. Ghi thẻ chip (trần 8 KB) & Hiển thị";
+            stepValues[0] = "Chờ";
+            stepValues[1] = "Chờ";
+            stepValues[2] = "Chờ";
+        }
 
         void beginBeforeRun(double pinnedHeapMb) {
             hasRun = true;

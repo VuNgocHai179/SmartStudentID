@@ -70,4 +70,45 @@ public class SecurityAuditFlowTest {
         assertEquals("MASVS 5/5", state.stepValues[2]);
         assertEquals(1f, state.getProgressBarRatio(5100L), 0.001f);
     }
+
+    @Test
+    public void customFlowDisplaysSeparatedDefenseMetricsAndResetsOnPinRun() {
+        SecurityAuditFlowView.SecurityFlowState state = new SecurityAuditFlowView.SecurityFlowState();
+
+        state.applyCustomFlow(
+                true,
+                "LUỒNG ANTI-HOOK & TOÀN VẸN APK",
+                "ĐANG BẢO VỆ",
+                new String[]{"ANTI-HOOK", "TRACER PID", "TOÀN VẸN APK"},
+                new String[]{"Sạch", "PID = 0", "543779C0..."},
+                new String[]{"QUÉT MAPS", "TRACER PID", "APK SHA-256"},
+                new String[]{"/proc/self/maps", "/proc/self/status", "Chữ ký APK"},
+                new int[]{
+                        SecurityAuditFlowView.SecurityFlowState.NODE_OK,
+                        SecurityAuditFlowView.SecurityFlowState.NODE_OK,
+                        SecurityAuditFlowView.SecurityFlowState.NODE_OK
+                },
+                new String[]{"Sạch", "PID=0", "Khớp"},
+                "Quét thực tế sạch • Phản ứng xóa L1: 1 ms",
+                new String[]{
+                        "1. Quét Frida / Xposed trên /proc/self/maps",
+                        "2. Đọc TracerPid chống Native Debugger",
+                        "3. Đối chiếu APK SHA-256 & thử phản ứng xóa L1"
+                },
+                new int[]{
+                        SecurityAuditFlowView.SecurityFlowState.STEP_DONE_OK,
+                        SecurityAuditFlowView.SecurityFlowState.STEP_DONE_OK,
+                        SecurityAuditFlowView.SecurityFlowState.STEP_DONE_OK
+                },
+                new String[]{"Sạch", "PID=0", "1 ms"}
+        );
+
+        assertTrue(state.useCustomDisplay);
+        assertEquals("LUỒNG ANTI-HOOK & TOÀN VẸN APK", state.cardTitle);
+        assertEquals("543779C0...", state.customKpiValues[2]);
+        assertEquals("APK SHA-256", state.nodeTitles[2]);
+
+        state.beginAfterRun(6000L, 6);
+        assertFalse(state.useCustomDisplay);
+    }
 }

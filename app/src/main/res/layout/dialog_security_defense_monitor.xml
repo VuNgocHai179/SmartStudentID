@@ -3,7 +3,6 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:filterTouchesWhenObscured="true"
     app:cardBackgroundColor="@color/white"
     app:cardCornerRadius="24dp"
     app:cardElevation="12dp"
@@ -90,91 +89,5 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:orientation="horizontal">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPopupDefenseRescan"
-                style="@style/Widget.SmartID.Button.Soft"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:minHeight="40dp"
-                android:paddingStart="6dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="6dp"
-                android:paddingBottom="6dp"
-                android:text="Quét lại môi trường"
-                android:textSize="11sp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPopupToggleFlagSecure"
-                style="@style/Widget.SmartID.Button.Outline"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:minHeight="40dp"
-                android:paddingStart="6dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="6dp"
-                android:paddingBottom="6dp"
-                android:text="Bật FLAG_SECURE"
-                android:textSize="11sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:orientation="horizontal">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPopupSimFrida"
-                style="@style/Widget.SmartID.Button.Outline"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:minHeight="40dp"
-                android:paddingStart="6dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="6dp"
-                android:paddingBottom="6dp"
-                android:text="Thử Hook Frida"
-                android:textColor="@color/red_600"
-                android:textSize="11sp"
-                app:strokeColor="#FCA5A5" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPopupSimBgLock"
-                style="@style/Widget.SmartID.Button.Outline"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:minHeight="40dp"
-                android:paddingStart="6dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="6dp"
-                android:paddingBottom="6dp"
-                android:text="Thử khóa nền 120s"
-                android:textColor="@color/amber_600"
-                android:textSize="11sp"
-                app:strokeColor="#FDE68A" />
-        </LinearLayout>
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnPopupRawAudit"
-            style="@style/Widget.SmartID.Button.Pill"
-            android:layout_width="match_parent"
-            android:layout_height="38dp"
-            android:layout_marginTop="8dp"
-            android:text="Xem chi tiết AES-128 EEPROM &amp; RAM"
-            android:textSize="11sp"
-            android:visibility="gone" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

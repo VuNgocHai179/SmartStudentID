@@ -126,6 +126,16 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <com.example.smartstudentid.ui.widget.LiveSecurityHudView
+            android:id="@+id/liveSecurityHud"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="10dp"
+            android:elevation="12dp"
+            android:visibility="gone" />
+
         <com.example.smartstudentid.ui.widget.LivePerfHudView
             android:id="@+id/livePerfHud"
             android:layout_width="wrap_content"

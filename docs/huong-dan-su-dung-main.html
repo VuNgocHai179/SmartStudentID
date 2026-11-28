@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hướng dẫn chạy và sử dụng SmartStudentID (nhánh main)</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --surface-soft: #f1f5f9;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --text: #0f172a;
+    --text-muted: #475569;
+    --text-light: #64748b;
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-bg: #eff6ff;
+    --success: #059669;
+    --success-bg: #ecfdf5;
+    --warning: #d97706;
+    --warning-bg: #fffbeb;
+    --danger: #e11d48;
+    --danger-bg: #fff1f2;
+    --code-bg: #0f172a;
+    --code-text: #e2e8f0;
+    --radius: 14px;
+    --radius-sm: 10px;
+    --shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.62;
+    font-size: 15px;
+  }
+
+  code, pre, .mono {
+    font-family: Consolas, "Cascadia Code", "Fira Code", monospace;
+  }
+
+  .app-shell {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 24px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .brand {
+    padding: 14px;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+    border: 1px solid #dbeafe;
+  }
+  .brand-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--primary);
+    background: #dbeafe;
+    padding: 3px 8px;
+    border-radius: 99px;
+    margin-bottom: 8px;
+  }
+  .brand h2 {
+    margin: 0 0 4px;
+    font-size: 17px;
+    color: var(--text);
+  }
+  .brand p {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+
+  .nav-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav-link:hover {
+    background: var(--surface-soft);
+    color: var(--text);
+  }
+  .nav-link.active {
+    background: var(--primary-bg);
+    color: var(--primary);
+  }
+  .nav-step {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: var(--surface-soft);
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11.5px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .nav-link.active .nav-step {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  .sidebar-note {
+    margin-top: auto;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .sidebar-note strong {
+    display: block;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  /* Main content */
+  .main {
+    flex: 1;
+    min-width: 0;
+    padding: 32px 36px 64px;
+    max-width: 1120px;
+  }
+
+  .hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 28px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  .hero-top {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .hero h1 {
+    margin: 0 0 8px;
+    font-size: 26px;
+    line-height: 1.25;
+    color: var(--text);
+  }
+  .hero-lead {
+    margin: 0;
+    color: var(--text-muted);
+    max-width: 760px;
+  }
+
+  .quick-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .quick-pill {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+  .quick-pill .q-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-light);
+    font-weight: 700;
+  }
+  .quick-pill .q-val {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-top: 2px;
+  }
+
+  section.doc-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 26px 28px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+    scroll-margin-top: 20px;
+  }
+
+  .sec-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sec-num {
+    background: var(--primary);
+    color: #fff;
+    font-weight: 800;
+    font-size: 12.5px;
+    padding: 4px 10px;
+    border-radius: 99px;
+    flex-shrink: 0;
+  }
+  .sec-head h2 {
+    margin: 0;
+    font-size: 20px;
+    color: var(--text);
+  }
+
+  h3 {
+    font-size: 16px;
+    margin: 20px 0 8px;
+    color: var(--text);
+  }
+  p { margin: 0 0 12px; }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    margin: 14px 0;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin: 14px 0;
+  }
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+    margin: 14px 0;
+  }
+
+  .card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .card-title {
+    font-weight: 700;
+    font-size: 14.5px;
+    color: var(--text);
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card p:last-child { margin-bottom: 0; }
+
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+  }
+  .tag-blue { background: var(--primary-bg); color: var(--primary); }
+  .tag-green { background: var(--success-bg); color: var(--success); }
+  .tag-amber { background: var(--warning-bg); color: var(--warning); }
+  .tag-rose { background: var(--danger-bg); color: var(--danger); }
+
+  /* Callouts */
+  .callout {
+    border-radius: 12px;
+    padding: 13px 16px;
+    margin: 14px 0;
+    border-left: 4px solid var(--primary);
+    background: var(--primary-bg);
+    color: #1e3a8a;
+    font-size: 14px;
+  }
+  .callout-warn {
+    border-left-color: var(--warning);
+    background: var(--warning-bg);
+    color: #78350f;
+  }
+  .callout-green {
+    border-left-color: var(--success);
+    background: var(--success-bg);
+    color: #064e3b;
+  }
+  .callout-title {
+    font-weight: 700;
+    margin-bottom: 4px;
+    display: block;
+  }
+
+  /* Code blocks with copy */
+  .cmd-box {
+    position: relative;
+    background: var(--code-bg);
+    color: var(--code-text);
+    border-radius: 12px;
+    padding: 13px 96px 13px 15px;
+    margin: 10px 0 14px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .cmd-box pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    background: #1e293b;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .copy-btn:hover { background: #334155; }
+  .copy-btn.copied {
+    background: var(--success);
+    border-color: var(--success);
+    color: #fff;
+  }
+
+  /* Inline code */
+  p code, li code, td code, .card code {
+    background: var(--surface-soft);
+    color: #0f172a;
+    padding: 1px 6px;
+    border-radius: 6px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+  }
+
+  /* Step flow cards */
+  .steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 14px 0;
+  }
+  .step-item {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 14px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .step-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    background: var(--primary);
+    color: #fff;
+    font-weight: 800;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-body h4 {
+    margin: 0 0 4px;
+    font-size: 15px;
+    color: var(--text);
+  }
+  .step-body p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* Tables */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin: 12px 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    background: var(--surface);
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    background: var(--surface-soft);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  tr:last-child td { border-bottom: none; }
+
+  /* Tabs */
+  .tab-group { margin: 14px 0; }
+  .tab-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .tab-btn {
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-muted);
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover {
+    background: var(--surface-soft);
+    color: var(--text);
+  }
+  .tab-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+  }
+  .tab-panel {
+    display: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+  }
+  .tab-panel.active { display: block; }
+
+  /* Tree map */
+  .tree-box {
+    background: var(--code-bg);
+    color: #cbd5e1;
+    border-radius: 12px;
+    padding: 16px 18px;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+  .tree-dir { color: #60a5fa; font-weight: 700; }
+  .tree-file { color: #f8fafc; }
+  .tree-note { color: #94a3b8; }
+
+  /* SVG Diagram */
+  .diagram-wrap {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  .diagram-wrap svg {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Search input for APDU table */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    margin: 12px 0;
+  }
+  .filter-input {
+    flex: 1;
+    min-width: 220px;
+    padding: 9px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    font-size: 13.5px;
+    color: var(--text);
+    background: var(--surface);
+  }
+  .filter-input:focus {
+    outline: 2px solid #bfdbfe;
+    border-color: var(--primary);
+  }
+
+  /* Checklist */
+  .progress-wrap {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .progress-track {
+    flex: 1;
+    min-width: 180px;
+    height: 10px;
+    background: #e2e8f0;
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--success);
+    transition: width 0.2s ease;
+  }
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .check-row:hover { border-color: var(--primary); }
+  .check-row.done {
+    background: var(--success-bg);
+    border-color: #a7f3d0;
+  }
+  .check-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    accent-color: var(--success);
+    cursor: pointer;
+  }
+  .check-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .check-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .btn-reset {
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-muted);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-reset:hover { background: var(--surface-soft); color: var(--text); }
+
+  /* Details / Troubleshooting */
+  details.trouble {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+  }
+  details.trouble summary {
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 14.5px;
+  }
+  details.trouble[open] summary { margin-bottom: 8px; }
+  details.trouble p {
+    margin: 0 0 8px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  details.trouble p:last-child { margin-bottom: 0; }
+
+  /* Clean lists without bold-colon pattern */
+  ul.clean-list {
+    margin: 8px 0 12px;
+    padding-left: 20px;
+  }
+  ul.clean-list li {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 960px) {
+    .app-shell { flex-direction: column; }
+    .sidebar {
+      width: 100%;
+      height: auto;
+      position: static;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      padding: 16px;
+    }
+    .nav-list {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+    .sidebar-note { display: none; }
+    .main { padding: 20px 16px 48px; }
+  }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-badge">Branch: main (c134477)</span>
+      <h2>SmartStudentID</h2>
+      <p>Tài liệu cài đặt, chạy Server và vận hành ứng dụng Android.</p>
+    </div>
+
+    <ul class="nav-list" id="sidebarNav">
+      <li><a class="nav-link active" href="#tong-quan"><span class="nav-step">0</span>Tổng quan hệ thống</a></li>
+      <li><a class="nav-link" href="#buoc-1-ide"><span class="nav-step">1</span>Chuẩn bị IDE và mã nguồn</a></li>
+      <li><a class="nav-link" href="#buoc-2-javacard"><span class="nav-step">2</span>Java Card và JCIDE</a></li>
+      <li><a class="nav-link" href="#buoc-3-server"><span class="nav-step">3</span>Khởi chạy BridgeServer</a></li>
+      <li><a class="nav-link" href="#buoc-4-android"><span class="nav-step">4</span>Build và chạy App Android</a></li>
+      <li><a class="nav-link" href="#buoc-5-sudung"><span class="nav-step">5</span>Sử dụng đầy đủ tính năng</a></li>
+      <li><a class="nav-link" href="#buoc-6-demo"><span class="nav-step">6</span>Checklist Demo và sửa lỗi</a></li>
+    </ul>
+
+    <div class="sidebar-note">
+      <strong>Thông số mặc định trên main</strong>
+      Cổng server: <code>8080</code><br>
+      Web Console: <code>localhost:8080</code><br>
+      PIN mặc định: <code>123456</code><br>
+      PUK quản trị: <code>88888888</code><br>
+      Admin: <code>admin / admin123</code>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="hero">
+      <div class="hero-top">
+        <div>
+          <h1>Hướng dẫn vận hành SmartStudentID trên nhánh main</h1>
+          <p class="hero-lead">
+            Tài liệu này mô tả từng bước cấu hình IDE, biên dịch Applet Java Card, khởi chạy PC BridgeServer cùng CSDL SQLite và sử dụng toàn bộ chức năng trên ứng dụng Android.
+          </p>
+        </div>
+      </div>
+      <div class="quick-bar">
+        <div class="quick-pill">
+          <div class="q-label">Nhánh Git</div>
+          <div class="q-val mono">main (c134477)</div>
+        </div>
+        <div class="quick-pill">
+          <div class="q-label">Bridge Server</div>
+          <div class="q-val mono">http://localhost:8080</div>
+        </div>
+        <div class="quick-pill">
+          <div class="q-label">CSDL SQLite</div>
+          <div class="q-val mono">smartcard.db (9 bảng)</div>
+        </div>
+        <div class="quick-pill">
+          <div class="q-label">PIN / PUK thẻ</div>
+          <div class="q-val mono">123456 / 88888888</div>
+        </div>
+        <div class="quick-pill">
+          <div class="q-label">Tài khoản Admin</div>
+          <div class="q-val mono">admin / admin123</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- SECTION 0 -->
+    <section class="doc-section" id="tong-quan">
+      <div class="sec-head">
+        <span class="sec-num">Bước 0</span>
+        <h2>Tổng quan kiến trúc hệ thống trên nhánh main</h2>
+      </div>
+      <p>
+        Hệ thống SmartStudentID trên nhánh <code>main</code> gồm 3 thành phần liên kết trực tiếp với nhau. Mỗi thành phần đảm nhiệm một lớp xử lý riêng từ chip thẻ thông minh, máy chủ trung gian trên PC đến giao diện di động cho cả Quản trị viên và Sinh viên.
+      </p>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title"><span class="tag tag-amber">Lớp 1</span> Java Card Applet</div>
+          <p>Mã nguồn nằm tại <code>javacard-applet/src/SmartCampusApplet.java</code> với AID <code>A0 00 00 00 62 03 01 0C 06 01</code>. Chip đảm nhiệm xác thực PIN/PUK, mã hóa hồ sơ bằng AES-128, ký số RSA-1024, lưu ảnh WebP và ví điện tử.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="tag tag-blue">Lớp 2</span> PC BridgeServer &amp; SQLite</div>
+          <p>Viết bằng Java thuần trong <code>bridge-server/src/</code>, chạy trên cổng <code>8080</code>. Server kết nối đầu đọc PC/SC của JCIDE (hoặc dùng thẻ ảo tích hợp), cung cấp Web Console cho giảng viên và quản lý 9 bảng trong <code>smartcard.db</code>.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="tag tag-green">Lớp 3</span> Ứng dụng Android (Java)</div>
+          <p>Một ứng dụng duy nhất trong thư mục <code>app/</code> phục vụ 2 vai trò. Người dùng đăng nhập bằng thẻ sinh viên (chạm thẻ nhập PIN) hoặc đăng nhập tài khoản quản trị để phát hành và mở khóa thẻ.</p>
+        </div>
+      </div>
+
+      <div class="diagram-wrap">
+        <svg width="920" height="270" viewBox="0 0 920 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sơ đồ kiến trúc 3 lớp SmartStudentID">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+            </marker>
+            <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#d97706"/>
+            </marker>
+          </defs>
+
+          <!-- Box 1: Java Card -->
+          <rect x="16" y="34" width="245" height="202" rx="14" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+          <text x="138" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="#92400e">1. Thẻ thông minh (Chip)</text>
+          <rect x="32" y="78" width="213" height="62" rx="10" fill="#ffffff" stroke="#fcd34d"/>
+          <text x="138" y="101" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f172a">JCIDE Simulator</text>
+          <text x="138" y="121" text-anchor="middle" font-size="11.5" fill="#475569">SmartCampusApplet (AID ...0601)</text>
+          <rect x="32" y="152" width="213" height="68" rx="10" fill="#ffffff" stroke="#fcd34d"/>
+          <text x="138" y="175" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f172a">Thẻ ảo dự phòng trên Server</text>
+          <text x="138" y="194" text-anchor="middle" font-size="11.5" fill="#475569">Virtual-JCIDE-Fallback-Engine</text>
+          <text x="138" y="210" text-anchor="middle" font-size="11" fill="#64748b">Tự chạy khi không mở JCIDE</text>
+
+          <!-- Arrow 1 <-> 2 -->
+          <line x1="265" y1="135" x2="335" y2="135" stroke="#d97706" stroke-width="2.2" marker-start="url(#arrow-amber)" marker-end="url(#arrow-amber)"/>
+          <text x="300" y="114" text-anchor="middle" font-size="11.5" font-weight="700" fill="#92400e">PC/SC</text>
+          <text x="300" y="128" text-anchor="middle" font-size="11" fill="#64748b">APDU</text>
+
+          <!-- Box 2: BridgeServer -->
+          <rect x="340" y="18" width="265" height="234" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+          <text x="472" y="46" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">2. PC BridgeServer (Cổng 8080)</text>
+          <rect x="356" y="62" width="233" height="54" rx="10" fill="#ffffff" stroke="#bfdbfe"/>
+          <text x="472" y="84" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f172a">HTTP API + Bộ nạp thẻ .scr</text>
+          <text x="472" y="102" text-anchor="middle" font-size="11.5" fill="#475569">/api/apdu, /api/status, /api/cards</text>
+
+          <rect x="356" y="126" width="233" height="54" rx="10" fill="#ffffff" stroke="#bfdbfe"/>
+          <text x="472" y="148" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f172a">Web Console Giảng viên</text>
+          <text x="472" y="166" text-anchor="middle" font-size="11.5" fill="#475569">http://localhost:8080 (QR động)</text>
+
+          <rect x="356" y="190" width="233" height="48" rx="10" fill="#ffffff" stroke="#93c5fd"/>
+          <text x="472" y="211" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f172a">SQLite DB (smartcard.db)</text>
+          <text x="472" y="228" text-anchor="middle" font-size="11" fill="#475569">9 bảng quan hệ + chữ ký RSA-1024</text>
+
+          <!-- Arrow 2 <-> 3 -->
+          <line x1="609" y1="135" x2="675" y2="135" stroke="#2563eb" stroke-width="2.2" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+          <text x="642" y="114" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1e40af">HTTP</text>
+          <text x="642" y="128" text-anchor="middle" font-size="11" fill="#64748b">JSON</text>
+
+          <!-- Box 3: Android App -->
+          <rect x="680" y="34" width="224" height="202" rx="14" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+          <text x="792" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="#065f46">3. App Android (SmartStudentID)</text>
+          <rect x="696" y="78" width="192" height="58" rx="10" fill="#ffffff" stroke="#6ee7b7"/>
+          <text x="792" y="100" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f172a">Cổng kết nối tự dò</text>
+          <text x="792" y="118" text-anchor="middle" font-size="11" fill="#475569">127.0.0.1 / 10.0.2.2 / LAN</text>
+          <rect x="696" y="148" width="192" height="72" rx="10" fill="#ffffff" stroke="#6ee7b7"/>
+          <text x="792" y="170" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0f172a">2 Chế độ hoạt động</text>
+          <text x="792" y="188" text-anchor="middle" font-size="11.5" fill="#475569">Sinh viên (4 tab chức năng)</text>
+          <text x="792" y="205" text-anchor="middle" font-size="11.5" fill="#475569">Quản trị (Phát hành, PUK)</text>
+        </svg>
+      </div>
+    </section>
+
+    <!-- SECTION 1 -->
+    <section class="doc-section" id="buoc-1-ide">
+      <div class="sec-head">
+        <span class="sec-num">Bước 1</span>
+        <h2>Chuẩn bị IDE, JDK và chuyển sang nhánh main</h2>
+      </div>
+      <p>
+        Trước khi mở dự án, hãy kiểm tra máy tính đã cài đủ Java 21, Android Studio và đúng nhánh mã nguồn <code>main</code>.
+      </p>
+
+      <h3>1.1. Yêu cầu công cụ và phiên bản</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Công cụ</th>
+              <th>Phiên bản yêu cầu</th>
+              <th>Vai trò trong dự án</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>JDK (Java Development Kit)</strong></td>
+              <td><code>JDK 21</code></td>
+              <td>Biên dịch Android Gradle daemon (<code>toolchainVersion=21</code>) và chạy <code>BridgeServer</code> với các module <code>java.smartcardio</code>, <code>jdk.httpserver</code>, <code>java.sql</code>.</td>
+            </tr>
+            <tr>
+              <td><strong>Android Studio + Gradle</strong></td>
+              <td>AGP <code>9.2.1</code>, Gradle <code>9.4.1</code></td>
+              <td>Mở, đồng bộ, build APK và đẩy ứng dụng sang điện thoại hoặc máy ảo.</td>
+            </tr>
+            <tr>
+              <td><strong>Android SDK</strong></td>
+              <td>Compile/Target <code>36</code> (minor 1), Min <code>24</code></td>
+              <td>Hỗ trợ thiết bị Android 7.0 trở lên, kèm <code>platform-tools</code> (ADB) để chạy <code>adb reverse</code>.</td>
+            </tr>
+            <tr>
+              <td><strong>JCIDE (Java Card IDE)</strong></td>
+              <td>Tùy chọn</td>
+              <td>Dùng khi muốn nạp và chạy <code>SmartCampusApplet.java</code> trên trình giả lập Java Card thật. Nếu không cài JCIDE, <code>BridgeServer</code> vẫn chạy bình thường nhờ bộ giả lập tích hợp.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>1.2. Chuyển sang nhánh main và mở dự án</h3>
+      <div class="callout callout-warn">
+        <span class="callout-title">Lưu ý nếu đang đứng ở nhánh khác</span>
+        Nếu thư mục hiện tại đang có thay đổi chưa commit ở nhánh khác (như nhánh <code>optimize</code>), hãy commit hoặc <code>git stash</code> trước khi chuyển nhánh để tránh xung đột tệp.
+      </div>
+      <div class="cmd-box">
+        <button class="copy-btn" type="button" data-copy="git status&#10;git checkout main&#10;git pull origin main">Sao chép</button>
+        <pre>git status
+git checkout main
+git pull origin main</pre>
+      </div>
+
+      <h3>1.3. Cấu trúc thư mục quan trọng trên nhánh main</h3>
+      <div class="tree-box"><span class="tree-dir">SmartStudentID/</span>
+├── <span class="tree-dir">app/</span>                          <span class="tree-note"># Mã nguồn ứng dụng Android (Java, ViewBinding, CameraX, ZXing, Gson)</span>
+│   ├── <span class="tree-file">build.gradle.kts</span>          <span class="tree-note"># compileSdk 36.1, minSdk 24, targetSdk 36, Java 11</span>
+│   └── <span class="tree-dir">src/main/java/com/example/smartstudentid/</span>
+│       ├── <span class="tree-dir">apdu/</span>                 <span class="tree-note"># ApduClient, ApduCommands, CardResponse</span>
+│       ├── <span class="tree-dir">security/</span>             <span class="tree-note"># BaseSecureActivity, EncryptedCacheManager, RsaCardVerifier, PinSessionManager</span>
+│       └── <span class="tree-dir">ui/</span>                   <span class="tree-note"># auth (LoginPin), admin (AdminLogin, AdminDashboard), student (4 tab + QrScanner)</span>
+├── <span class="tree-dir">bridge-server/</span>                <span class="tree-note"># Máy chủ cầu nối PC và quản lý CSDL SQLite</span>
+│   ├── <span class="tree-file">start-bridge-server.bat</span>   <span class="tree-note"># Script tự dọn cổng 8080, chạy adb reverse, biên dịch và bật Server</span>
+│   ├── <span class="tree-dir">src/</span>                      <span class="tree-note"># BridgeServer.java, DatabaseManager.java</span>
+│   ├── <span class="tree-dir">lib/</span>                      <span class="tree-note"># sqlite-jdbc.jar, slf4j-api.jar, zxing-core-3.5.3.jar</span>
+│   └── <span class="tree-dir">data/</span>                     <span class="tree-note"># Chứa tệp smartcard.db được tạo tự động khi chạy Server</span>
+└── <span class="tree-dir">javacard-applet/</span>              <span class="tree-note"># Mã nguồn Java Card Applet và kịch bản nạp thẻ</span>
+    ├── <span class="tree-dir">src/</span>                      <span class="tree-note"># SmartCampusApplet.java</span>
+    └── <span class="tree-dir">scripts/</span>                  <span class="tree-note"># the_1_vu_ngoc_hai.scr, the_2_nguyen_minh_quan.scr, the_3_tran_thu_ha.scr, test_apdu_full.scr</span></div>
+    </section>
+
+    <!-- SECTION 2 -->
+    <section class="doc-section" id="buoc-2-javacard">
+      <div class="sec-head">
+        <span class="sec-num">Bước 2</span>
+        <h2>Thiết lập Java Card Applet và JCIDE</h2>
+      </div>
+      <p>
+        Hệ thống hỗ trợ hai cách chạy phần thẻ thông minh. Bạn chọn một trong hai cách dưới đây tùy theo nhu cầu kiểm thử hoặc demo.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span class="tag tag-green">Cách A (Nhanh nhất)</span> Dùng thẻ ảo trên BridgeServer</div>
+          <p>Không cần mở phần mềm JCIDE. Khi khởi chạy <code>BridgeServer</code>, lớp <code>VirtualSmartCardEmulator</code> tự động kích hoạt ở chế độ <code>Virtual-JCIDE-Fallback-Engine</code>, xử lý đầy đủ 16 mã lệnh APDU, AES-128, RSA-1024, ảnh WebP và ví điện tử.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="tag tag-amber">Cách B (Mô phỏng thật)</span> Chạy trên JCIDE Simulator</div>
+          <p>Tạo project Java Card trong JCIDE với tệp <code>javacard-applet/src/SmartCampusApplet.java</code> (package <code>smartstudent</code>). Cài đặt Applet với AID <code>A0 00 00 00 62 03 01 0C 06 01</code>, sau đó chạy kịch bản <code>.scr</code>. <code>BridgeServer</code> quét đầu đọc PC/SC mỗi 1,2 giây và tự động đẩy sự kiện chạm thẻ sang điện thoại.</p>
+        </div>
+      </div>
+
+      <h3>Các kịch bản thẻ mẫu có sẵn trong <code>javacard-applet/scripts/</code></h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tệp kịch bản</th>
+              <th>Mục đích</th>
+              <th>Dữ liệu nạp xuống thẻ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>the_1_vu_ngoc_hai.scr</code></td>
+              <td>Nạp hồ sơ sinh viên 1</td>
+              <td><code>CT070315|Vũ Ngọc Hải|15/08/2003|CT7C|An toàn Thông tin</code>, PIN <code>123456</code></td>
+            </tr>
+            <tr>
+              <td><code>the_2_nguyen_minh_quan.scr</code></td>
+              <td>Nạp hồ sơ sinh viên 2</td>
+              <td><code>CT070301|Nguyễn Minh Quân|20/11/2003|CT7C|An toàn Thông tin</code>, PIN <code>123456</code></td>
+            </tr>
+            <tr>
+              <td><code>the_3_tran_thu_ha.scr</code></td>
+              <td>Nạp hồ sơ sinh viên 3</td>
+              <td><code>CT070322|Trần Thu Hà|05/03/2003|CT7C|Công nghệ Thông tin</code>, PIN <code>123456</code></td>
+            </tr>
+            <tr>
+              <td><code>test_apdu_full.scr</code></td>
+              <td>Kiểm thử toàn bộ lệnh APDU</td>
+              <td>Thử sai PIN 3 lần (<code>63C2</code>, <code>63C1</code>, <code>6983</code>), mở khóa bằng PUK <code>88888888</code>, đọc/ghi AES, ký RSA, điểm danh, mượn sách.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Bảng tra cứu 16 mã lệnh APDU của SmartCampusApplet (CLA = 0x80)</h3>
+      <div class="filter-bar">
+        <input type="text" id="apduFilter" class="filter-input" placeholder="Lọc mã lệnh APDU theo INS hoặc chức năng (ví dụ: 0x20, PIN, RSA, ví)..." />
+      </div>
+      <div class="table-wrap">
+        <table id="apduTable">
+          <thead>
+            <tr>
+              <th>INS</th>
+              <th>Tên hằng số</th>
+              <th>Chức năng chính</th>
+              <th>Ghi chú tham số / Bảo mật</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>0x10</code></td><td><code>INS_VERIFY_PIN</code></td><td>Xác thực mã PIN</td><td>PIN mặc định <code>123456</code>, sai tối đa 3 lần (<code>63C2</code>, <code>63C1</code>, <code>6983</code>).</td></tr>
+            <tr><td><code>0x11</code></td><td><code>INS_CHANGE_PIN</code></td><td>Đổi mã PIN</td><td>Cập nhật PIN trong giao dịch nguyên tử (4 đến 8 ký tự).</td></tr>
+            <tr><td><code>0x12</code></td><td><code>INS_UNBLOCK_CARD_PUK</code></td><td>Mở khóa hoặc khóa thẻ bằng PUK</td><td>Dùng mã PUK quản trị <code>88888888</code> (8 số).</td></tr>
+            <tr><td><code>0x13</code></td><td><code>INS_GET_PUBLIC_KEY</code></td><td>Lấy khóa công khai RSA-1024</td><td><code>P1=01</code> trả Modulus N (128 bytes), <code>P1=02</code> trả Exponent E.</td></tr>
+            <tr><td><code>0x14</code></td><td><code>INS_SIGN_CHALLENGE</code></td><td>Ký số challenge</td><td>Ký SHA1-PKCS#1 bằng RSA Private Key trên chip.</td></tr>
+            <tr><td><code>0x20</code></td><td><code>INS_SET_STUDENT_INFO</code></td><td>Ghi hồ sơ sinh viên</td><td>Mã hóa AES-128 CBC trước khi lưu vào EEPROM.</td></tr>
+            <tr><td><code>0x21</code></td><td><code>INS_GET_STUDENT_INFO</code></td><td>Đọc hồ sơ sinh viên</td><td><code>P1=00</code> trả bản rõ đã giải mã, <code>P1=01</code> trả bản mã AES thô.</td></tr>
+            <tr><td><code>0x22</code></td><td><code>INS_UPLOAD_AVATAR_CHUNK</code></td><td>Nạp từng mảnh ảnh WebP</td><td>Dùng <code>P1-P2</code> làm offset, tối đa 8192 bytes.</td></tr>
+            <tr><td><code>0x23</code></td><td><code>INS_DOWNLOAD_AVATAR_CHUNK</code></td><td>Tải từng mảnh ảnh WebP</td><td>Đọc ảnh chân dung từ EEPROM theo <code>P1-P2</code> offset.</td></tr>
+            <tr><td><code>0x30</code></td><td><code>INS_GET_ACADEMIC_LIBRARY_STATUS</code></td><td>Truy vấn học vụ và sách</td><td>Trả điểm rèn luyện, số buổi điểm danh, quyền Lab, sách đang mượn.</td></tr>
+            <tr><td><code>0x31</code></td><td><code>INS_BORROW_OR_ATTENDANCE</code></td><td>Điểm danh hoặc mượn sách</td><td><code>P1=01</code> điểm danh, <code>P1=02</code> mượn sách (tối đa 5 cuốn), kèm chữ ký RSA.</td></tr>
+            <tr><td><code>0x32</code></td><td><code>INS_RETURN_OR_LAB_ACCESS</code></td><td>Trả sách hoặc mở cửa Lab</td><td>Thực thi trong giao dịch nguyên tử và ghi nhật ký trên thẻ.</td></tr>
+            <tr><td><code>0x33</code></td><td><code>INS_GET_ACTIVITY_LOG</code></td><td>Đọc nhật ký trên thẻ</td><td>Trả tối đa 10 hoạt động gần nhất trong bộ đệm vòng (7 bytes/mục).</td></tr>
+            <tr><td><code>0x40</code></td><td><code>INS_WALLET_CREDIT</code></td><td>Nạp tiền vào ví thẻ</td><td>Cộng số dư VND (hạn mức tối đa 50.000.000 VND), trả biên lai ký RSA.</td></tr>
+            <tr><td><code>0x41</code></td><td><code>INS_WALLET_DEBIT</code></td><td>Thanh toán từ ví thẻ</td><td>Trừ số dư VND (mặc định khởi tạo 500.000 VND), trả biên lai ký RSA.</td></tr>
+            <tr><td><code>0x42</code></td><td><code>INS_WALLET_GET_BALANCE</code></td><td>Đọc số dư ví trên chip</td><td>Trả về số dư 4-byte big-endian lưu trong EEPROM.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 3 -->
+    <section class="doc-section" id="buoc-3-server">
+      <div class="sec-head">
+        <span class="sec-num">Bước 3</span>
+        <h2>Khởi chạy BridgeServer và dùng Web Console trên PC</h2>
+      </div>
+      <p>
+        Máy chủ cầu nối phải được bật trước khi mở ứng dụng Android để thiết lập cổng <code>8080</code>, khởi tạo CSDL SQLite và mở kênh truyền <code>adb reverse</code>.
+      </p>
+
+      <h3>3.1. Cách khởi động Server</h3>
+      <p>
+        Nhấp đúp tệp <code>bridge-server\start-bridge-server.bat</code> trong thư mục dự án, hoặc mở PowerShell tại <code>e:\SmartStudentID</code> rồi chạy lệnh bên dưới.
+      </p>
+      <div class="cmd-box">
+        <button class="copy-btn" type="button" data-copy="cd e:\SmartStudentID&#10;.\bridge-server\start-bridge-server.bat">Sao chép</button>
+        <pre>cd e:\SmartStudentID
+.\bridge-server\start-bridge-server.bat</pre>
+      </div>
+
+      <div class="steps-list">
+        <div class="step-item">
+          <div class="step-badge">1</div>
+          <div class="step-body">
+            <h4>Giải phóng cổng 8080</h4>
+            <p>Script kiểm tra tiến trình đang chiếm cổng <code>8080</code> qua <code>netstat</code> và tự dừng bằng <code>taskkill</code> để tránh lỗi đụng cổng.</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-badge">2</div>
+          <div class="step-body">
+            <h4>Chuyển tiếp cổng USB với ADB</h4>
+            <p>Script chạy <code>adb reverse tcp:8080 tcp:8080</code> (ưu tiên <code>E:\AndroidSDK\platform-tools\adb.exe</code>, nếu không thấy sẽ gọi <code>adb</code> trong biến môi trường PATH).</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-badge">3</div>
+          <div class="step-body">
+            <h4>Biên dịch và khởi tạo 9 bảng SQLite</h4>
+            <p>Biên dịch <code>DatabaseManager.java</code> và <code>BridgeServer.java</code> vào <code>bridge-server\out</code>, nạp 3 thư viện trong <code>bridge-server\lib\*</code>, sau đó tạo tệp <code>bridge-server/data/smartcard.db</code> gồm 9 bảng: <code>cards</code>, <code>attendance_logs</code>, <code>book_loans</code>, <code>card_audit_logs</code>, <code>admin_accounts</code>, <code>wallet_transactions</code>, <code>courses</code>, <code>enrollments</code>, <code>attendance_sessions</code>.</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-badge">4</div>
+          <div class="step-body">
+            <h4>Lắng nghe HTTP và đầu đọc thẻ</h4>
+            <p>Khi cửa sổ terminal in dòng <code>SMART STUDENT ID - PC BRIDGE &amp; SQLITE DB SERVER ON PORT 8080</code>, hệ thống đã sẵn sàng. Không đóng cửa sổ terminal này trong suốt quá trình dùng app.</p>
+          </div>
+        </div>
+      </div>
+
+      <h3>3.2. Sử dụng bảng điều khiển Web tại <code>http://localhost:8080</code></h3>
+      <p>Mở trình duyệt trên máy tính và truy cập <code>http://localhost:8080</code>. Giao diện web cung cấp 3 khu vực điều khiển trực tiếp phục vụ giảng viên và người kiểm thử.</p>
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title"><span class="tag tag-blue">Khu vực 1</span> Điểm danh và chiếu QR động</div>
+          <p>Chọn môn học (<code>AT19N01</code>, <code>AT19N02</code>, <code>AT19N03</code>, <code>CN19N04</code>), thời lượng phiên (5, 10, 15, 30 phút) và chu kỳ đổi mã QR (15s, 20s, 30s). Nhấn "Mở phiên &amp; Chiếu QR" để phát QR động, lấy mã OTP 6 số dự phòng, bật chế độ "Phóng to máy chiếu" và theo dõi danh sách sinh viên điểm danh theo thời gian thực.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="tag tag-amber">Khu vực 2</span> Bộ nạp thẻ nhanh</div>
+          <p>Hiển thị toàn bộ thẻ có trong SQLite. Bấm vào một thẻ bất kỳ (như <code>CT070315</code>) để nạp dữ liệu thẻ đó vào đầu đọc và tăng biến <code>tapEventId</code>, khiến màn hình điện thoại tự bật popup nhập PIN sau tối đa 750 ms. Bạn có thể tải lên tệp <code>.scr</code> bất kỳ từ máy tính.</p>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="tag tag-green">Khu vực 3</span> Giám sát CSDL SQLite</div>
+          <p>Hiển thị số lượng bản ghi và nội dung hiện tại trong <code>smartcard.db</code> để đối chiếu dữ liệu ngay sau khi phát hành thẻ, đổi PIN, điểm danh, mượn sách hoặc thanh toán ví trên điện thoại.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4 -->
+    <section class="doc-section" id="buoc-4-android">
+      <div class="sec-head">
+        <span class="sec-num">Bước 4</span>
+        <h2>Build và chạy ứng dụng Android trong Android Studio</h2>
+      </div>
+      <p>
+        Mở Android Studio, chọn <strong>Open</strong> và trỏ vào thư mục gốc <code>e:\SmartStudentID</code>. Đợi Gradle đồng bộ hoàn tất với Gradle <code>9.4.1</code> và JDK <code>21</code>, sau đó chọn cấu hình chạy <code>app</code>.
+      </p>
+
+      <div class="callout callout-green">
+        <span class="callout-title">Hỗ trợ chiếu màn hình khi demo</span>
+        Trên nhánh <code>main</code>, lớp <code>BaseSecureActivity</code> mặc định tắt <code>FLAG_SECURE</code> khi khởi tạo để bạn có thể chiếu màn hình điện thoại qua Android Studio Device Mirroring hoặc Scrcpy mà không bị màn hình đen.
+      </div>
+
+      <h3>Chọn phương thức kết nối thiết bị Android với BridgeServer</h3>
+      <div class="tab-group" data-tab-group="conn">
+        <div class="tab-buttons">
+          <button class="tab-btn active" type="button" data-tab-target="conn-usb">1. Điện thoại thật qua cáp USB (Khuyên dùng)</button>
+          <button class="tab-btn" type="button" data-tab-target="conn-emu">2. Máy ảo Android Studio Emulator</button>
+          <button class="tab-btn" type="button" data-tab-target="conn-wifi">3. Điện thoại thật qua Wi-Fi LAN</button>
+        </div>
+
+        <div class="tab-panel active" id="conn-usb">
+          <p>Đây là cách ổn định nhất vì camera quét QR hoạt động tốt và không bị tường lửa Windows chặn.</p>
+          <div class="steps-list">
+            <div class="step-item">
+              <div class="step-badge">1</div>
+              <div class="step-body">
+                <h4>Bật USB Debugging trên điện thoại</h4>
+                <p>Vào Cài đặt, Tùy chọn nhà phát triển và bật Gỡ lỗi USB, sau đó cắm cáp USB vào máy tính và bấm Cho phép khi điện thoại hỏi xác nhận RSA.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-badge">2</div>
+              <div class="step-body">
+                <h4>Chạy lại hoặc kiểm tra adb reverse</h4>
+                <p>File <code>start-bridge-server.bat</code> đã tự chạy lệnh này, nhưng nếu bạn cắm cáp USB sau khi bật Server, hãy chạy lại lệnh bên dưới.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-badge">3</div>
+              <div class="step-body">
+                <h4>Nhấn Run trong Android Studio</h4>
+                <p>Ứng dụng kết nối tới <code>http://127.0.0.1:8080</code> qua đường hầm USB.</p>
+              </div>
+            </div>
+          </div>
+          <div class="cmd-box">
+            <button class="copy-btn" type="button" data-copy="adb devices&#10;adb reverse tcp:8080 tcp:8080">Sao chép</button>
+            <pre>adb devices
+adb reverse tcp:8080 tcp:8080</pre>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="conn-emu">
+          <p>Phù hợp khi không có điện thoại Android bên cạnh.</p>
+          <ul class="clean-list">
+            <li>Khởi động một thiết bị ảo (AVD) có API từ 24 trở lên trong Device Manager của Android Studio.</li>
+            <li>Đảm bảo <code>BridgeServer</code> đang chạy trên PC ở cổng <code>8080</code>, sau đó bấm Run để cài app lên Emulator.</li>
+            <li>Lớp <code>ApduClient</code> tự động thử <code>127.0.0.1:8080</code> rồi chuyển sang <code>http://10.0.2.2:8080</code> (địa chỉ loopback trỏ ra máy host Windows).</li>
+            <li>Khi thử chức năng điểm danh trên máy ảo không có webcam soi QR trên màn hình, bạn dùng nút nhập mã OTP 6 số hoặc nút điểm danh trực tiếp bằng thẻ.</li>
+          </ul>
+        </div>
+
+        <div class="tab-panel" id="conn-wifi">
+          <p>Dùng khi muốn ngắt cáp USB để cầm điện thoại di chuyển tự do.</p>
+          <ul class="clean-list">
+            <li>Kết nối máy tính và điện thoại vào cùng một mạng Wi-Fi.</li>
+            <li>Mở cổng TCP <code>8080</code> trong Windows Defender Firewall cho mạng đang dùng.</li>
+            <li>Trong tệp <code>ApduClient.java</code>, danh sách địa chỉ dự phòng hiện khai báo IP LAN mẫu là <code>http://192.168.0.101:8080</code>. Nếu IP máy tính của bạn khác địa chỉ này (kiểm tra bằng lệnh <code>ipconfig</code>), hãy sửa lại IP trong mảng <code>CANDIDATE_BASE_URLS</code> trước khi nhấn Run.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5 -->
+    <section class="doc-section" id="buoc-5-sudung">
+      <div class="sec-head">
+        <span class="sec-num">Bước 5</span>
+        <h2>Hướng dẫn sử dụng đầy đủ các luồng trên App Android</h2>
+      </div>
+      <p>
+        Khi khởi chạy lần đầu, <code>DatabaseManager</code> tự động tạo sẵn các tài khoản quản trị, thẻ sinh viên mẫu, môn học và giao dịch ban đầu trong <code>smartcard.db</code> để bạn thao tác ngay.
+      </p>
+
+      <h3>5.1. Dữ liệu mẫu có sẵn khi vừa bật Server</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Loại dữ liệu</th>
+              <th>Định danh / Tài khoản</th>
+              <th>Thông tin chi tiết</th>
+              <th>Trạng thái khởi tạo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Quản trị viên</td>
+              <td><code>admin</code> / <code>admin123</code></td>
+              <td>Quản trị viên Hệ thống (<code>SUPER_ADMIN</code>)</td>
+              <td>Hoạt động</td>
+            </tr>
+            <tr>
+              <td>Quản trị viên</td>
+              <td><code>daotao</code> / <code>daotao123</code></td>
+              <td>Phòng Đào tạo và Khảo thí (<code>CARD_ADMIN</code>)</td>
+              <td>Hoạt động</td>
+            </tr>
+            <tr>
+              <td>Thẻ sinh viên 1</td>
+              <td><code>CT070315</code></td>
+              <td>Vũ Ngọc Hải, lớp CT7C, An toàn Thông tin, PIN <code>123456</code>, Ví 500.000 VND</td>
+              <td>Đang mở (Sẵn sàng test)</td>
+            </tr>
+            <tr>
+              <td>Thẻ sinh viên 2</td>
+              <td><code>CT070301</code></td>
+              <td>Nguyễn Minh Quân, lớp CT7C, An toàn Thông tin, PIN <code>123456</code></td>
+              <td>Đang mở</td>
+            </tr>
+            <tr>
+              <td>Thẻ sinh viên 3</td>
+              <td><code>CT070322</code></td>
+              <td>Trần Thu Hà, lớp CT7C, Công nghệ Thông tin, PIN <code>123456</code></td>
+              <td>Đang khóa (Dùng để test mở khóa bằng PUK <code>88888888</code>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>5.2. Quy trình thao tác theo từng màn hình</h3>
+      <div class="tab-group" data-tab-group="roles">
+        <div class="tab-buttons">
+          <button class="tab-btn active" type="button" data-tab-target="role-login">Đăng nhập &amp; Chạm thẻ</button>
+          <button class="tab-btn" type="button" data-tab-target="role-admin">Chế độ Quản trị (Admin)</button>
+          <button class="tab-btn" type="button" data-tab-target="role-student">4 Tab Sinh viên</button>
+        </div>
+
+        <div class="tab-panel active" id="role-login">
+          <h4>Màn hình chờ chạm thẻ (<code>LoginPinActivity</code>)</h4>
+          <div class="steps-list">
+            <div class="step-item">
+              <div class="step-badge">1</div>
+              <div class="step-body">
+                <h4>Kích hoạt sự kiện chạm thẻ</h4>
+                <p>Ở trạng thái chưa gắn thẻ, màn hình hiện thông báo "Đưa thẻ sinh viên lại gần NFC thiết bị" và tự hỏi <code>/api/status</code> mỗi 750 ms. Bạn có thể bấm trực tiếp vào vùng chờ NFC trên app, bấm một thẻ trên Web Console <code>http://localhost:8080</code>, hoặc nạp file <code>.scr</code> trong JCIDE.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-badge">2</div>
+              <div class="step-body">
+                <h4>Nhập mã PIN 6 số</h4>
+                <p>Popup bàn phím PIN xuất hiện kèm tên chủ thẻ đang gắn trên đầu đọc. Nhập <code>123456</code> để chip kiểm tra qua <code>INS 0x10</code> và xác thực cặp khóa RSA-1024.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-badge">3</div>
+              <div class="step-body">
+                <h4>Duy trì phiên đăng nhập</h4>
+                <p>Sau khi mở khóa thành công, ứng dụng lưu phiên vào <code>PinSessionManager</code> và mã hóa hồ sơ tạm bằng AES-256-GCM trong <code>EncryptedCacheManager</code>. Các lần quay lại màn hình chính sau đó sẽ hiển thị nút "Mở khóa ứng dụng" và "Đăng xuất thẻ".</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="role-admin">
+          <h4>Cổng Quản trị viên (<code>AdminLoginActivity</code> và <code>AdminDashboardActivity</code>)</h4>
+          <p>Tại màn hình <code>LoginPinActivity</code>, nhấn nút <strong>Chế độ Quản trị</strong> ở phía dưới, sau đó đăng nhập bằng tài khoản <code>admin</code> / <code>admin123</code> (hoặc <code>daotao</code> / <code>daotao123</code>). Server kiểm tra mật khẩu băm SHA-256 kèm salt trong bảng <code>admin_accounts</code>.</p>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-title">Phát hành thẻ sinh viên mới</div>
+              <p>Điền MSSV, Họ tên, Ngày sinh (chọn qua hộp thoại lịch), Lớp, Khoa/Viện, PIN khởi tạo và chọn ảnh chân dung từ Thư viện hoặc Camera. Khi bấm phát hành, app gửi lệnh <code>INS 0x20</code> lưu hồ sơ AES, cắt ảnh WebP nạp qua <code>INS 0x22</code>, gọi <code>INS 0x13</code> lấy Public Key RSA-1024 và ghi bản ghi vào bảng <code>cards</code> trên Server.</p>
+            </div>
+            <div class="card">
+              <div class="card-title">Quản lý danh sách thẻ đã cấp</div>
+              <p>Chạm vào một thẻ bất kỳ trong danh sách để mở hộp thoại tác vụ gồm: nạp thẻ vào đầu đọc để test đăng nhập, sửa thông tin cá nhân trực tiếp lên chip, khóa thẻ hoặc mở khóa thẻ bị khóa PIN bằng mã PUK <code>88888888</code> (<code>INS 0x12</code>), hoặc xóa thẻ khỏi CSDL.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="role-student">
+          <h4>4 Tab chức năng chính trong <code>StudentMainActivity</code></h4>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-title"><span class="tag tag-blue">Tab 1</span> Thẻ SV (<code>CardProfileFragment</code>)</div>
+              <p>Hiển thị thông tin sinh viên và ảnh chân dung đọc từ chip. Hỗ trợ đọc lại dữ liệu từ chip, sửa hồ sơ cá nhân, đổi mã PIN (<code>INS 0x11</code>), chụp hoặc chọn ảnh mới để nén WebP nạp xuống EEPROM, bật hộp thoại QR định danh cá nhân và đăng xuất thẻ.</p>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="tag tag-green">Tab 2</span> Điểm danh (<code>DynamicQrFragment</code>)</div>
+              <p>Liệt kê các phiên điểm danh đang mở từ Server. Sinh viên điểm danh theo 3 cách: quét mã QR động bằng CameraX (<code>QrScannerActivity</code>), nhập mã dự phòng 6 số hiển thị trên màn hình giảng viên, hoặc bấm điểm danh bằng thẻ ký số RSA-1024. Bên dưới là thanh tiến độ chuyên cần từng môn; chạm vào môn học để xem chi tiết các buổi đã điểm danh.</p>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="tag tag-amber">Tab 3</span> Thư viện (<code>LibraryLabFragment</code>)</div>
+              <p>Hiển thị danh sách đầu sách từ <code>smartcard.db</code> và hạn mức tối đa 5 cuốn đang mượn trên chip. Sinh viên bấm Mượn hoặc Trả sách (<code>INS 0x31</code>, <code>INS 0x32</code> kèm chữ ký RSA), thử quẹt cửa ra vào phòng Lab và bấm nút đọc 10 dòng nhật ký vòng lưu trực tiếp trên EEPROM (<code>INS 0x33</code>).</p>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="tag tag-rose">Tab 4</span> Ví điện tử (<code>SecurityOptLabFragment</code>)</div>
+              <p>Cho phép ẩn hoặc hiện số dư, đồng bộ số dư từ chip (<code>INS 0x42</code>), nạp tiền qua các nguồn mẫu (Vietcombank, BIDV, MB Bank, Quầy Tài vụ với mức nhanh 50k đến 500k) và thanh toán dịch vụ (Căng-tin, Gửi xe, In ấn, CLB). Mỗi giao dịch đều yêu cầu xác nhận, thực thi lệnh ví <code>INS 0x40</code>/<code>0x41</code>, ký biên lai RSA-1024, lọc lịch sử (Tất cả, Nạp tiền, Thanh toán) và chạm vào từng dòng để xem biên lai chi tiết.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6 -->
+    <section class="doc-section" id="buoc-6-demo">
+      <div class="sec-head">
+        <span class="sec-num">Bước 6</span>
+        <h2>Checklist chạy Demo chuẩn và xử lý lỗi thường gặp</h2>
+      </div>
+      <p>
+        Đánh dấu từng bước bên dưới trong khi kiểm thử hoặc trình diễn trực tiếp. Trạng thái được lưu ngay trên trình duyệt của bạn.
+      </p>
+
+      <div class="progress-wrap">
+        <strong id="progressLabel">Đã xong 0 / 8 bước</strong>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <button class="btn-reset" type="button" id="resetChecklist">Đặt lại</button>
+      </div>
+
+      <div class="checklist" id="demoChecklist">
+        <label class="check-row">
+          <input type="checkbox" data-check-id="c1">
+          <div>
+            <div class="check-title">1. Khởi chạy BridgeServer qua start-bridge-server.bat</div>
+            <div class="check-desc">Terminal thông báo Server đang chạy ở cổng 8080 và đã khởi tạo <code>bridge-server/data/smartcard.db</code>.</div>
+          </div>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-check-id="c2">
+          <div>
+            <div class="check-title">2. Mở Web Console tại http://localhost:8080</div>
+            <div class="check-desc">Xác nhận danh sách thẻ (CT070315, CT070301, CT070322) và bảng môn học hiển thị đầy đủ.</div>
+          </div>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-check-id="c3">
+          <div>
+            <div class="check-title">3. Chạy ứng dụng Android trên điện thoại hoặc Emulator</div>
+            <div class="check-desc">App mở vào màn hình chờ NFC (<code>LoginPinActivity</code>) và không báo mất kết nối.</div>
+          </div>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-check-id="c4">
+          <div>
+            <div class="check-title">4. Chạm thẻ CT070315 và đăng nhập bằng PIN 123456</div>
+            <div class="check-desc">Bấm thẻ Vũ Ngọc Hải trên Web Console để popup PIN tự bật trên điện thoại, nhập <code>123456</code>.</div>
+          </div>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-check-id="c5">
+          <div>
+            <div class="check-title">5. Kiểm tra Tab Thẻ SV, cập nhật ảnh hoặc đổi PIN</div>
+            <div class="check-desc">Thử mở QR định danh và tải lại hồ sơ từ chip.</div>
+          </div>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-check-id="c6">
+          <div>
+            <div class="check-title">6. Mở phiên điểm danh trên PC và quét QR trên điện thoại</div>
+            <div class="check-desc">Mở phiên môn <code>AT19N01</code> ở <code>localhost:8080</code>, quét QR hoặc nhập mã 6 số ở Tab Điểm danh, kiểm tra danh sách điểm danh trên PC cập nhật trạng thái RSA-1024.</div>
+          </div>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-check-id="c7">
+          <div>
+            <div class="check-title">7. Thử mượn sách, mở cửa Lab và thanh toán Ví điện tử</div>
+            <div class="check-desc">Thực hiện 1 lượt mượn sách ở Tab Thư viện, đọc log trên chip, rồi nạp tiền hoặc thanh toán Căng-tin ở Tab Ví điện tử.</div>
+          </div>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-check-id="c8">
+          <div>
+            <div class="check-title">8. Đăng nhập Quản trị và mở khóa thẻ CT070322 bằng PUK</div>
+            <div class="check-desc">Vào Chế độ Quản trị với <code>admin / admin123</code>, mở khóa thẻ Trần Thu Hà bằng PUK <code>88888888</code> và thử phát hành 1 thẻ mới.</div>
+          </div>
+        </label>
+      </div>
+
+      <h3>Xử lý lỗi thường gặp</h3>
+      <details class="trouble">
+        <summary>1. App báo không kết nối được BridgeServer (cổng 8080)</summary>
+        <p>Kiểm tra cửa sổ terminal của <code>start-bridge-server.bat</code> vẫn đang mở. Nếu cắm cáp USB sau khi đã bật server, hãy chạy lại <code>adb reverse tcp:8080 tcp:8080</code> trên máy tính. Với kết nối Wi-Fi LAN, kiểm tra IP máy tính bằng <code>ipconfig</code> và đối chiếu với <code>CANDIDATE_BASE_URLS</code> trong <code>ApduClient.java</code>.</p>
+      </details>
+      <details class="trouble">
+        <summary>2. Thẻ bị khóa sau 3 lần nhập sai mã PIN (SW = 6983)</summary>
+        <p>Vào nút <strong>Chế độ Quản trị</strong> ở màn hình đăng nhập, đăng nhập <code>admin / admin123</code>, chọn thẻ đang bị khóa trong danh sách và nhập mã PUK <code>88888888</code> để mở khóa lại về trạng thái hoạt động.</p>
+      </details>
+      <details class="trouble">
+        <summary>3. Gradle báo sai phiên bản Java khi mở bằng Android Studio</summary>
+        <p>Dự án khai báo <code>toolchainVersion=21</code> trong <code>gradle/gradle-daemon-jvm.properties</code>. Trong Android Studio, vào Settings, Build Execution Deployment, Build Tools, Gradle và chọn Gradle JDK là phiên bản 21.</p>
+      </details>
+      <details class="trouble">
+        <summary>4. Máy ảo Emulator không quét được mã QR bằng Camera</summary>
+        <p>Khi trình chiếu mã QR trên PC mà máy ảo không hướng camera vào màn hình được, bấm nút nhập <strong>Mã dự phòng 6 số</strong> ngay bên cạnh nút quét QR trên thẻ phiên điểm danh trong Tab Điểm danh, rồi đọc 6 chữ số hiển thị phía dưới mã QR trên <code>http://localhost:8080</code>.</p>
+      </details>
+    </section>
+  </main>
+</div>
+
+<script>
+  (function () {
+    // Copy buttons
+    document.querySelectorAll('.copy-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var text = btn.getAttribute('data-copy') || '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            markCopied(btn);
+          });
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          markCopied(btn);
+        }
+      });
+    });
+
+    function markCopied(btn) {
+      var orig = btn.textContent;
+      btn.textContent = 'Đã chép';
+      btn.classList.add('copied');
+      setTimeout(function () {
+        btn.textContent = orig;
+        btn.classList.remove('copied');
+      }, 1500);
+    }
+
+    // Tabs
+    document.querySelectorAll('.tab-group').forEach(function (group) {
+      var buttons = group.querySelectorAll('.tab-btn');
+      var panels = group.querySelectorAll('.tab-panel');
+      buttons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var targetId = btn.getAttribute('data-tab-target');
+          buttons.forEach(function (b) { b.classList.remove('active'); });
+          panels.forEach(function (p) { p.classList.remove('active'); });
+          btn.classList.add('active');
+          var target = group.querySelector('#' + targetId);
+          if (target) target.classList.add('active');
+        });
+      });
+    });
+
+    // APDU Table Filter
+    var apduInput = document.getElementById('apduFilter');
+    var apduRows = document.querySelectorAll('#apduTable tbody tr');
+    if (apduInput) {
+      apduInput.addEventListener('input', function () {
+        var q = apduInput.value.trim().toLowerCase();
+        apduRows.forEach(function (row) {
+          var txt = row.textContent.toLowerCase();
+          row.style.display = txt.indexOf(q) !== -1 ? '' : 'none';
+        });
+      });
+    }
+
+    // Interactive Demo Checklist with localStorage
+    var STORAGE_KEY = 'smartstudentid_main_demo_checklist_v1';
+    var boxes = document.querySelectorAll('#demoChecklist input[type="checkbox"]');
+    var progressLabel = document.getElementById('progressLabel');
+    var progressFill = document.getElementById('progressFill');
+    var resetBtn = document.getElementById('resetChecklist');
+
+    function loadChecklist() {
+      var saved = {};
+      try {
+        saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      } catch (e) {
+        saved = {};
+      }
+      boxes.forEach(function (box) {
+        var id = box.getAttribute('data-check-id');
+        box.checked = Boolean(saved[id]);
+        updateRowClass(box);
+      });
+      updateProgress();
+    }
+
+    function saveChecklist() {
+      var state = {};
+      boxes.forEach(function (box) {
+        state[box.getAttribute('data-check-id')] = box.checked;
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {}
+    }
+
+    function updateRowClass(box) {
+      var row = box.closest('.check-row');
+      if (row) {
+        row.classList.toggle('done', box.checked);
+      }
+    }
+
+    function updateProgress() {
+      var total = boxes.length;
+      var done = 0;
+      boxes.forEach(function (b) { if (b.checked) done++; });
+      var pct = total > 0 ? Math.round((done / total) * 100) : 0;
+      progressLabel.textContent = 'Đã xong ' + done + ' / ' + total + ' bước';
+      progressFill.style.width = pct + '%';
+    }
+
+    boxes.forEach(function (box) {
+      box.addEventListener('change', function () {
+        updateRowClass(box);
+        updateProgress();
+        saveChecklist();
+      });
+    });
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        boxes.forEach(function (box) {
+          box.checked = false;
+          updateRowClass(box);
+        });
+        updateProgress();
+        saveChecklist();
+      });
+    }
+
+    loadChecklist();
+
+    // Scroll spy for sidebar links
+    var navLinks = document.querySelectorAll('#sidebarNav .nav-link');
+    var sections = document.querySelectorAll('section.doc-section');
+    window.addEventListener('scroll', function () {
+      var currentId = '';
+      var offset = window.scrollY + 120;
+      sections.forEach(function (sec) {
+        if (sec.offsetTop <= offset) {
+          currentId = sec.getAttribute('id');
+        }
+      });
+      if (currentId) {
+        navLinks.forEach(function (link) {
+          var href = link.getAttribute('href').slice(1);
+          link.classList.toggle('active', href === currentId);
+        });
+      }
+    }, { passive: true });
+  })();
+</script>
+</body>
+</html>

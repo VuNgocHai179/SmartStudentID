@@ -2,6 +2,8 @@ package com.example.smartstudentid.ui.demo;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -14,6 +16,7 @@ import android.os.Debug;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.security.keystore.KeyPermanentlyInvalidatedException;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
@@ -36,6 +39,9 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SwitchCompat;
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.example.smartstudentid.BuildConfig;
@@ -55,12 +61,12 @@ import com.example.smartstudentid.security.CryptoManager;
 import com.example.smartstudentid.security.EncryptedCacheManager;
 import com.example.smartstudentid.security.PinSessionManager;
 import com.example.smartstudentid.security.SecurityEnvironmentChecker;
+import com.example.smartstudentid.ui.auth.LoginPinActivity;
 import com.example.smartstudentid.ui.widget.CacheFlowView;
 import com.example.smartstudentid.ui.widget.ExecutionWaterfallView;
 import com.example.smartstudentid.ui.widget.ImagePipelineView;
 import com.example.smartstudentid.ui.widget.RealtimeTopicChartView;
 import com.example.smartstudentid.ui.widget.SecurityAuditFlowView;
-import com.example.smartstudentid.ui.widget.SecurityDefensePopupDialog;
 import com.example.smartstudentid.ui.widget.ThreadingLaneView;
 import com.google.android.material.button.MaterialButton;
 import com.google.zxing.BarcodeFormat;
@@ -79,6 +85,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.crypto.Cipher;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
@@ -96,6 +104,12 @@ public class TopicDemoFragment extends Fragment {
     private static final int TOPIC_CACHE = 2;
     private static final int TOPIC_IMAGE = 3;
     private static final int TOPIC_STARTUP = 4;
+
+    private static final int SEC_FLOW_PIN = 0;
+    private static final int SEC_FLOW_ANTI_HOOK = 1;
+    private static final int SEC_FLOW_UI_LOCK = 2;
+    private static final int SEC_FLOW_BIOMETRIC = 3;
+    private static final int SEC_FLOW_COUNT = 4;
 
     private static final String SLATE = "#475569";
     private static final String SLATE_MUTED = "#64748B";
@@ -226,6 +240,13 @@ public class TopicDemoFragment extends Fragment {
     private TextView tvChipPinType;
     private TextView tvChipRsaState;
     private TextView tvChipEnvState;
+    private MaterialButton btnSecFlowPin;
+    private MaterialButton btnSecFlowAntiHook;
+    private MaterialButton btnSecFlowUiLock;
+    private MaterialButton btnSecFlowBiometric;
+    private View panelSecSubPin;
+    private MaterialButton btnSecFlowLockNow;
+    private MaterialButton btnToggleFlagSecureDemo;
     private LinearLayout panelStudent;
     private LinearLayout panelImage;
     private LinearLayout panelPin;
@@ -235,13 +256,22 @@ public class TopicDemoFragment extends Fragment {
     private TextView demoStudentId;
     private TextView demoDept;
     private TextView demoSourceBadge;
+    private static final String[] PIN_DOT_STRINGS = {
+            "", "•", "• •", "• • •", "• • • •", "• • • • •", "• • • • • •", "• • • • • • •", "• • • • • • • •"
+    };
+    private final char[] securePinBuf = new char[8];
+    private int securePinLen = 0;
+
     private TextView demoImageInfo;
-    private EditText demoPinInput;
+    private TextView tvSecurePinDisplay;
+    private final View[] securePinKeyViews = new View[12];
     private MaterialButton btnAction;
     private MaterialButton btnPickImage;
     private MaterialButton btnSimulateWrongPin3x;
+    private View rowCacheResetActions;
+    private MaterialButton btnEvictL1Only;
     private MaterialButton btnResetCache;
-    private MaterialButton btnInspectTopicSecurity;
+    private boolean lastWipeWasAutoWipe;
     private ProgressBar progress;
     private TextView tvComparisonTitle;
     private LinearLayout llComparison;
@@ -258,6 +288,20 @@ public class TopicDemoFragment extends Fragment {
 
     private final Map<String, String> before = new LinkedHashMap<>();
     private final Map<String, String> after = new LinkedHashMap<>();
+    private final Map<String, String>[] secBeforeByFlow = createFlowMapArray();
+    private final Map<String, String>[] secAfterByFlow = createFlowMapArray();
+    private int secSubFlow = SEC_FLOW_PIN;
+    private volatile String lastBeforeRetainedPin = null;
+    private int lastTestedPinLength = 6;
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String>[] createFlowMapArray() {
+        Map<String, String>[] arr = new Map[SEC_FLOW_COUNT];
+        for (int i = 0; i < SEC_FLOW_COUNT; i++) {
+            arr[i] = new LinkedHashMap<>();
+        }
+        return arr;
+    }
 
     private LocalCacheManager localCacheManager;
     private EncryptedCacheManager encryptedCache;
@@ -280,7 +324,28 @@ public class TopicDemoFragment extends Fragment {
         imagePicker = registerForActivityResult(new ActivityResultContracts.PickVisualMedia(), uri -> {
             if (uri != null) {
                 pickedUri = uri;
-                loadPickedPreview(uri);
+                chaosManager.resolveStep3ImageAndMemory();
+                before.clear();
+                after.clear();
+                if (isAdded()) {
+                    renderComparison();
+                    updateTechSummaryLine();
+                    if (imagePipelineView != null) {
+                        imagePipelineView.resetToIdle();
+                    }
+                    if (realtimeChart != null) {
+                        realtimeChart.setTopic(TOPIC_IMAGE);
+                        realtimeChart.setAfterMode(optimized());
+                    }
+                    if (tvCardQuota8Kb != null) {
+                        tvCardQuota8Kb.setTextColor(Color.parseColor(SLATE));
+                        tvCardQuota8Kb.setText("Bộ nhớ thẻ chip: 0 / 8.0 KB (Bấm \"Lưu ảnh lên thẻ chip\" để đo)");
+                    }
+                    if (pbCardQuota8Kb != null) {
+                        pbCardQuota8Kb.setProgress(0);
+                    }
+                    loadPickedPreview(uri);
+                }
             }
         });
     }
@@ -308,7 +373,7 @@ public class TopicDemoFragment extends Fragment {
             showCachedProfile();
         }
         if (topic == TOPIC_IMAGE) {
-            prepareSampleImage();
+            showWaitingForImageState();
         }
     }
 
@@ -322,6 +387,8 @@ public class TopicDemoFragment extends Fragment {
             currentQrWindowEpoch = -1L;
             qrTimerHandler.removeCallbacks(qrTickRunnable);
             qrTimerHandler.post(qrTickRunnable);
+        } else if (topic == TOPIC_STARTUP) {
+            syncFlagSecureForCurrentFlow(optimized());
         }
     }
 
@@ -333,10 +400,14 @@ public class TopicDemoFragment extends Fragment {
         qrTimerHandler.removeCallbacks(qrTickRunnable);
         releaseLiveMetricFlags();
         ApduClient.getInstance().clearTelemetryListener(apduTelemetryListener);
+        wipeSecurePinBuffer();
         if (topic == TOPIC_THREADING) {
             chaosManager.resolveStep1Threading();
         } else if (topic == TOPIC_IMAGE) {
             chaosManager.resolveStep3ImageAndMemory();
+        } else if (topic == TOPIC_STARTUP && BuildConfig.DEBUG
+                && getActivity() instanceof BaseSecureActivity) {
+            ((BaseSecureActivity) getActivity()).applyFlagSecure(false);
         }
     }
 
@@ -347,6 +418,7 @@ public class TopicDemoFragment extends Fragment {
         qrTimerHandler.removeCallbacks(qrTickRunnable);
         releaseLiveMetricFlags();
         ApduClient.getInstance().clearTelemetryListener(apduTelemetryListener);
+        wipeSecurePinBuffer();
         if (topic == TOPIC_THREADING) {
             chaosManager.resolveStep1Threading();
         } else if (topic == TOPIC_IMAGE) {
@@ -418,6 +490,13 @@ public class TopicDemoFragment extends Fragment {
         tvChipPinType = root.findViewById(R.id.tvChipPinType);
         tvChipRsaState = root.findViewById(R.id.tvChipRsaState);
         tvChipEnvState = root.findViewById(R.id.tvChipEnvState);
+        btnSecFlowPin = root.findViewById(R.id.btnSecFlowPin);
+        btnSecFlowAntiHook = root.findViewById(R.id.btnSecFlowAntiHook);
+        btnSecFlowUiLock = root.findViewById(R.id.btnSecFlowUiLock);
+        btnSecFlowBiometric = root.findViewById(R.id.btnSecFlowBiometric);
+        panelSecSubPin = root.findViewById(R.id.panelSecSubPin);
+        btnSecFlowLockNow = root.findViewById(R.id.btnSecFlowLockNow);
+        btnToggleFlagSecureDemo = root.findViewById(R.id.btnToggleFlagSecureDemo);
         panelStudent = root.findViewById(R.id.panelStudent);
         panelImage = root.findViewById(R.id.panelImage);
         panelPin = root.findViewById(R.id.panelPin);
@@ -428,12 +507,25 @@ public class TopicDemoFragment extends Fragment {
         demoDept = root.findViewById(R.id.demoDept);
         demoSourceBadge = root.findViewById(R.id.demoSourceBadge);
         demoImageInfo = root.findViewById(R.id.demoImageInfo);
-        demoPinInput = root.findViewById(R.id.demoPinInput);
+        tvSecurePinDisplay = root.findViewById(R.id.tvSecurePinDisplay);
+        securePinKeyViews[0] = root.findViewById(R.id.btnPinKey0);
+        securePinKeyViews[1] = root.findViewById(R.id.btnPinKey1);
+        securePinKeyViews[2] = root.findViewById(R.id.btnPinKey2);
+        securePinKeyViews[3] = root.findViewById(R.id.btnPinKey3);
+        securePinKeyViews[4] = root.findViewById(R.id.btnPinKey4);
+        securePinKeyViews[5] = root.findViewById(R.id.btnPinKey5);
+        securePinKeyViews[6] = root.findViewById(R.id.btnPinKey6);
+        securePinKeyViews[7] = root.findViewById(R.id.btnPinKey7);
+        securePinKeyViews[8] = root.findViewById(R.id.btnPinKey8);
+        securePinKeyViews[9] = root.findViewById(R.id.btnPinKey9);
+        securePinKeyViews[10] = root.findViewById(R.id.btnPinKeyBack);
+        securePinKeyViews[11] = root.findViewById(R.id.btnPinKeyClear);
         btnAction = root.findViewById(R.id.btnDemoAction);
         btnPickImage = root.findViewById(R.id.btnPickImage);
         btnSimulateWrongPin3x = root.findViewById(R.id.btnSimulateWrongPin3x);
+        rowCacheResetActions = root.findViewById(R.id.rowCacheResetActions);
+        btnEvictL1Only = root.findViewById(R.id.btnEvictL1Only);
         btnResetCache = root.findViewById(R.id.btnResetCache);
-        btnInspectTopicSecurity = root.findViewById(R.id.btnInspectTopicSecurity);
         progress = root.findViewById(R.id.demoProgress);
         tvComparisonTitle = root.findViewById(R.id.tvComparisonTitle);
         llComparison = root.findViewById(R.id.llComparison);
@@ -471,9 +563,13 @@ public class TopicDemoFragment extends Fragment {
         panelPin.setVisibility(topic == TOPIC_STARTUP ? View.VISIBLE : View.GONE);
         cardMode.setVisibility(View.VISIBLE);
         btnSimulateWrongPin3x.setVisibility(topic == TOPIC_CACHE ? View.VISIBLE : View.GONE);
+        if (rowCacheResetActions != null) {
+            rowCacheResetActions.setVisibility(topic == TOPIC_CACHE ? View.VISIBLE : View.GONE);
+        }
         btnResetCache.setVisibility(topic == TOPIC_CACHE ? View.VISIBLE : View.GONE);
-        btnInspectTopicSecurity.setVisibility(
-                (topic == TOPIC_CACHE || topic == TOPIC_STARTUP) ? View.VISIBLE : View.GONE);
+        if (btnEvictL1Only != null) {
+            btnEvictL1Only.setVisibility(topic == TOPIC_CACHE ? View.VISIBLE : View.GONE);
+        }
         realtimeChart.setTopic(topic);
         tvTechHeaderTitle.setText("🔬 Chi tiết kỹ thuật & Đồ thị (§" + (topic + 1) + ")");
         if (cardMechanism != null) {
@@ -532,7 +628,6 @@ public class TopicDemoFragment extends Fragment {
                 badge.setText("HỒ SƠ NGOẠI TUYẾN • §3");
                 title.setText("Hồ sơ & Lưu trữ");
                 btnAction.setText("Mở hồ sơ");
-                btnInspectTopicSecurity.setText("Kiểm chứng Lưu trữ: Plaintext Leak vs AES-GCM");
                 tvRealtimeChartTitle.setText("ĐỒ THỊ REALTIME • ĐỘ TRỄ MỞ HỒ SƠ");
                 break;
 
@@ -545,11 +640,10 @@ public class TopicDemoFragment extends Fragment {
 
             case TOPIC_STARTUP:
                 badge.setText("TRUNG TÂM BẢO MẬT • §5");
-                title.setText("Bảo mật & Xác thực PIN");
+                title.setText("Bảo mật & Phòng thủ (4 Luồng)");
                 realtimeChart.setColdStartMs(DemoMetrics.getColdStartMs());
-                btnAction.setText("Xác thực đăng nhập");
-                btnInspectTopicSecurity.setText("Mở Popup Đo kiểm Phòng thủ Bảo mật");
                 tvRealtimeChartTitle.setText("ĐỒ THỊ REALTIME • PHƠI NHIỄM PIN TRÊN RAM");
+                selectSecuritySubFlow(SEC_FLOW_PIN);
                 break;
 
             default:
@@ -571,6 +665,14 @@ public class TopicDemoFragment extends Fragment {
             if (suppressSwitchRun) {
                 return;
             }
+            if (topic == TOPIC_IMAGE) {
+                if (pickedUri == null) {
+                    promptPickImageFirst();
+                } else if (demoImageInfo != null) {
+                    demoImageInfo.setTextColor(Color.parseColor(SLATE));
+                }
+                return;
+            }
             applyTopicChaosState(checked);
             if (!busy) {
                 runCurrentMode();
@@ -589,6 +691,10 @@ public class TopicDemoFragment extends Fragment {
         btnApplyTopicFix.setOnClickListener(v -> triggerTopicMode(true));
 
         btnAction.setOnClickListener(v -> {
+            if (topic == TOPIC_IMAGE && pickedUri == null) {
+                promptPickImageFirst();
+                return;
+            }
             boolean mode = optimized();
             applyTopicChaosState(mode);
             runCurrentMode();
@@ -597,15 +703,55 @@ public class TopicDemoFragment extends Fragment {
                 .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
                 .build()));
         btnSimulateWrongPin3x.setOnClickListener(v -> simulateWrongPin3xAutoWipe());
-        btnResetCache.setOnClickListener(v -> resetCache());
-        btnInspectTopicSecurity.setOnClickListener(v -> {
-            if (topic == TOPIC_STARTUP && getActivity() instanceof BaseSecureActivity) {
-                SecurityDefensePopupDialog.show((BaseSecureActivity) getActivity(),
-                        this::showTopicSecurityInspector);
-            } else {
-                showTopicSecurityInspector();
+        for (int i = 0; i <= 9; i++) {
+            final char digitChar = (char) ('0' + i);
+            if (securePinKeyViews[i] != null) {
+                securePinKeyViews[i].setOnClickListener(v -> appendSecurePinDigit(digitChar));
             }
-        });
+        }
+        if (securePinKeyViews[10] != null) {
+            securePinKeyViews[10].setOnClickListener(v -> backspaceSecurePinDigit());
+        }
+        if (securePinKeyViews[11] != null) {
+            securePinKeyViews[11].setOnClickListener(v -> wipeSecurePinBuffer());
+        }
+        if (btnEvictL1Only != null) {
+            btnEvictL1Only.setOnClickListener(v -> evictL1Only());
+        }
+        btnResetCache.setOnClickListener(v -> resetCache());
+        if (btnSecFlowPin != null) {
+            btnSecFlowPin.setOnClickListener(v -> selectSecuritySubFlow(SEC_FLOW_PIN));
+        }
+        if (btnSecFlowAntiHook != null) {
+            btnSecFlowAntiHook.setOnClickListener(v -> selectSecuritySubFlow(SEC_FLOW_ANTI_HOOK));
+        }
+        if (btnSecFlowUiLock != null) {
+            btnSecFlowUiLock.setOnClickListener(v -> selectSecuritySubFlow(SEC_FLOW_UI_LOCK));
+        }
+        if (btnSecFlowBiometric != null) {
+            btnSecFlowBiometric.setOnClickListener(v -> selectSecuritySubFlow(SEC_FLOW_BIOMETRIC));
+        }
+        if (btnSecFlowLockNow != null) {
+            btnSecFlowLockNow.setOnClickListener(v -> {
+                pinSessionManager.lockSessionAndEvictRam();
+                Intent intent = new Intent(requireContext(), LoginPinActivity.class);
+                intent.putExtra(LoginPinActivity.EXTRA_SESSION_LOCKED_TIMEOUT, true);
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(intent);
+                if (getActivity() != null) {
+                    getActivity().finish();
+                }
+            });
+        }
+        if (btnToggleFlagSecureDemo != null) {
+            btnToggleFlagSecureDemo.setOnClickListener(v -> {
+                if (getActivity() instanceof BaseSecureActivity) {
+                    BaseSecureActivity host = (BaseSecureActivity) getActivity();
+                    host.applyFlagSecure(!host.isFlagSecureEnabled());
+                    updateFlagSecureToggleButton(optimized());
+                }
+            });
+        }
         tvToggleTrace.setOnClickListener(v -> {
             traceExpanded = !traceExpanded;
             View traceBody = getActiveTraceBodyView();
@@ -630,6 +776,17 @@ public class TopicDemoFragment extends Fragment {
         }
         suppressSwitchRun = false;
 
+        if (topic == TOPIC_IMAGE) {
+            if (pickedUri == null) {
+                promptPickImageFirst();
+            } else if (isAdded()) {
+                Toast.makeText(requireContext(),
+                        "Đã chọn chế độ " + (afterMode ? "Đã tối ưu" : "Chưa tối ưu")
+                                + " — bấm \"Lưu ảnh lên thẻ chip\" để đo.",
+                        Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
         applyTopicChaosState(afterMode);
         if (busy) {
             busy = false;
@@ -641,6 +798,11 @@ public class TopicDemoFragment extends Fragment {
     private void updateModeLabels(boolean checked) {
         tvModeHint.setText(checked ? "Đã tối ưu" : "Chưa tối ưu");
         tvModeHint.setTextColor(Color.parseColor(checked ? GREEN : RED));
+        if (topic == TOPIC_IMAGE && btnAction != null) {
+            btnAction.setText(checked
+                    ? "Lưu ảnh lên thẻ chip (Đã tối ưu)"
+                    : "Lưu ảnh lên thẻ chip (Chưa tối ưu)");
+        }
         renderMechanismCard(checked);
         updateRealAppStatusCards(checked);
         startLiveCounterPollingIfNeeded();
@@ -679,17 +841,18 @@ public class TopicDemoFragment extends Fragment {
                 tvCompareEncValue.setText("Đang bỏ qua\n(Không dùng)");
                 tvCompareEncValue.setTextColor(Color.parseColor(SLATE_MUTED));
             } else if (isWiped && !hasL1 && !hasL2) {
-                // Auto-Wiped after 3 wrong PINs
-                boxTierL1.setBackgroundResource(R.drawable.bg_status_red);
-                tvTierL1State.setText("ĐÃ HỦY");
-                tvTierL1State.setTextColor(Color.parseColor(RED));
+                // Cleared manually or Auto-Wiped after 3 wrong PINs
+                boolean isAuto = lastWipeWasAutoWipe;
+                boxTierL1.setBackgroundResource(isAuto ? R.drawable.bg_status_red : R.drawable.bg_soft_panel);
+                tvTierL1State.setText(isAuto ? "ĐÃ HỦY" : "TRỐNG");
+                tvTierL1State.setTextColor(Color.parseColor(isAuto ? RED : SLATE_MUTED));
 
-                boxTierL2.setBackgroundResource(R.drawable.bg_status_red);
-                tvTierL2State.setText("ĐÃ HỦY");
-                tvTierL2State.setTextColor(Color.parseColor(RED));
+                boxTierL2.setBackgroundResource(isAuto ? R.drawable.bg_status_red : R.drawable.bg_soft_panel);
+                tvTierL2State.setText(isAuto ? "ĐÃ HỦY" : "TRỐNG");
+                tvTierL2State.setTextColor(Color.parseColor(isAuto ? RED : SLATE_MUTED));
 
                 boxTierChip.setBackgroundResource(R.drawable.bg_soft_panel);
-                tvTierChipState.setText("0 APDU");
+                tvTierChipState.setText(isAuto ? "0 APDU" : "Cần quẹt");
                 tvTierChipState.setTextColor(Color.parseColor(SLATE_MUTED));
 
                 boxComparePlaintext.setBackgroundResource(R.drawable.bg_soft_panel);
@@ -698,11 +861,11 @@ public class TopicDemoFragment extends Fragment {
                 tvComparePlainValue.setText("✓ 0 byte (Sạch)");
                 tvComparePlainValue.setTextColor(Color.parseColor(GREEN));
 
-                boxCompareEncrypted.setBackgroundResource(R.drawable.bg_status_red);
-                tvCompareEncTitle.setText("💥 Auto-Wipe 3/3");
-                tvCompareEncTitle.setTextColor(Color.parseColor(RED));
-                tvCompareEncValue.setText("0 byte trên máy\n(Cần quẹt lại)");
-                tvCompareEncValue.setTextColor(Color.parseColor(RED));
+                boxCompareEncrypted.setBackgroundResource(isAuto ? R.drawable.bg_status_red : R.drawable.bg_soft_panel);
+                tvCompareEncTitle.setText(isAuto ? "💥 Auto-Wipe 3/3" : "🧹 Cache trống");
+                tvCompareEncTitle.setTextColor(Color.parseColor(isAuto ? RED : SLATE_MUTED));
+                tvCompareEncValue.setText(isAuto ? "0 byte trên máy\n(Cần quẹt lại)" : "0 byte trên máy\n(Lần tới đọc thẻ)");
+                tvCompareEncValue.setTextColor(Color.parseColor(isAuto ? RED : SLATE_MUTED));
             } else {
                 // After: 2-tier L1 RAM + L2 TEE active
                 String rawCipherPreview = readRawEncryptedCacheSnippet();
@@ -731,34 +894,42 @@ public class TopicDemoFragment extends Fragment {
                 tvCompareEncValue.setTextColor(Color.parseColor(SLATE));
             }
         } else if (topic == TOPIC_STARTUP && panelSecurityShield != null) {
-            int score = afterMode ? 5 : chaosManager.getMasvsScore();
-            int accent = Color.parseColor(afterMode ? GREEN : RED);
-            panelSecurityShield.setBackgroundResource(afterMode ? R.drawable.bg_status_green : R.drawable.bg_status_red);
-            tvSecurityShieldTitle.setText(afterMode ? "✓ Bộ nhớ PIN & Thiết bị an toàn" : "❌ Cảnh báo phơi nhiễm PIN");
-            tvSecurityShieldTitle.setTextColor(accent);
-            tvSecurityShieldScore.setText("MASVS " + score + "/5");
-            tvSecurityShieldScore.setBackgroundResource(afterMode ? R.drawable.bg_pill_green : R.drawable.bg_pill_red);
-            tvSecurityShieldScore.setTextColor(accent);
+            if (secSubFlow == SEC_FLOW_PIN) {
+                int score = afterMode ? 5 : chaosManager.getMasvsScore();
+                int accent = Color.parseColor(afterMode ? GREEN : RED);
+                panelSecurityShield.setBackgroundResource(afterMode ? R.drawable.bg_status_green : R.drawable.bg_status_red);
+                tvSecurityShieldTitle.setText(afterMode ? "✓ Bộ nhớ PIN & Khóa trung gian an toàn" : "❌ Cảnh báo phơi nhiễm PIN");
+                tvSecurityShieldTitle.setTextColor(accent);
+                tvSecurityShieldScore.setText("MASVS " + score + "/5");
+                tvSecurityShieldScore.setBackgroundResource(afterMode ? R.drawable.bg_pill_green : R.drawable.bg_pill_red);
+                tvSecurityShieldScore.setTextColor(accent);
 
-            renderMasvsSegments(score, afterMode);
-            String pinSource = (demoPinInput != null && demoPinInput.getText().length() >= 4)
-                    ? demoPinInput.getText().toString().trim() : "123456";
-            renderPinRamCells(pinSource, afterMode);
+                renderMasvsSegments(score, afterMode);
+                String pinSource = afterMode
+                        ? "00000000".substring(0, Math.max(4, Math.min(8, lastTestedPinLength)))
+                        : (lastBeforeRetainedPin != null ? lastBeforeRetainedPin : "123456");
+                renderPinRamCells(pinSource, afterMode);
 
-            tvPinRamExposureBadge.setText(afterMode ? "0% phơi nhiễm (Đã xóa)" : "100% lộ trên Heap!");
-            tvPinRamExposureBadge.setTextColor(accent);
+                tvPinRamExposureBadge.setText(afterMode ? "0% phơi nhiễm (Đã xóa)" : "100% lộ trên Heap!");
+                tvPinRamExposureBadge.setTextColor(accent);
 
-            tvChipPinType.setText(afterMode ? "✓ char[]" : "✕ String");
-            tvChipPinType.setBackgroundResource(afterMode ? R.drawable.bg_pill_green : R.drawable.bg_pill_red);
-            tvChipPinType.setTextColor(accent);
+                tvChipPinType.setText(afterMode ? "✓ char[]" : "✕ String");
+                tvChipPinType.setBackgroundResource(afterMode ? R.drawable.bg_pill_green : R.drawable.bg_pill_red);
+                tvChipPinType.setTextColor(accent);
 
-            tvChipRsaState.setText(afterMode ? "✓ RSA-1024" : "✕ Bỏ RSA");
-            tvChipRsaState.setBackgroundResource(afterMode ? R.drawable.bg_pill_green : R.drawable.bg_pill_red);
-            tvChipRsaState.setTextColor(accent);
+                tvChipRsaState.setText(afterMode ? "✓ Xóa byte[]" : "✕ Sót byte[]");
+                tvChipRsaState.setBackgroundResource(afterMode ? R.drawable.bg_pill_green : R.drawable.bg_pill_red);
+                tvChipRsaState.setTextColor(accent);
 
-            tvChipEnvState.setText(afterMode ? "✓ An toàn" : "✕ Root/Dbg");
-            tvChipEnvState.setBackgroundResource(afterMode ? R.drawable.bg_pill_green : R.drawable.bg_pill_red);
-            tvChipEnvState.setTextColor(accent);
+                tvChipEnvState.setText(afterMode ? "✓ Lazy Init" : "✕ Sync Init");
+                tvChipEnvState.setBackgroundResource(afterMode ? R.drawable.bg_pill_green : R.drawable.bg_pill_red);
+                tvChipEnvState.setTextColor(accent);
+            }
+            if (btnSecFlowLockNow != null) {
+                btnSecFlowLockNow.setVisibility(
+                        (secSubFlow == SEC_FLOW_UI_LOCK && afterMode) ? View.VISIBLE : View.GONE);
+            }
+            updateFlagSecureToggleButton(afterMode);
         }
     }
 
@@ -970,6 +1141,11 @@ public class TopicDemoFragment extends Fragment {
             case TOPIC_STARTUP:
                 if (afterMode) chaosManager.resolveStep4PinAndSecurity();
                 else chaosManager.injectStep4PinAndSecurity();
+                applyPinPadTapjackingFilter(afterMode);
+                if (btnAction != null) {
+                    btnAction.setFilterTouchesWhenObscured(afterMode);
+                }
+                syncFlagSecureForCurrentFlow(afterMode);
                 break;
             default:
                 break;
@@ -993,7 +1169,20 @@ public class TopicDemoFragment extends Fragment {
                 runImage(optimized());
                 break;
             case TOPIC_STARTUP:
-                runLogin(optimized());
+                switch (secSubFlow) {
+                    case SEC_FLOW_ANTI_HOOK:
+                        runAntiHookAndApkFlow(optimized());
+                        break;
+                    case SEC_FLOW_UI_LOCK:
+                        runUiAndBackgroundLockFlow(optimized());
+                        break;
+                    case SEC_FLOW_BIOMETRIC:
+                        runBiometricTeeFlow(optimized());
+                        break;
+                    default:
+                        runLogin(optimized());
+                        break;
+                }
                 break;
             default:
                 runBottleneck(optimized());
@@ -1015,21 +1204,34 @@ public class TopicDemoFragment extends Fragment {
             appendTrace(TRACE_COLOR_INFO, "Đẩy tác vụ đọc Cache sang ApduThreadPool (không chặn UI)");
             runTask(() -> {
                 long startNs = System.nanoTime();
-                appendTrace(TRACE_COLOR_INFO, "Đọc hồ sơ từ EncryptedCacheManager (AES-256-GCM)");
+                appendTrace(TRACE_COLOR_INFO, "Kiểm tra Cache 2 tầng (L1 RAM → L2 AndroidKeyStore TEE)");
                 StudentCardRecord cached = encryptedCache.getStudentProfile();
+                String tier = encryptedCache.getLastReadTier();
+                int apduSent = 0;
                 if (cached == null) {
-                    String active = ApduClient.getInstance().getActiveCardInfo();
-                    if (active != null && active.contains("|")) {
-                        cached = StudentCardRecord.fromPipeDelimitedString(active);
+                    appendTrace(TRACE_COLOR_INFO, "Cache trống (MISS) → Đọc thẻ qua APDU & lưu lại L2 TEE + L1 RAM...");
+                    LocalCacheManager.ProfileLoadResult cardRes = fetchFromCard();
+                    cached = cardRes.getRecord();
+                    apduSent = cardRes.getApduCommandsSent();
+                    if (cached != null) {
                         encryptedCache.saveStudentProfile(cached);
                     }
+                    tier = "COLD_CARD";
                 }
                 long elapsedMs = Math.max(4L, (System.nanoTime() - startNs) / 1_000_000L);
-                long[] stepMs = new long[]{0L, 0L, Math.max(2L, elapsedMs / 2), 0L, Math.max(2L, elapsedMs - elapsedMs / 2)};
-                return new BottleneckRunResult(cached, stepMs, elapsedMs, 0);
+                long[] stepMs = apduSent > 0
+                        ? new long[]{Math.max(1L, elapsedMs / 5), Math.max(1L, elapsedMs / 5), Math.max(2L, elapsedMs / 5), 0L, Math.max(2L, elapsedMs / 5)}
+                        : new long[]{0L, 0L, Math.max(2L, elapsedMs / 2), 0L, Math.max(2L, elapsedMs - elapsedMs / 2)};
+                return new BottleneckRunResult(cached, stepMs, elapsedMs, apduSent, tier);
             }, (res, blockedMs, totalMs) -> {
-                showProfile(res.record, encryptedCache.getAvatarBytes(), "CACHE");
-                appendTrace(TRACE_COLOR_OK, "✓ Bỏ qua 41 lệnh APDU & RSA → phản hồi trong " + res.elapsedMs + " ms (0 APDU)");
+                boolean cold = "COLD_CARD".equals(res.cacheTier);
+                String tierUi = "L1_RAM".equals(res.cacheTier)
+                        ? "L1 RAM (<1 ms)"
+                        : ("L2_TEE".equals(res.cacheTier) ? "L2 TEE (AES-GCM)" : "Thẻ → Nạp L1+L2");
+                showProfile(res.record, encryptedCache.getAvatarBytes(), cold ? "THẺ → L1+L2" : "CACHE");
+                appendTrace(TRACE_COLOR_OK, cold
+                        ? "↻ Cache MISS → đọc thẻ (" + res.apduCount + " APDU, " + res.elapsedMs + " ms) & đã lưu L2 TEE + L1 RAM"
+                        : "✓ Hit " + tierUi + " → bỏ qua 41 lệnh APDU & RSA (" + res.elapsedMs + " ms, 0 APDU)");
                 if (executionWaterfall != null) {
                     executionWaterfall.finishAfterRun(res.stepMs, res.elapsedMs);
                 }
@@ -1043,17 +1245,19 @@ public class TopicDemoFragment extends Fragment {
                 }
                 Map<String, String> metrics = new LinkedHashMap<>();
                 metrics.put("Cơ chế", TopicMechanismGuide.forTopic(topic, true).comparisonMechanismLabel);
-                metrics.put("1. SELECT applet", "0 ms (Cache)");
-                metrics.put("2. VERIFY PIN", "0 ms (Session)");
-                metrics.put("3. AES-128 EEPROM", res.stepMs[2] + " ms (GCM)");
-                metrics.put("4. Ký RSA-1024", "0 ms (Cached)");
-                metrics.put("5. Học vụ & 35 ảnh", res.stepMs[4] + " ms (WebP)");
+                metrics.put("Tầng đọc", tierUi);
+                metrics.put("1. SELECT applet", res.stepMs[0] + " ms");
+                metrics.put("2. VERIFY PIN", res.stepMs[1] + " ms");
+                metrics.put("3. AES-128 EEPROM", res.stepMs[2] + (cold ? " ms" : " ms (GCM)"));
+                metrics.put("4. Ký RSA-1024", res.stepMs[3] + (cold ? " ms" : " ms (Cached)"));
+                metrics.put("5. Học vụ & 35 ảnh", res.stepMs[4] + (cold ? " ms" : " ms (WebP)"));
                 metrics.put("Tổng thời gian", res.elapsedMs + " ms");
-                metrics.put("Chatty I/O", "0 gói (Giảm 100%)");
-                metrics.put("Hao pin I/O", formatBatteryImpact(0, res.elapsedMs));
-                appendTrace(TRACE_COLOR_OK, "🔋 Năng lượng: " + formatBatteryImpact(0, res.elapsedMs));
-                finishRun(true, metrics, "✓ After (Cache 2 tầng): phản hồi trong "
-                        + res.elapsedMs + " ms (0 Chatty I/O • tiết kiệm pin)!", true);
+                metrics.put("Chatty I/O", res.apduCount == 0 ? "0 gói (Giảm 100%)" : res.apduCount + " gói (Nạp lạnh)");
+                metrics.put("Hao pin I/O", formatBatteryImpact(res.apduCount, res.elapsedMs));
+                appendTrace(TRACE_COLOR_OK, "🔋 Năng lượng: " + formatBatteryImpact(res.apduCount, res.elapsedMs));
+                finishRun(true, metrics, cold
+                        ? "↻ Cache trống (MISS): đã đọc thẻ (" + res.elapsedMs + " ms) và lưu vào L2 TEE + L1 RAM!"
+                        : "✓ After (" + tierUi + "): phản hồi trong " + res.elapsedMs + " ms (0 Chatty I/O • tiết kiệm pin)!", true);
             });
             return;
         }
@@ -1164,7 +1368,7 @@ public class TopicDemoFragment extends Fragment {
                         "⏳ Đang tổng hợp kết quả điểm nghẽn...");
 
                 long totalElapsedMs = elapsedMsSince(totalStartNs);
-                return new BottleneckRunResult(record, stepMs, totalElapsedMs, apduCount);
+                return new BottleneckRunResult(record, stepMs, totalElapsedMs, apduCount, "BYPASS");
             } finally {
                 suppressRawApduTelemetry = false;
             }
@@ -1179,6 +1383,7 @@ public class TopicDemoFragment extends Fragment {
             }
             Map<String, String> metrics = new LinkedHashMap<>();
             metrics.put("Cơ chế", TopicMechanismGuide.forTopic(topic, false).comparisonMechanismLabel);
+            metrics.put("Tầng đọc", "Thẻ trực tiếp (0 Cache)");
             metrics.put("1. SELECT applet", res.stepMs[0] + " ms");
             metrics.put("2. VERIFY PIN", res.stepMs[1] + " ms");
             metrics.put("3. AES-128 EEPROM", res.stepMs[2] + " ms");
@@ -1261,6 +1466,16 @@ public class TopicDemoFragment extends Fragment {
         }
     }
 
+    private static String shortWorkerTag(String threadName, int fallbackIndex) {
+        if (threadName != null) {
+            int idx = threadName.lastIndexOf('T');
+            if (idx >= 0 && idx + 1 < threadName.length()) {
+                return threadName.substring(idx);
+            }
+        }
+        return "T" + (fallbackIndex + 1);
+    }
+
     // ------------------------------------------------------------------
     // §2 — refresh from card in Before (Main Thread) / After (pool)
     // ------------------------------------------------------------------
@@ -1269,31 +1484,115 @@ public class TopicDemoFragment extends Fragment {
         String where = afterMode ? "thread nền (After)" : "Main Thread (Before)";
         startRun("Đang làm mới hồ sơ trên " + where + "...");
         if (afterMode) {
-            resetTrace("▶ BẮT ĐẦU §2 AFTER — Đẩy sang ApduThreadPool", true);
+            resetTrace("▶ BẮT ĐẦU §2 AFTER — Chạy song song 4 luồng ApduThreadPool", true);
             if (threadingLaneView != null) {
                 threadingLaneView.beginAfterRun();
             }
             appendTrace(TRACE_COLOR_OK, "Hủy jankRunnable trên MainLooper (gỡ chặn UI)");
-            appendTrace(TRACE_COLOR_INFO, "Giao fetchFromCard() cho ApduThreadPool (non-blocking)");
-            runTask(() -> {
-                appendTrace(TRACE_COLOR_INFO, "Đang gửi APDU đọc thẻ trên Worker Thread nền...");
-                return fetchFromCard();
-            }, (result, blockedMs, totalMs) -> {
-                showProfile(result.getRecord(), null, "THẺ");
-                appendTrace(TRACE_COLOR_OK, "✓ Nhận callback cập nhật UI trên main (" + msText(blockedMs)
-                        + " chặn, đọc thẻ " + result.getElapsedMs() + " ms) → giữ 60 FPS");
+            appendTrace(TRACE_COLOR_INFO, "Giao đồng thời 4 tác vụ (APDU · QR 30s · PBKDF2 · Cache L2) cho ApduThreadPool (4T)");
+
+            final AtomicReference<LocalCacheManager.ProfileLoadResult> cardResultRef = new AtomicReference<>();
+            final AtomicReference<Bitmap> qrBitmapRef = new AtomicReference<>();
+            final String qrStudentId = "CT070318";
+            final String[] taskLabels = {"APDU thẻ", "Sinh QR 30s", "Băm PBKDF2", "Cache L2 TEE"};
+
+            @SuppressWarnings("unchecked")
+            Callable<String>[] parallelTasks = new Callable[]{
+                    () -> {
+                        LocalCacheManager.ProfileLoadResult res = fetchFromCard();
+                        cardResultRef.set(res);
+                        return res.getElapsedMs() + " ms";
+                    },
+                    () -> {
+                        long windowEpoch = System.currentTimeMillis() / 30_000L;
+                        String payload = "SMARTID|" + qrStudentId + "|T" + windowEpoch + "|RSA1024";
+                        QRCodeWriter writer = new QRCodeWriter();
+                        BitMatrix matrix = writer.encode(payload, BarcodeFormat.QR_CODE, 360, 360);
+                        int w = matrix.getWidth();
+                        int h = matrix.getHeight();
+                        int[] pixels = new int[w * h];
+                        for (int y = 0; y < h; y++) {
+                            int offset = y * w;
+                            for (int x = 0; x < w; x++) {
+                                pixels[offset + x] = matrix.get(x, y) ? 0xFF0F172A : 0xFFFFFFFF;
+                            }
+                        }
+                        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565);
+                        bmp.setPixels(pixels, 0, w, 0, 0, w, h);
+                        qrBitmapRef.set(bmp);
+                        return w + "x" + h;
+                    },
+                    () -> {
+                        char[] demoPin = new char[]{'0', '0', '0', '0', '0', '0'};
+                        byte[] salt = CryptoManager.generateRandomBytes(16);
+                        String hash = CryptoManager.computePinVerifierHash(demoPin, salt);
+                        Arrays.fill(demoPin, '\0');
+                        return (hash != null ? hash.length() : 0) + " ch";
+                    },
+                    () -> {
+                        encryptedCache.getStudentProfile();
+                        byte[] av = encryptedCache.getAvatarBytes();
+                        if (av != null && av.length > 0) {
+                            BitmapFactory.Options opts = new BitmapFactory.Options();
+                            opts.inJustDecodeBounds = true;
+                            BitmapFactory.decodeByteArray(av, 0, av.length, opts);
+                        }
+                        return encryptedCache.getLastReadTier();
+                    }
+            };
+
+            ApduThreadPool.getInstance().executeParallelBatch(taskLabels, parallelTasks, (reports, blockedMs, wallMs) -> {
+                if (!isAdded()) return;
+                LocalCacheManager.ProfileLoadResult cardResult = cardResultRef.get();
+                if (cardResult != null && cardResult.getRecord() != null) {
+                    showProfile(cardResult.getRecord(), null, "THẺ");
+                }
+                Bitmap qrBmp = qrBitmapRef.get();
+                if (qrBmp != null && ivDemoQr != null) {
+                    ivDemoQr.setImageBitmap(qrBmp);
+                }
+
+                String[] rLabels = new String[reports.length];
+                String[] rThreads = new String[reports.length];
+                long[] rStarts = new long[reports.length];
+                long[] rDurs = new long[reports.length];
+                long sumMs = 0L;
+                for (int i = 0; i < reports.length; i++) {
+                    ApduThreadPool.WorkerTaskReport r = reports[i];
+                    rLabels[i] = r.label;
+                    rThreads[i] = r.threadName;
+                    rStarts[i] = r.startOffsetMs;
+                    rDurs[i] = r.durationMs;
+                    sumMs += r.durationMs;
+                    appendTrace(TRACE_COLOR_INFO, String.format(Locale.US,
+                            "  ↳ %s [%s]: %s (%d ms · +%d ms)",
+                            shortWorkerTag(r.threadName, i), r.threadName, r.label, r.durationMs, r.startOffsetMs));
+                }
+
+                appendTrace(TRACE_COLOR_OK, "✓ Xong song song 4T trong " + wallMs + " ms (tổng gộp " + sumMs
+                        + " ms), Main Thread giữ " + msText(blockedMs) + " → giữ 60 FPS");
+
                 if (threadingLaneView != null) {
-                    threadingLaneView.finishAfterRun(blockedMs, result.getElapsedMs());
+                    threadingLaneView.finishAfterRun(blockedMs, wallMs, rLabels, rThreads, rStarts, rDurs);
                 }
                 if (realtimeChart != null) {
-                    realtimeChart.recordThreadingResult(true, blockedMs, result.getElapsedMs());
+                    realtimeChart.recordThreadingResult(true, blockedMs, wallMs);
                 }
+
                 Map<String, String> metrics = new LinkedHashMap<>();
                 metrics.put("Cơ chế", TopicMechanismGuide.forTopic(topic, true).comparisonMechanismLabel);
                 metrics.put("Main Thread giữ", msText(blockedMs));
-                metrics.put("Thời gian đọc", result.getElapsedMs() + " ms");
+                metrics.put("Luồng nền", "4 Worker (T1–T4)");
+                for (int i = 0; i < reports.length; i++) {
+                    ApduThreadPool.WorkerTaskReport r = reports[i];
+                    metrics.put("T" + (i + 1) + " · " + r.label,
+                            r.durationMs + " ms (" + shortWorkerTag(r.threadName, i) + ")");
+                }
+                metrics.put("Tổng tường (4T)", wallMs + " ms (gộp " + sumMs + " ms)");
                 metrics.put("Khung rớt", Math.round(blockedMs / 16.6667f) + " khung");
-                finishRun(true, metrics, "✓ After: hồ sơ đã cập nhật trên Worker Thread, UI không bị chặn (60 FPS).", true);
+                finishRun(true, metrics,
+                        "✓ After: 4 luồng nền (T1–T4) chạy song song xong trong " + wallMs
+                                + " ms (gộp tuần tự " + sumMs + " ms), UI giữ 60 FPS.", true);
             });
         } else {
             resetTrace("▶ BẮT ĐẦU §2 BEFORE — Khóa trực tiếp Main Thread", false);
@@ -1339,7 +1638,12 @@ public class TopicDemoFragment extends Fragment {
             Map<String, String> metrics = new LinkedHashMap<>();
             metrics.put("Cơ chế", TopicMechanismGuide.forTopic(topic, false).comparisonMechanismLabel);
             metrics.put("Main Thread giữ", msText(accumulatedMs));
-            metrics.put("Thời gian đọc", accumulatedMs + " ms");
+            metrics.put("Luồng nền", "0/4 Worker (Nhàn rỗi)");
+            metrics.put("T1 · APDU thẻ", accumulatedMs + " ms (Main)");
+            metrics.put("T2 · Sinh QR 30s", "Bị chặn bởi Main");
+            metrics.put("T3 · Băm PBKDF2", "Bị chặn bởi Main");
+            metrics.put("T4 · Cache L2 TEE", "Bị chặn bởi Main");
+            metrics.put("Tổng tường (4T)", accumulatedMs + " ms (tuần tự)");
             metrics.put("Khung rớt", Math.round(accumulatedMs / 16.6667f) + " khung");
             finishRun(false, metrics, "⚠ Before: UI đã bị khóa " + accumulatedMs
                     + " ms qua 18 nhịp (~" + Math.round(accumulatedMs / 16.6667f)
@@ -1403,17 +1707,27 @@ public class TopicDemoFragment extends Fragment {
                 appendTrace(TRACE_COLOR_INFO, "Kiểm tra tầng L1 (RAM) → L2 (AndroidKeyStore TEE AES-256-GCM)...");
                 StudentCardRecord cached = encryptedCache.getStudentProfile();
                 String tier = encryptedCache.getLastReadTier();
-                if (cached == null) {
-                    String active = ApduClient.getInstance().getActiveCardInfo();
-                    if (active != null && active.contains("|")) {
-                        cached = StudentCardRecord.fromPipeDelimitedString(active);
-                        encryptedCache.saveStudentProfile(cached);
-                        tier = "L2_TEE";
-                    }
-                }
                 if (cached != null) {
                     return new CacheOpen(cached, encryptedCache.getAvatarBytes(), true, 0, tier);
                 }
+                // Cold Cache MISS: L1 & L2 are both empty -> perform genuine APDU card read, then hydrate L2 + L1.
+                appendTrace(TRACE_COLOR_FAULT, "Cache MISS (L1 & L2 đều trống) → Gửi lệnh APDU đọc lại từ Thẻ Chip...");
+                long coldStartNs = System.nanoTime();
+                LocalCacheManager.ProfileLoadResult coldResult = fetchFromCard();
+                ApduClient client = ApduClient.getInstance();
+                client.sendApdu(ApduCommands.CLA_SMART_STUDENT, ApduCommands.INS_SIGN_CHALLENGE,
+                        (byte) 0x00, (byte) 0x00, CryptoManager.generateRandomBytes(16));
+                int coldApdus = coldResult.getApduCommandsSent() + 1;
+                sleepRemainder(coldStartNs, 520L);
+
+                StudentCardRecord rec = coldResult.getRecord();
+                if (rec != null) {
+                    encryptedCache.saveStudentProfile(rec);
+                    if (!pinSessionManager.hasActiveSession()) {
+                        pinSessionManager.createPinSession(rec.getStudentId(), rec.getFullName(), "123456".toCharArray());
+                    }
+                }
+                return new CacheOpen(rec, encryptedCache.getAvatarBytes(), false, coldApdus, "COLD_CARD");
             }
             // Before mode: full 36-APDU direct card + RSA + 30 avatar chunks read (~2.65 seconds)
             appendTrace(TRACE_COLOR_FAULT, "Gửi 5 APDU đọc hồ sơ + INS 0x40 ký RSA-1024 trên thẻ...");
@@ -1442,15 +1756,45 @@ public class TopicDemoFragment extends Fragment {
             }
             return new CacheOpen(result.getRecord(), encryptedCache.getAvatarBytes(), false, totalApdus, "BYPASS");
         }, (openResult, blockedMs, totalMs) -> {
+            if ("COLD_CARD".equals(openResult.cacheTier)) {
+                lastWipeWasAutoWipe = false;
+                int apduCount = openResult.apduCount;
+                showProfile(openResult.record, openResult.avatarBytes, "THẺ → L1+L2");
+                appendTrace(TRACE_COLOR_OK, "↻ MISS toàn bộ (L1 & L2 trống) → Đọc thẻ " + apduCount
+                        + " APDU (" + totalMs + " ms) → Đã mã hóa lưu L2 TEE & nạp L1 RAM");
+                if (cacheFlowView != null) {
+                    cacheFlowView.finishAfterColdMiss(totalMs, apduCount);
+                }
+                if (realtimeChart != null) {
+                    realtimeChart.recordCacheResult(true, false, totalMs, apduCount);
+                }
+                Map<String, String> metrics = new LinkedHashMap<>();
+                metrics.put("Cơ chế", "Cache MISS → Nạp 2 tầng");
+                metrics.put("Nguồn", "Thẻ (" + apduCount + " APDU) → L1+L2");
+                metrics.put("Thời gian", totalMs + " ms (Nạp lạnh)");
+                metrics.put("I/O thừa", apduCount + " APDU (Lần sau: 0)");
+                metrics.put("Tự hủy 3x PIN", "Sẵn sàng (3/3 lần)");
+                finishRun(true, metrics, "↻ Cache trống (MISS): đã đọc lại từ thẻ (" + totalMs + " ms • "
+                        + apduCount + " APDU) và lưu L2 TEE + L1 RAM. Bấm Mở hồ sơ lần nữa để thấy Hit L1 RAM!", true);
+                return;
+            }
+
+            if (openResult.fromCache) {
+                lastWipeWasAutoWipe = false;
+            }
             String tierLabel = "L1_RAM".equals(openResult.cacheTier)
                     ? "L1 RAM"
                     : ("L2_TEE".equals(openResult.cacheTier) ? "L2 TEE" : "THẺ");
             showProfile(openResult.record, openResult.avatarBytes, openResult.fromCache ? tierLabel : "THẺ");
             int apduCount = openResult.fromCache ? 0 : openResult.apduCount;
-            appendTrace(openResult.fromCache ? TRACE_COLOR_OK : TRACE_COLOR_FAULT,
-                    openResult.fromCache
-                            ? "✓ Hit " + tierLabel + " (L1 RAM + L2 AndroidKeyStore TEE): " + totalMs + " ms (0 APDU • giảm 100% I/O)"
-                            : "⚠ Bypass Cache: tốn " + totalMs + " ms (" + apduCount + " APDU) & lộ bản rõ");
+            if ("L1_RAM".equals(openResult.cacheTier)) {
+                appendTrace(TRACE_COLOR_OK, "✓ Hit L1 RAM (bỏ qua L2 & thẻ): " + totalMs + " ms (0 APDU)");
+            } else if ("L2_TEE".equals(openResult.cacheTier)) {
+                appendTrace(TRACE_COLOR_OK, "✓ L1 MISS → Hit L2 AndroidKeyStore TEE (AES-256-GCM) → Nạp lại L1 RAM: "
+                        + totalMs + " ms (0 APDU)");
+            } else {
+                appendTrace(TRACE_COLOR_FAULT, "⚠ Bypass Cache: tốn " + totalMs + " ms (" + apduCount + " APDU) & lộ bản rõ");
+            }
             if (cacheFlowView != null) {
                 if (openResult.fromCache) {
                     cacheFlowView.finishAfterRun(tierLabel, totalMs);
@@ -1463,7 +1807,12 @@ public class TopicDemoFragment extends Fragment {
             }
             Map<String, String> metrics = new LinkedHashMap<>();
             metrics.put("Cơ chế", TopicMechanismGuide.forTopic(topic, afterMode).comparisonMechanismLabel);
-            metrics.put("Nguồn", openResult.fromCache ? tierLabel + " (AES-GCM TEE)" : "Thẻ (36 APDU)");
+            String sourceMetric = !openResult.fromCache
+                    ? "Thẻ (36 APDU)"
+                    : ("L1_RAM".equals(openResult.cacheTier)
+                            ? "L1 RAM (Nhánh nóng)"
+                            : "L2 TEE (AES-GCM → Nạp L1)");
+            metrics.put("Nguồn", sourceMetric);
             metrics.put("Thời gian", totalMs + " ms");
             metrics.put("I/O thừa", openResult.fromCache ? "0 APDU (Giảm 100%)" : apduCount + " APDU");
             metrics.put("Tự hủy 3x PIN", openResult.fromCache ? "Sẵn sàng (3/3 lần)" : "Không bảo vệ");
@@ -1565,6 +1914,7 @@ public class TopicDemoFragment extends Fragment {
                 // Wrong PIN
                 boolean autoWiped = !pinSessionManager.hasActiveSession();
                 if (autoWiped) {
+                    lastWipeWasAutoWipe = true;
                     encryptedCache.wipeStudentSessionCache();
                     boolean wipedOk = !encryptedCache.hasL1ProfileCached() && !encryptedCache.hasL2ProfileCached();
                     appendTrace(TRACE_COLOR_FAULT, "Lần 3/3: nhập sai PIN → vượt ngưỡng tối đa!");
@@ -1602,8 +1952,27 @@ public class TopicDemoFragment extends Fragment {
         dialog.show();
     }
 
+    private void evictL1Only() {
+        if (busy) return;
+        if (!encryptedCache.hasL2ProfileCached()) {
+            Toast.makeText(requireContext(),
+                    "L2 TEE đang trống — bấm Mở hồ sơ để nạp dữ liệu từ thẻ trước.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        encryptedCache.evictL1RamOnly();
+        lastWipeWasAutoWipe = false;
+        if (cacheFlowView != null) {
+            cacheFlowView.recordL1Evicted();
+        }
+        appendTrace(TRACE_COLOR_INFO,
+                "Đã xóa riêng L1 RAM (L2 AndroidKeyStore TEE vẫn giữ) → Bấm Mở hồ sơ để test L1 MISS → L2 HIT");
+        updateRealAppStatusCards(optimized());
+    }
+
     private void resetCache() {
         if (busy) return;
+        lastWipeWasAutoWipe = false;
         encryptedCache.wipeStudentSessionCache();
         before.clear();
         after.clear();
@@ -1623,6 +1992,10 @@ public class TopicDemoFragment extends Fragment {
     // ------------------------------------------------------------------
 
     private void runImage(boolean afterMode) {
+        if (pickedUri == null) {
+            promptPickImageFirst();
+            return;
+        }
         resetTrace(afterMode
                 ? "▶ BẮT ĐẦU §4 AFTER — Two-pass Decode + WebP 75% & Dọn Heap"
                 : "▶ BẮT ĐẦU §4 BEFORE — Full Bitmap PNG & Heap Memory Churn", afterMode);
@@ -1706,9 +2079,11 @@ public class TopicDemoFragment extends Fragment {
         Bitmap full = null;
         Bitmap preview = null;
         try {
-            byte[] srcBytes = pickedUri == null ? ensureSampleBytes() : null;
-            int[] dims = sourceBounds(srcBytes);
-            full = decodeFullSize(dims[0], dims[1], srcBytes);
+            if (pickedUri == null) {
+                return ImageRunResult.failure("⚠ Vui lòng chọn ảnh từ thư viện trước.");
+            }
+            int[] dims = sourceBounds(null);
+            full = decodeFullSize(dims[0], dims[1], null);
             if (full == null) {
                 return ImageRunResult.failure("❌ Không giải mã được ảnh đã chọn.");
             }
@@ -1779,25 +2154,17 @@ public class TopicDemoFragment extends Fragment {
         Bitmap avatar = null;
         Bitmap preview = null;
         try {
-            byte[] srcBytes = pickedUri == null ? ensureSampleBytes() : null;
-            int[] dims = sourceBounds(srcBytes);
-            byte[] webp;
-            int sampleSize;
-            if (pickedUri != null) {
-                ImageOptimizer.AvatarOptimizationReport report =
-                        ImageOptimizer.decodeAndCompressAvatarReport(appContext(), pickedUri);
-                if (report == null) {
-                    return ImageRunResult.failure("❌ Không xử lý được ảnh đã chọn (có thể quá lớn).");
-                }
-                webp = report.webpBytes;
-                sampleSize = report.sampleSize;
-            } else {
-                avatar = ImageOptimizer.decodeAndDownsample(srcBytes,
-                        ImageOptimizer.TARGET_AVATAR_WIDTH, ImageOptimizer.TARGET_AVATAR_HEIGHT);
-                webp = ImageOptimizer.compressAvatarForCard(avatar);
-                sampleSize = ImageOptimizer.calculateInSampleSize(dims[0], dims[1],
-                        ImageOptimizer.TARGET_AVATAR_WIDTH, ImageOptimizer.TARGET_AVATAR_HEIGHT);
+            if (pickedUri == null) {
+                return ImageRunResult.failure("⚠ Vui lòng chọn ảnh từ thư viện trước.");
             }
+            int[] dims = sourceBounds(null);
+            ImageOptimizer.AvatarOptimizationReport report =
+                    ImageOptimizer.decodeAndCompressAvatarReport(appContext(), pickedUri);
+            if (report == null) {
+                return ImageRunResult.failure("❌ Không xử lý được ảnh đã chọn (có thể quá lớn).");
+            }
+            byte[] webp = report.webpBytes;
+            int sampleSize = report.sampleSize;
             long processMs = Math.max(1, (System.nanoTime() - startNs) / 1_000_000);
             int bufferReuses = ImageOptimizer.getReusable8KbBufferReuseCount();
             postImageAfterCompressed(sampleSize, webp.length / 1024.0, bufferReuses);
@@ -1924,16 +2291,30 @@ public class TopicDemoFragment extends Fragment {
         return ImageOptimizer.decodeAndDownsample(srcBytes, width, height);
     }
 
-    private void prepareSampleImage() {
-        if (sampleBytes != null) return;
-        ApduThreadPool.getInstance().executeAsyncOnPool(this::ensureSampleBytes, (bytes, blockedMs, totalMs) -> {
-            if (!isAdded()) return;
-            Bitmap preview = ImageOptimizer.decodeAndDownsample(bytes, 320, 320);
-            if (preview != null) {
-                showPreview(preview);
-            }
-            demoImageInfo.setText("Ảnh mẫu: 1200×1200 px");
-        });
+    private void showWaitingForImageState() {
+        if (demoImageInfo != null) {
+            demoImageInfo.setTextColor(Color.parseColor(SLATE_MUTED));
+            demoImageInfo.setText("Chưa chọn ảnh — hãy bấm \"Chọn ảnh từ thư viện\"");
+        }
+        if (tvCardQuota8Kb != null) {
+            tvCardQuota8Kb.setTextColor(Color.parseColor(SLATE_MUTED));
+            tvCardQuota8Kb.setText("Bộ nhớ thẻ chip: 0 / 8.0 KB (Chờ chọn ảnh...)");
+        }
+        if (pbCardQuota8Kb != null) {
+            pbCardQuota8Kb.setProgress(0);
+        }
+    }
+
+    private void promptPickImageFirst() {
+        if (demoImageInfo != null) {
+            demoImageInfo.setTextColor(Color.parseColor(RED));
+            demoImageInfo.setText("⚠ Chưa có ảnh — bấm \"Chọn ảnh từ thư viện\" trước");
+        }
+        if (isAdded()) {
+            Toast.makeText(requireContext(),
+                    "Vui lòng chọn ảnh từ thư viện trước khi đo!",
+                    Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void loadPickedPreview(Uri uri) {
@@ -1946,7 +2327,11 @@ public class TopicDemoFragment extends Fragment {
             if (result.bitmap != null) {
                 showPreview(result.bitmap);
             }
-            demoImageInfo.setText("Ảnh đã chọn: " + result.width + "×" + result.height + " px");
+            if (demoImageInfo != null) {
+                demoImageInfo.setTextColor(Color.parseColor(SLATE));
+                demoImageInfo.setText("Ảnh đã chọn: " + result.width + "×" + result.height
+                        + " px • Bấm \"Lưu ảnh lên thẻ chip\" để đo");
+            }
         });
     }
 
@@ -1969,28 +2354,237 @@ public class TopicDemoFragment extends Fragment {
     }
 
     // ------------------------------------------------------------------
-    // §5 — log in with the PIN
+    // §5 — 4 separated security flows
     // ------------------------------------------------------------------
 
-    private void runLogin(boolean afterMode) {
-        String pinText = demoPinInput.getText().toString().trim();
-        if (pinText.length() < 4) {
-            Toast.makeText(requireContext(), "Nhập PIN 4–8 chữ số.", Toast.LENGTH_SHORT).show();
+    private void selectSecuritySubFlow(int flow) {
+        if (busy) {
+            busy = false;
+            endRun();
+        }
+        secSubFlow = Math.max(0, Math.min(SEC_FLOW_COUNT - 1, flow));
+
+        styleSecurityFlowPill(btnSecFlowPin, secSubFlow == SEC_FLOW_PIN);
+        styleSecurityFlowPill(btnSecFlowAntiHook, secSubFlow == SEC_FLOW_ANTI_HOOK);
+        styleSecurityFlowPill(btnSecFlowUiLock, secSubFlow == SEC_FLOW_UI_LOCK);
+        styleSecurityFlowPill(btnSecFlowBiometric, secSubFlow == SEC_FLOW_BIOMETRIC);
+
+        if (panelSecSubPin != null) {
+            panelSecSubPin.setVisibility(secSubFlow == SEC_FLOW_PIN ? View.VISIBLE : View.GONE);
+        }
+
+        if (btnAction != null) {
+            switch (secSubFlow) {
+                case SEC_FLOW_ANTI_HOOK:
+                    btnAction.setText("Chạy test: Quét Hook & Toàn vẹn APK");
+                    break;
+                case SEC_FLOW_UI_LOCK:
+                    btnAction.setText("Chạy test: Bảo vệ UI & Khóa nền");
+                    break;
+                case SEC_FLOW_BIOMETRIC:
+                    btnAction.setText("Chạy test: Mở khóa Sinh trắc TEE");
+                    break;
+                default:
+                    btnAction.setText("Chạy test: Xác thực & Zeroize PIN");
+                    break;
+            }
+        }
+
+        if (tvTraceHeaderTitle != null) {
+            switch (secSubFlow) {
+                case SEC_FLOW_ANTI_HOOK:
+                    tvTraceHeaderTitle.setText("LUỒNG 2 • ANTI-HOOK & TOÀN VẸN APK (§5)");
+                    break;
+                case SEC_FLOW_UI_LOCK:
+                    tvTraceHeaderTitle.setText("LUỒNG 3 • FLAG_SECURE, TAPJACKING & KHÓA NỀN (§5)");
+                    break;
+                case SEC_FLOW_BIOMETRIC:
+                    tvTraceHeaderTitle.setText("LUỒNG 4 • SINH TRẮC HỌC CRYPTOOBJECT TEE (§5)");
+                    break;
+                default:
+                    tvTraceHeaderTitle.setText("LUỒNG 1 • ZEROIZE PIN & KHÓA TRUNG GIAN (§5)");
+                    break;
+            }
+        }
+
+        if (securityAuditFlowView != null) {
+            switch (secSubFlow) {
+                case SEC_FLOW_ANTI_HOOK:
+                    securityAuditFlowView.resetToIdleForFlow(
+                            "LUỒNG 2: CHỐNG HOOK & TOÀN VẸN APK",
+                            new String[]{"ANTI-HOOK", "TRACER PID", "TOÀN VẸN APK"},
+                            new String[]{"QUÉT MAPS", "TRACER PID", "APK SHA-256"},
+                            new String[]{"/proc/self/maps", "/proc/self/status", "Chữ ký APK"},
+                            "Bấm nút chạy để quét Frida, TracerPid, SHA-256 APK & phản ứng xóa L1",
+                            new String[]{
+                                    "1. Quét Frida / Xposed trên /proc/self/maps",
+                                    "2. Đọc TracerPid chống Native Debugger",
+                                    "3. Đối chiếu SHA-256 APK & phản ứng xóa L1"
+                            }
+                    );
+                    break;
+                case SEC_FLOW_UI_LOCK:
+                    securityAuditFlowView.resetToIdleForFlow(
+                            "LUỒNG 3: CHỐNG CHỤP, TAPJACKING & KHÓA NỀN",
+                            new String[]{"FLAG_SECURE", "TAPJACKING", "KHÓA NỀN 120S"},
+                            new String[]{"CHỐNG CHỤP", "LỌC PHỦ", "KHÓA L1 RAM"},
+                            new String[]{"Window Flag", "Obscured Touch", "Timeout 120s"},
+                            "Bấm nút chạy để bật FLAG_SECURE thật (thử chụp màn hình) & khóa L1 RAM",
+                            new String[]{
+                                    "1. Bật cờ FLAG_SECURE chống chụp & quay màn hình",
+                                    "2. Lọc chạm Tapjacking (filterTouchesWhenObscured)",
+                                    "3. Khóa phiên nền 120s: xóa PIN tạm & tầng L1 RAM"
+                            }
+                    );
+                    break;
+                case SEC_FLOW_BIOMETRIC:
+                    securityAuditFlowView.resetToIdleForFlow(
+                            "LUỒNG 4: SINH TRẮC HỌC CRYPTOOBJECT TEE",
+                            new String[]{"CƠ CHẾ MỞ", "PHẦN CỨNG", "CHỐNG THAY VÂN TAY"},
+                            new String[]{"BIOMETRIC", "KEYSTORE", "AES-256-GCM"},
+                            new String[]{"BIOMETRIC_STRONG", "TEE / StrongBox", "CryptoObject"},
+                            "Bấm nút chạy để xác thực vân tay thật qua CryptoObject trong AndroidKeyStore",
+                            new String[]{
+                                    "1. Khởi tạo khóa AES-256-GCM trong TEE / StrongBox",
+                                    "2. Xác thực BiometricPrompt.CryptoObject phần cứng",
+                                    "3. Đối chiếu Nonce phiên & vô hiệu nếu đổi vân tay"
+                            }
+                    );
+                    break;
+                default:
+                    securityAuditFlowView.resetToIdleForFlow(
+                            "LUỒNG 1: BĂM PBKDF2 & XÓA RAM PIN",
+                            new String[]{"THỜI GIAN ĐĂNG NHẬP", "PHƠI NHIỄM PIN", "ĐIỂM MASVS"},
+                            new String[]{"KHỞI TẠO", "BĂM PBKDF2", "ZEROIZE RAM"},
+                            new String[]{"Sync / Lazy", "10.000 vòng", "Heap RAM"},
+                            "Bấm nút chạy để kiểm chứng Zeroize PIN char[] & xóa khóa byte[]",
+                            new String[]{
+                                    "1. Khởi tạo KeyStore (Sync vs Lazy)",
+                                    "2. Băm PBKDF2 & Xóa PIN + khóa byte[]",
+                                    "3. Kiểm toán OWASP MASVS"
+                            }
+                    );
+                    break;
+            }
+        }
+
+        syncFlagSecureForCurrentFlow(optimized());
+        updateRealAppStatusCards(optimized());
+        renderComparison();
+        updateTechSummaryLine();
+    }
+
+    /**
+     * Scopes FLAG_SECURE in Debug builds strictly to Flow 3 (UI & Background Lock)
+     * so Android Studio mirroring stays visible for all other flows/tabs.
+     */
+    private void syncFlagSecureForCurrentFlow(boolean afterMode) {
+        if (getActivity() instanceof BaseSecureActivity) {
+            BaseSecureActivity host = (BaseSecureActivity) getActivity();
+            boolean shouldEnable = !BuildConfig.DEBUG
+                    || (topic == TOPIC_STARTUP && secSubFlow == SEC_FLOW_UI_LOCK && afterMode);
+            host.applyFlagSecure(shouldEnable);
+        }
+        updateFlagSecureToggleButton(afterMode);
+    }
+
+    private void updateFlagSecureToggleButton(boolean afterMode) {
+        if (btnToggleFlagSecureDemo == null) return;
+        boolean visible = topic == TOPIC_STARTUP
+                && secSubFlow == SEC_FLOW_UI_LOCK
+                && afterMode
+                && BuildConfig.DEBUG;
+        btnToggleFlagSecureDemo.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (visible && getActivity() instanceof BaseSecureActivity) {
+            boolean flagOn = ((BaseSecureActivity) getActivity()).isFlagSecureEnabled();
+            btnToggleFlagSecureDemo.setText(flagOn
+                    ? "Tắt FLAG_SECURE tạm (Hiện lại Mirror)"
+                    : "Bật FLAG_SECURE (Chặn chụp / Mirror)");
+        }
+    }
+
+    private void styleSecurityFlowPill(MaterialButton btn, boolean active) {
+        if (btn == null || !isAdded()) return;
+        btn.setBackgroundTintList(ColorStateList.valueOf(
+                Color.parseColor(active ? BLUE : "#F1F5F9")));
+        btn.setTextColor(Color.parseColor(active ? "#FFFFFF" : "#334155"));
+    }
+
+    private void appendSecurePinDigit(char digit) {
+        if (securePinLen >= securePinBuf.length) {
             return;
         }
+        securePinBuf[securePinLen++] = digit;
+        updateSecurePinDisplay();
+    }
+
+    private void backspaceSecurePinDigit() {
+        if (securePinLen <= 0) {
+            return;
+        }
+        securePinBuf[--securePinLen] = '\0';
+        updateSecurePinDisplay();
+    }
+
+    private void wipeSecurePinBuffer() {
+        Arrays.fill(securePinBuf, '\0');
+        securePinLen = 0;
+        updateSecurePinDisplay();
+    }
+
+    private void updateSecurePinDisplay() {
+        if (tvSecurePinDisplay != null) {
+            tvSecurePinDisplay.setText(PIN_DOT_STRINGS[Math.max(0, Math.min(PIN_DOT_STRINGS.length - 1, securePinLen))]);
+        }
+    }
+
+    private void applyPinPadTapjackingFilter(boolean enabled) {
+        if (tvSecurePinDisplay != null) {
+            tvSecurePinDisplay.setFilterTouchesWhenObscured(enabled);
+        }
+        for (View keyView : securePinKeyViews) {
+            if (keyView != null) {
+                keyView.setFilterTouchesWhenObscured(enabled);
+            }
+        }
+    }
+
+    private void runLogin(boolean afterMode) {
+        if (securePinLen < 4) {
+            Toast.makeText(requireContext(), "Chạm bàn phím bên dưới để nhập PIN 4–8 chữ số.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        int trimmedLen = securePinLen;
+        lastTestedPinLength = trimmedLen;
+        final String beforePinText;
+        final char[] afterPinChars;
+        if (afterMode) {
+            afterPinChars = new char[trimmedLen];
+            System.arraycopy(securePinBuf, 0, afterPinChars, 0, trimmedLen);
+            wipeSecurePinBuffer();
+            beforePinText = null;
+            lastBeforeRetainedPin = null;
+        } else {
+            afterPinChars = null;
+            beforePinText = new String(securePinBuf, 0, trimmedLen);
+            lastBeforeRetainedPin = beforePinText;
+            wipeSecurePinBuffer();
+        }
+
         resetTrace(afterMode
-                ? "▶ BẮT ĐẦU §5 AFTER — Lazy Init & Zeroize PIN char[]"
-                : "▶ BẮT ĐẦU §5 BEFORE — Sync KeyStore & Lộ String PIN trên Heap", afterMode);
+                ? "▶ BẮT ĐẦU §5.1 AFTER — Lazy Init & Zeroize PIN char[]"
+                : "▶ BẮT ĐẦU §5.1 BEFORE — Sync KeyStore & Lộ String PIN trên Heap", afterMode);
         if (securityAuditFlowView != null) {
             if (afterMode) {
-                securityAuditFlowView.beginAfterRun(pinText.length());
+                securityAuditFlowView.beginAfterRun(trimmedLen);
             } else {
-                securityAuditFlowView.beginBeforeRun(pinText.length(), chaosManager.getMasvsScore());
+                securityAuditFlowView.beginBeforeRun(trimmedLen, chaosManager.getMasvsScore());
             }
         }
         startRun(afterMode ? "Đang đăng nhập & zeroize char[]..."
                 : "⏳ Đang khởi tạo KeyStore đồng bộ & băm PIN chưa xóa String...");
-        runTask(() -> afterMode ? loginAfter(pinText) : loginBefore(pinText),
+        runTask(() -> afterMode ? loginAfter(afterPinChars) : loginBefore(beforePinText),
                 (result, blockedMs, totalMs) -> {
                     if (securityAuditFlowView != null) {
                         if (afterMode) {
@@ -2007,14 +2601,16 @@ public class TopicDemoFragment extends Fragment {
                     metrics.put("Khởi tạo + PBKDF2", result.ms + " ms");
                     metrics.put("Zeroize PIN", result.remaining < 0
                             ? "Không (String 100%)" : result.remaining + "/" + result.length + " ký tự còn");
+                    metrics.put("Xóa khóa byte[]", afterMode ? "✓ rawKey + keyBytes = 0" : "✕ Sót trong Heap");
                     metrics.put("MASVS", afterMode ? "5/5 (An toàn)" : chaosManager.getMasvsScore() + "/5 (Rủi ro)");
-                    metrics.put("Phòng thủ runtime", afterMode
-                            ? "Anti-Hook + APK SHA-256 + Tapjack" : "Chưa bật");
                     String status = afterMode
                             ? "✓ After (" + result.ms + " ms): đăng nhập xong, PIN đã zeroize ("
                             + (result.length - result.remaining) + "/" + result.length + " ký tự) • MASVS 5/5."
                             : "⚠ Before (" + result.ms + " ms): khởi tạo chậm & PIN vẫn nằm trong String trên Heap (100%)!";
                     finishRun(afterMode, metrics, status, afterMode);
+                    if (afterMode) {
+                        autoDemoHandler.postDelayed(() -> Runtime.getRuntime().gc(), 250L);
+                    }
                 });
     }
 
@@ -2028,11 +2624,9 @@ public class TopicDemoFragment extends Fragment {
         SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
         factory.generateSecret(spec).getEncoded();
         postSecurityPbkdf2Done(chaosManager.getMasvsScore());
-        // Simulate unoptimized synchronous KeyStore + cold-start overhead + heap retention (~1.95s)
         sleepRemainder(startNs, 1950L);
         long ms = Math.max(1, (System.nanoTime() - startNs) / 1_000_000);
         appendTrace(TRACE_COLOR_FAULT, "⚠ Hoàn tất sau " + ms + " ms: PIN vẫn còn 100% trong RAM (Heap Dump đọc được)");
-        // Intentionally do not call spec.clearPassword(): demonstrates un-zeroized String exposure.
         return new PinRunResult(ms, -1, pinText.length());
     }
 
@@ -2044,20 +2638,402 @@ public class TopicDemoFragment extends Fragment {
         });
     }
 
-    private PinRunResult loginAfter(String pinText) {
-        char[] pin = pinText.toCharArray();
+    private PinRunResult loginAfter(char[] pin) {
         long startNs = System.nanoTime();
-        appendTrace(TRACE_COLOR_OK, "Bỏ khởi tạo đồng bộ, chuyển PIN sang mảng char[" + pin.length + "]");
-        appendTrace(TRACE_COLOR_INFO, "Băm PIN qua CryptoManager.computePinVerifierHash() + tự động zeroize");
+        int pinLen = pin != null ? pin.length : 0;
+        appendTrace(TRACE_COLOR_OK, "Bỏ khởi tạo đồng bộ, chuyển PIN sang mảng char[" + pinLen + "]");
+        appendTrace(TRACE_COLOR_INFO, "Băm PIN qua CryptoManager.computePinVerifierHash() + xóa rawKey/keyBytes");
         CryptoManager.computePinVerifierHash(pin, new byte[16]);
         long ms = Math.max(1, (System.nanoTime() - startNs) / 1_000_000);
         int remaining = 0;
-        for (char c : pin) {
-            if (c != '\0') remaining++;
+        if (pin != null) {
+            for (char c : pin) {
+                if (c != '\0') remaining++;
+            }
         }
+        System.gc();
         appendTrace(TRACE_COLOR_OK, "✓ Đã ghi đè Arrays.fill(pin, '\\0') → còn "
-                + remaining + "/" + pin.length + " ký tự • Khôi phục MASVS 5/5 (" + ms + " ms)");
-        return new PinRunResult(ms, remaining, pin.length);
+                + remaining + "/" + pinLen + " ký tự • Khôi phục MASVS 5/5 (" + ms + " ms)");
+        return new PinRunResult(ms, remaining, pinLen);
+    }
+
+    private void runAntiHookAndApkFlow(boolean afterMode) {
+        startRun(afterMode ? "Đang quét Anti-Hook, TracerPid & APK SHA-256..."
+                : "Đang mô phỏng bỏ qua kiểm tra Hook & APK...");
+        final Context appCtx = appContext();
+        runTask(() -> {
+            if (!afterMode) {
+                return new AntiHookRunResult(0L, 0L, false, false, false, "Không kiểm tra", false, true);
+            }
+            long scanStart = System.nanoTime();
+            SecurityEnvironmentChecker.SecurityAuditReport report =
+                    SecurityEnvironmentChecker.inspectEnvironment(appCtx);
+            long scanMs = Math.max(1L, (System.nanoTime() - scanStart) / 1_000_000L);
+
+            long reactStart = System.nanoTime();
+            SecurityEnvironmentChecker.SecurityAuditReport simHook =
+                    new SecurityEnvironmentChecker.SecurityAuditReport(
+                            false, false, false, true, false, true, true, report.apkCertSha256);
+            boolean reacted = SecurityEnvironmentChecker.enforceActiveDefense(appCtx, simHook, BuildConfig.DEBUG);
+            long reactMs = Math.max(1L, (System.nanoTime() - reactStart) / 1_000_000L);
+            boolean l1After = encryptedCache.hasL1ProfileCached();
+
+            String shortHex = report.getShortApkCertHex();
+            if (shortHex.length() > 8) {
+                shortHex = shortHex.substring(0, 8) + "...";
+            }
+            return new AntiHookRunResult(scanMs, reactMs, !report.hookingDetected,
+                    !report.nativeDebugger, report.apkSignatureValid, shortHex, reacted, l1After);
+        }, (res, blockedMs, totalMs) -> {
+            if (securityAuditFlowView != null) {
+                int[] nodeStates = afterMode
+                        ? new int[]{
+                        res.hookingClean ? SecurityAuditFlowView.SecurityFlowState.NODE_OK
+                                : SecurityAuditFlowView.SecurityFlowState.NODE_FAULT,
+                        res.nativeDebugClean ? SecurityAuditFlowView.SecurityFlowState.NODE_OK
+                                : SecurityAuditFlowView.SecurityFlowState.NODE_FAULT,
+                        res.apkValid ? SecurityAuditFlowView.SecurityFlowState.NODE_OK
+                                : SecurityAuditFlowView.SecurityFlowState.NODE_FAULT}
+                        : new int[]{
+                        SecurityAuditFlowView.SecurityFlowState.NODE_FAULT,
+                        SecurityAuditFlowView.SecurityFlowState.NODE_FAULT,
+                        SecurityAuditFlowView.SecurityFlowState.NODE_FAULT};
+                int[] stepStates = afterMode
+                        ? new int[]{
+                        res.hookingClean ? SecurityAuditFlowView.SecurityFlowState.STEP_DONE_OK
+                                : SecurityAuditFlowView.SecurityFlowState.STEP_DONE_FAULT,
+                        res.nativeDebugClean ? SecurityAuditFlowView.SecurityFlowState.STEP_DONE_OK
+                                : SecurityAuditFlowView.SecurityFlowState.STEP_DONE_FAULT,
+                        (res.apkValid && res.activeDefenseTriggered)
+                                ? SecurityAuditFlowView.SecurityFlowState.STEP_DONE_OK
+                                : SecurityAuditFlowView.SecurityFlowState.STEP_DONE_FAULT}
+                        : new int[]{
+                        SecurityAuditFlowView.SecurityFlowState.STEP_DONE_FAULT,
+                        SecurityAuditFlowView.SecurityFlowState.STEP_DONE_FAULT,
+                        SecurityAuditFlowView.SecurityFlowState.STEP_DONE_FAULT};
+
+                securityAuditFlowView.showCustomFlow(
+                        afterMode,
+                        "LUỒNG 2: CHỐNG HOOK & TOÀN VẸN APK",
+                        afterMode ? "PHÒNG THỦ ON" : "BỎ QUA · LỘ L1",
+                        new String[]{"ANTI-HOOK", "TRACER PID", "TOÀN VẸN APK"},
+                        afterMode
+                                ? new String[]{
+                                res.hookingClean ? "Sạch" : "Hook!",
+                                res.nativeDebugClean ? "PID = 0" : "Attached",
+                                res.apkValid ? res.apkShortHex : "Sai SHA"}
+                                : new String[]{"Bỏ qua", "Bỏ qua", "Không ký"},
+                        new String[]{"QUÉT MAPS", "TRACER PID", "APK SHA-256"},
+                        new String[]{"/proc/self/maps", "/proc/self/status", "Chữ ký APK"},
+                        nodeStates,
+                        afterMode
+                                ? new String[]{res.hookingClean ? "Sạch" : "Hook!",
+                                res.nativeDebugClean ? "PID=0" : "Dbg!",
+                                res.apkValid ? "Khớp" : "Lệch"}
+                                : new String[]{"Tắt", "Tắt", "Tắt"},
+                        afterMode
+                                ? String.format(Locale.US,
+                                "Quét thật %d ms • Thử Hook Frida → xóa L1 RAM trong %d ms",
+                                res.scanMs, res.reactionMs)
+                                : "Không kiểm tra Frida / TracerPid • L1 RAM vẫn lộ nếu bị hook",
+                        new String[]{
+                                "1. Quét Frida / Xposed trên /proc/self/maps",
+                                "2. Đọc TracerPid chống Native Debugger",
+                                "3. Đối chiếu APK SHA-256 & phản ứng xóa L1"
+                        },
+                        stepStates,
+                        afterMode
+                                ? new String[]{res.hookingClean ? "Sạch" : "Cảnh báo",
+                                res.nativeDebugClean ? "PID=0" : "Attached",
+                                "Xóa L1 (" + res.reactionMs + " ms)"}
+                                : new String[]{"Bỏ qua", "Bỏ qua", "Còn L1 RAM"}
+                );
+            }
+
+            Map<String, String> metrics = new LinkedHashMap<>();
+            metrics.put("Cơ chế", afterMode ? "Anti-Hook + TracerPid + APK SHA-256" : "Không kiểm tra môi trường");
+            metrics.put("Quét /proc/self/maps", afterMode ? (res.hookingClean ? "✓ Sạch (" + res.scanMs + " ms)" : "❌ Phát hiện Hook") : "✕ Bỏ qua");
+            metrics.put("Native TracerPid", afterMode ? (res.nativeDebugClean ? "✓ TracerPid = 0" : "❌ Đang debug") : "✕ Bỏ qua");
+            metrics.put("Chữ ký APK (SHA-256)", afterMode ? (res.apkValid ? "✓ Khớp " + res.apkShortHex : "❌ Sai chữ ký") : "✕ Chưa kiểm tra");
+            metrics.put("Phản ứng khi Hook", afterMode ? ("✓ Xóa L1 + PIN (" + res.reactionMs + " ms)") : "✕ Còn nguyên trên RAM");
+            finishRun(afterMode, metrics, "", afterMode);
+        });
+    }
+
+    private void runUiAndBackgroundLockFlow(boolean afterMode) {
+        startRun(afterMode ? "Đang bật FLAG_SECURE, Tapjacking & khóa L1 RAM..."
+                : "Đang tắt FLAG_SECURE & giữ nguyên L1 RAM...");
+        final BaseSecureActivity host = (getActivity() instanceof BaseSecureActivity)
+                ? (BaseSecureActivity) getActivity() : null;
+        syncFlagSecureForCurrentFlow(afterMode);
+        applyPinPadTapjackingFilter(afterMode);
+        if (btnAction != null) {
+            btnAction.setFilterTouchesWhenObscured(afterMode);
+        }
+
+        boolean flagNow = host != null && host.isFlagSecureEnabled();
+        if (afterMode) {
+            pinSessionManager.lockSessionAndEvictRam();
+        }
+        boolean l1Remaining = encryptedCache.hasL1ProfileCached();
+
+        if (securityAuditFlowView != null) {
+            int stNode = afterMode
+                    ? SecurityAuditFlowView.SecurityFlowState.NODE_OK
+                    : SecurityAuditFlowView.SecurityFlowState.NODE_FAULT;
+            int stStep = afterMode
+                    ? SecurityAuditFlowView.SecurityFlowState.STEP_DONE_OK
+                    : SecurityAuditFlowView.SecurityFlowState.STEP_DONE_FAULT;
+            securityAuditFlowView.showCustomFlow(
+                    afterMode,
+                    "LUỒNG 3: CHỐNG CHỤP, TAPJACKING & KHÓA NỀN",
+                    afterMode ? "BỀ MẶT KHÓA" : "TẮT BẢO VỆ",
+                    new String[]{"FLAG_SECURE", "TAPJACKING", "L1 RAM SAU KHÓA"},
+                    afterMode
+                            ? new String[]{flagNow ? "BẬT (Chặn)" : "TẮT", "Đang lọc", l1Remaining ? "Còn L1" : "Đã xóa"}
+                            : new String[]{"TẮT (Lộ ảnh)", "Không lọc", "Còn lưu"},
+                    new String[]{"CHỐNG CHỤP", "LỌC PHỦ", "KHÓA L1 RAM"},
+                    new String[]{"FLAG_SECURE", "Obscured", "Timeout 120s"},
+                    new int[]{stNode, stNode, stNode},
+                    afterMode
+                            ? new String[]{"BẬT", "Lọc ON", "Xóa L1"}
+                            : new String[]{"TẮT", "Lọc OFF", "Giữ L1"},
+                    afterMode
+                            ? "Đã bật thật FLAG_SECURE (bạn hãy thử chụp màn hình ngay!) & xóa sạch L1 RAM"
+                            : "Cho phép chụp màn hình tự do, không lọc lớp phủ & không khóa nền",
+                    new String[]{
+                            "1. Cờ Window FLAG_SECURE chặn chụp/quay màn hình",
+                            "2. Bộ lọc filterTouchesWhenObscured chống Tapjacking",
+                            "3. Khóa phiên nền 120s: xóa PIN tạm & L1 RAM"
+                    },
+                    new int[]{stStep, stStep, stStep},
+                    afterMode
+                            ? new String[]{"Chặn chụp", "Lọc phủ", "L1 = Trống"}
+                            : new String[]{"Chụp được", "Cho chạm", "Còn L1"}
+            );
+        }
+
+        Map<String, String> metrics = new LinkedHashMap<>();
+        metrics.put("Cơ chế", afterMode ? "FLAG_SECURE + Tapjack + Auto-Lock 120s" : "Tắt bảo vệ giao diện & phiên");
+        metrics.put("Chụp màn hình (FLAG_SECURE)", flagNow ? "✓ ĐANG CHẶN THẬT" : "✕ Cho phép chụp");
+        metrics.put("Chống lớp phủ Tapjacking", afterMode ? "✓ Đang lọc chạm đè" : "✕ Tắt bộ lọc");
+        metrics.put("L1 RAM sau khóa nền", afterMode ? (l1Remaining ? "Còn" : "✓ Đã xóa sạch") : "✕ Còn giữ trên RAM");
+        finishRun(afterMode, metrics, "", afterMode);
+
+        if (afterMode) {
+            Toast.makeText(requireContext(),
+                    "Đã bật FLAG_SECURE thật trên màn hình này — bạn có thể bấm chụp màn hình để kiểm chứng!",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void runBiometricTeeFlow(boolean afterMode) {
+        if (!afterMode) {
+            startRun("Đang chạy mở khóa PIN tĩnh CPU...");
+            runTask(() -> {
+                long startNs = System.nanoTime();
+                char[] pin = "123456".toCharArray();
+                CryptoManager.computePinVerifierHash(pin, new byte[16]);
+                long ms = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
+                return ms;
+            }, (ms, blockedMs, totalMs) -> {
+                if (securityAuditFlowView != null) {
+                    int fNode = SecurityAuditFlowView.SecurityFlowState.NODE_FAULT;
+                    int fStep = SecurityAuditFlowView.SecurityFlowState.STEP_DONE_FAULT;
+                    securityAuditFlowView.showCustomFlow(
+                            false,
+                            "LUỒNG 4: SINH TRẮC HỌC CRYPTOOBJECT TEE",
+                            "KHÔNG KHÓA HW",
+                            new String[]{"CƠ CHẾ MỞ", "THỜI GIAN CPU", "ĐỔI VÂN TAY"},
+                            new String[]{"PIN tĩnh", ms + " ms", "Không phát hiện"},
+                            new String[]{"NHẬP PIN", "PBKDF2 CPU", "KEYSTORE"},
+                            new String[]{"Tĩnh", "10.000 vòng", "Không dùng"},
+                            new int[]{fNode, fNode, fNode},
+                            new String[]{"Thủ công", ms + " ms", "Không TEE"},
+                            "Phải chạy PBKDF2 trên CPU, không gắn khóa phần cứng AndroidKeyStore",
+                            new String[]{
+                                    "1. Mở khóa bằng PIN tĩnh (không CryptoObject)",
+                                    "2. Băm PBKDF2 10.000 vòng trên CPU",
+                                    "3. Tự hủy khóa khi đổi vân tay máy"
+                            },
+                            new int[]{fStep, fStep, fStep},
+                            new String[]{"Không", ms + " ms", "Tắt"}
+                    );
+                }
+                Map<String, String> metrics = new LinkedHashMap<>();
+                metrics.put("Cơ chế", "Chỉ PIN tĩnh (không sinh trắc)");
+                metrics.put("Thời gian xử lý", ms + " ms (PBKDF2 CPU)");
+                metrics.put("Khóa phần cứng TEE/StrongBox", "✕ Không dùng");
+                metrics.put("Đổi vân tay trên máy", "✕ Không tự vô hiệu");
+                finishRun(false, metrics, "", false);
+            });
+            return;
+        }
+
+        final Context appCtx = appContext();
+        if (!BiometricKeyManager.isBiometricStrongAvailable(appCtx)) {
+            if (securityAuditFlowView != null) {
+                int wNode = SecurityAuditFlowView.SecurityFlowState.NODE_FAULT;
+                int wStep = SecurityAuditFlowView.SecurityFlowState.STEP_DONE_FAULT;
+                securityAuditFlowView.showCustomFlow(
+                        false,
+                        "LUỒNG 4: SINH TRẮC HỌC CRYPTOOBJECT TEE",
+                        "CHƯA CÀI VÂN TAY",
+                        new String[]{"CƠ CHẾ MỞ", "PHẦN CỨNG", "TRẠNG THÁI"},
+                        new String[]{"CryptoObject", "TEE", "Chưa có vân tay"},
+                        new String[]{"BIOMETRIC", "KEYSTORE", "AES-256-GCM"},
+                        new String[]{"BIOMETRIC_STRONG", "TEE / StrongBox", "CryptoObject"},
+                        new int[]{wNode, wNode, wNode},
+                        new String[]{"Thiếu", "Sẵn sàng", "Chờ cài"},
+                        "Thiết bị chưa cài vân tay mức BIOMETRIC_STRONG trong Cài đặt",
+                        new String[]{
+                                "1. Kiểm tra BIOMETRIC_STRONG trên máy",
+                                "2. Xác thực BiometricPrompt.CryptoObject",
+                                "3. Tự hủy khóa khi đổi vân tay máy"
+                        },
+                        new int[]{wStep, wStep, wStep},
+                        new String[]{"Chưa cài", "Chờ", "Chờ"}
+                );
+            }
+            Toast.makeText(requireContext(),
+                    "Hãy cài ít nhất 1 vân tay trong Cài đặt điện thoại để chạy test thật phần này.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        BiometricKeyManager bioMgr = new BiometricKeyManager(appCtx);
+        String activeId = pinSessionManager.getActiveStudentId();
+        final String targetStudentId = (activeId != null && !activeId.isEmpty()) ? activeId : "CT070318";
+        final boolean alreadyEnrolled = bioMgr.isEnrolledForStudent(targetStudentId);
+        final Cipher hwCipher;
+        try {
+            hwCipher = alreadyEnrolled ? bioMgr.initDecryptCipher() : bioMgr.initEncryptCipher();
+        } catch (KeyPermanentlyInvalidatedException invalidated) {
+            bioMgr.clearBinding();
+            Toast.makeText(requireContext(),
+                    "Phát hiện vân tay mới — AndroidKeyStore đã tự hủy khóa cũ! Bấm chạy lại để gắn khóa mới.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        } catch (Exception e) {
+            Toast.makeText(requireContext(),
+                    "Không khởi tạo được CryptoObject: " + e.getMessage(),
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        startRun("Đang chờ xác thực vân tay phần cứng...");
+        final long promptStartNs = System.nanoTime();
+        BiometricPrompt prompt = new BiometricPrompt(
+                this,
+                ContextCompat.getMainExecutor(requireContext()),
+                new BiometricPrompt.AuthenticationCallback() {
+                    @Override
+                    public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
+                        if (!isAdded()) return;
+                        Cipher authedCipher = result.getCryptoObject() != null
+                                ? result.getCryptoObject().getCipher() : null;
+                        byte[] nonce = pinSessionManager.getOrCreateSessionUnlockNonce();
+                        try {
+                            long cryptoStartNs = System.nanoTime();
+                            boolean ok;
+                            if (alreadyEnrolled) {
+                                ok = bioMgr.verifyDecryptedNonce(authedCipher, nonce);
+                            } else {
+                                bioMgr.completeBinding(targetStudentId, authedCipher, nonce);
+                                ok = true;
+                            }
+                            long gcmMs = Math.max(1L, (System.nanoTime() - cryptoStartNs) / 1_000_000L);
+                            long totalBioMs = Math.max(1L, (System.nanoTime() - promptStartNs) / 1_000_000L);
+                            String backing = bioMgr.getBackingStoreLabel();
+                            if (!ok) {
+                                bioMgr.clearBinding();
+                                endRun();
+                                Toast.makeText(requireContext(), "Nonce không khớp!", Toast.LENGTH_SHORT).show();
+                                return;
+                            }
+                            if (securityAuditFlowView != null) {
+                                int okNode = SecurityAuditFlowView.SecurityFlowState.NODE_OK;
+                                int okStep = SecurityAuditFlowView.SecurityFlowState.STEP_DONE_OK;
+                                securityAuditFlowView.showCustomFlow(
+                                        true,
+                                        "LUỒNG 4: SINH TRẮC HỌC CRYPTOOBJECT TEE",
+                                        "ĐÃ XÁC THỰC " + backing.toUpperCase(Locale.US),
+                                        new String[]{"CƠ CHẾ MỞ", "GIẢI MÃ " + backing, "ĐỔI VÂN TAY"},
+                                        new String[]{"CryptoObject", gcmMs + " ms", "Tự hủy khóa"},
+                                        new String[]{"BIOMETRIC", backing, "AES-256-GCM"},
+                                        new String[]{"STRONG", "AndroidKeyStore", "Nonce OK"},
+                                        new int[]{okNode, okNode, okNode},
+                                        new String[]{"Hợp lệ", backing, gcmMs + " ms"},
+                                        "Xác thực phần cứng thành công (" + totalBioMs + " ms) • Khóa " + backing + " bảo vệ",
+                                        new String[]{
+                                                "1. Mở khóa bằng BiometricPrompt.CryptoObject",
+                                                "2. " + (alreadyEnrolled ? "Giải mã" : "Mã hóa gắn") + " AES-256-GCM trong " + backing,
+                                                "3. Tự vô hiệu khi thêm vân tay mới"
+                                        },
+                                        new int[]{okStep, okStep, okStep},
+                                        new String[]{"Xong", gcmMs + " ms", "Bật"}
+                                );
+                            }
+                            Map<String, String> metrics = new LinkedHashMap<>();
+                            metrics.put("Cơ chế", "BiometricPrompt + CryptoObject");
+                            metrics.put("Thời gian xử lý", gcmMs + " ms (AES-GCM phần cứng)");
+                            metrics.put("Khóa phần cứng TEE/StrongBox", "✓ " + backing + " (256-bit)");
+                            metrics.put("Đổi vân tay trên máy", "✓ Tự hủy khóa (KeyInvalidated)");
+                            finishRun(true, metrics, "", true);
+                        } catch (Exception e) {
+                            endRun();
+                            Toast.makeText(requireContext(),
+                                    "Lỗi CryptoObject: " + e.getMessage(),
+                                    Toast.LENGTH_SHORT).show();
+                        } finally {
+                            Arrays.fill(nonce, (byte) 0);
+                        }
+                    }
+
+                    @Override
+                    public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
+                        if (!isAdded()) return;
+                        endRun();
+                        Toast.makeText(requireContext(),
+                                "Đã hủy xác thực sinh trắc học: " + errString,
+                                Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
+
+        BiometricPrompt.PromptInfo info = new BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Kiểm chứng Sinh trắc học TEE")
+                .setSubtitle(alreadyEnrolled
+                        ? "Xác thực vân tay để giải mã nonce bằng khóa " + bioMgr.getBackingStoreLabel()
+                        : "Đặt vân tay để gắn khóa AES-256-GCM vào " + bioMgr.getBackingStoreLabel())
+                .setNegativeButtonText("Hủy")
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                .build();
+        prompt.authenticate(info, new BiometricPrompt.CryptoObject(hwCipher));
+    }
+
+    private static final class AntiHookRunResult {
+        final long scanMs;
+        final long reactionMs;
+        final boolean hookingClean;
+        final boolean nativeDebugClean;
+        final boolean apkValid;
+        final String apkShortHex;
+        final boolean activeDefenseTriggered;
+        final boolean l1Remaining;
+
+        AntiHookRunResult(long scanMs, long reactionMs, boolean hookingClean,
+                          boolean nativeDebugClean, boolean apkValid, String apkShortHex,
+                          boolean activeDefenseTriggered, boolean l1Remaining) {
+            this.scanMs = scanMs;
+            this.reactionMs = reactionMs;
+            this.hookingClean = hookingClean;
+            this.nativeDebugClean = nativeDebugClean;
+            this.apkValid = apkValid;
+            this.apkShortHex = apkShortHex;
+            this.activeDefenseTriggered = activeDefenseTriggered;
+            this.l1Remaining = l1Remaining;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -2136,9 +3112,17 @@ public class TopicDemoFragment extends Fragment {
         }
     }
 
+    private Map<String, String> currentBeforeMap() {
+        return topic == TOPIC_STARTUP ? secBeforeByFlow[secSubFlow] : before;
+    }
+
+    private Map<String, String> currentAfterMap() {
+        return topic == TOPIC_STARTUP ? secAfterByFlow[secSubFlow] : after;
+    }
+
     private void finishRun(boolean afterRun, Map<String, String> metrics, String status, boolean ok) {
         endRun();
-        Map<String, String> target = afterRun ? after : before;
+        Map<String, String> target = afterRun ? currentAfterMap() : currentBeforeMap();
         target.clear();
         target.putAll(metrics);
         renderComparison();
@@ -2160,17 +3144,32 @@ public class TopicDemoFragment extends Fragment {
                 key = "Dung lượng";
                 break;
             case TOPIC_STARTUP:
-                key = "Zeroize PIN";
+                switch (secSubFlow) {
+                    case SEC_FLOW_ANTI_HOOK:
+                        key = "Phản ứng khi Hook";
+                        break;
+                    case SEC_FLOW_UI_LOCK:
+                        key = "Chụp màn hình (FLAG_SECURE)";
+                        break;
+                    case SEC_FLOW_BIOMETRIC:
+                        key = "Khóa phần cứng TEE/StrongBox";
+                        break;
+                    default:
+                        key = "Zeroize PIN";
+                        break;
+                }
                 break;
             default:
                 key = "Tổng thời gian";
                 break;
         }
-        String bVal = before.get(key);
-        String aVal = after.get(key);
+        String bVal = currentBeforeMap().get(key);
+        String aVal = currentAfterMap().get(key);
         if (bVal != null || aVal != null) {
             tvTechSummary.setText("Before: " + (bVal != null ? bVal : "—")
                     + "  •  After: " + (aVal != null ? aVal : "—"));
+        } else {
+            tvTechSummary.setText("Chạy Before & After để xem so sánh");
         }
     }
 
@@ -2275,16 +3274,18 @@ public class TopicDemoFragment extends Fragment {
 
     private void renderComparison() {
         llComparison.removeAllViews();
+        Map<String, String> bMap = currentBeforeMap();
+        Map<String, String> aMap = currentAfterMap();
         Set<String> keys = new LinkedHashSet<>();
-        keys.addAll(before.keySet());
-        keys.addAll(after.keySet());
+        keys.addAll(bMap.keySet());
+        keys.addAll(aMap.keySet());
         if (keys.isEmpty()) {
             addComparisonNote("Chưa có số liệu.");
             return;
         }
         addComparisonHeader();
         for (String key : keys) {
-            addComparisonRow(key, before.get(key), after.get(key));
+            addComparisonRow(key, bMap.get(key), aMap.get(key));
         }
     }
 
@@ -2357,114 +3358,6 @@ public class TopicDemoFragment extends Fragment {
         llComparison.addView(divider);
     }
 
-    private void showTopicSecurityInspector() {
-        final Context appCtx = appContext();
-        final boolean isCacheTopic = (topic == TOPIC_CACHE);
-        final boolean flagSecureActive = (getActivity() instanceof BaseSecureActivity)
-                && ((BaseSecureActivity) getActivity()).isFlagSecureEnabled();
-        ApduThreadPool.getInstance().executeAsyncOnPool(() -> {
-            CardResponse plainResp = ApduClient.getInstance().sendApdu(
-                    ApduCommands.CLA_SMART_STUDENT,
-                    ApduCommands.INS_GET_STUDENT_INFO,
-                    ApduCommands.P1_INFO_DECRYPTED,
-                    (byte) 0x00,
-                    null
-            );
-            CardResponse cipherResp = ApduClient.getInstance().sendApdu(
-                    ApduCommands.CLA_SMART_STUDENT,
-                    ApduCommands.INS_GET_STUDENT_INFO,
-                    ApduCommands.P1_INFO_RAW_CIPHERTEXT,
-                    (byte) 0x00,
-                    null
-            );
-            String plainText = new String(plainResp.getData(), StandardCharsets.UTF_8);
-            String cipherHex = ApduCommands.bytesToHex(cipherResp.getData());
-            String leakContent = chaosManager.getPlaintextLeakContent(appCtx);
-            String exposedPin = chaosManager.getExposedPinInHeap();
-            boolean hasEncryptedProfile = encryptedCache.getStudentProfile() != null;
-            boolean keystoreOk = SecurityEnvironmentChecker.isAndroidKeyStoreAvailable();
-            int remainingPinTries = pinSessionManager.getRemainingUnlockAttempts();
-            SecurityEnvironmentChecker.SecurityAuditReport auditReport =
-                    SecurityEnvironmentChecker.inspectEnvironment(appCtx);
-            boolean bioStrong = BiometricKeyManager.isBiometricStrongAvailable(appCtx);
-            String bioBacking = new BiometricKeyManager(appCtx).getBackingStoreLabel();
-            return new InspectorData(plainText, cipherHex, leakContent, exposedPin,
-                    hasEncryptedProfile, keystoreOk, remainingPinTries,
-                    auditReport, bioStrong, bioBacking, flagSecureActive);
-        }, (data, mainBlockedMs, totalMs) -> {
-            if (!isAdded()) return;
-            StringBuilder sb = new StringBuilder();
-            if (isCacheTopic) {
-                sb.append("=== KIỂM CHỨNG LƯU ĐỆM 2 TẦNG (§3 OWASP MASVS-STORAGE) ===\n");
-                sb.append("• Tầng L1 (In-Memory RAM): ")
-                        .append(encryptedCache.hasL1ProfileCached() ? "✓ Có sẵn (<1 ms)" : "• Trống (Đã xóa / Auto-Wipe)")
-                        .append("\n");
-                sb.append("• Tầng L2 (AndroidKeyStore TEE • AES-256-GCM):\n  ")
-                        .append(data.hasEncryptedProfile ? "✓ Có hồ sơ đã mã hóa AES-GCM" : "• Trống (Auto-Wipe / chưa mở)")
-                        .append(" • KeyStore TEE: ").append(data.keystoreOk ? "Sẵn sàng" : "Fallback")
-                        .append("\n• Tự hủy sau 3 lần sai PIN: còn ").append(data.remainingPinTries).append("/3 lần thử\n\n");
-                sb.append("• SharedPreferences(\"insecure_plaintext_leak\"):\n  ")
-                        .append(data.leakContent != null
-                                ? "❌ ĐANG LỘ BẢN RÕ: " + data.leakContent
-                                : "✓ Sạch — Không có bản rõ chưa mã hóa")
-                        .append("\n\n");
-            } else {
-                sb.append("=== KIỂM CHỨNG RAM PIN & OWASP MASVS (§5) ===\n");
-                sb.append("• Vùng nhớ Heap chứa mã PIN:\n  ")
-                        .append(data.exposedPin != null
-                                ? "❌ PHƠI NHIỄM 100%: \"" + data.exposedPin + "\""
-                                : "✓ Đã Zeroize (0%) — Dùng char[] + Arrays.fill('\\0')")
-                        .append("\n\n");
-                sb.append("• Điểm kiểm toán MASVS: ").append(chaosManager.getMasvsScore()).append("/5\n");
-                sb.append("• RSA-1024 Challenge: ")
-                        .append(chaosManager.isRsaVerificationBypassed() ? "❌ Đang bỏ qua!" : "✓ Đã xác thực")
-                        .append("\n• Root/Debugger giả lập: ")
-                        .append((chaosManager.isSimulatedRootDetected() || chaosManager.isSimulatedDebuggerDetected())
-                                ? "❌ Phát hiện đe dọa!" : "✓ An toàn")
-                        .append(" • PIN còn ").append(data.remainingPinTries).append("/3 lần thử\n\n");
-                if (data.auditReport != null) {
-                    sb.append("=== PHÒNG THỦ CHIỀU SÂU (MASVS-RESILIENCE & PLATFORM) ===\n");
-                    sb.append("• Anti-Hooking (/proc/self/maps): ")
-                            .append(data.auditReport.hookingDetected ? "❌ Phát hiện Frida/Xposed!" : "✓ Sạch")
-                            .append("\n• Native Debugger (TracerPid): ")
-                            .append(data.auditReport.nativeDebugger ? "❌ Đang attach!" : "✓ TracerPid = 0")
-                            .append("\n• Toàn vẹn APK (SHA-256): ")
-                            .append(data.auditReport.apkSignatureValid ? "✓ Khớp " : "❌ Sai lệch ")
-                            .append(data.auditReport.getShortApkCertHex())
-                            .append("\n• Bề mặt UI: Tapjacking Filter ON • FLAG_SECURE=")
-                            .append(data.flagSecureActive ? "ON (Release)" : (BuildConfig.DEBUG ? "OFF (Debug demo)" : "OFF"))
-                            .append("\n• Tự khóa nền: sau 120s xóa PIN tạm + L1 RAM")
-                            .append("\n• Sinh trắc học phần cứng: ")
-                            .append(data.biometricStrongAvailable
-                                    ? "BIOMETRIC_STRONG + CryptoObject (" + data.biometricBacking + ")"
-                                    : "Chưa đăng ký trên thiết bị")
-                            .append("\n\n");
-                }
-            }
-            sb.append("=== ĐỐI CHIẾU MÃ HÓA AES-128 TRÊN EEPROM ===\n");
-            sb.append("• Bản rõ (INS 0x21 • P1=0x00):\n  ").append(data.plainUtf8).append("\n\n");
-            sb.append("• Bản mã thô AES-128 (INS 0x21 • P1=0x01):\n  ").append(data.cipherHex);
-
-            ScrollView scrollView = new ScrollView(requireContext());
-            TextView tv = new TextView(requireContext());
-            int pad = dp(18);
-            tv.setPadding(pad, pad, pad, pad);
-            tv.setTextSize(12f);
-            tv.setTypeface(Typeface.MONOSPACE);
-            tv.setTextColor(0xFF0F172A);
-            tv.setText(sb.toString());
-            scrollView.addView(tv);
-
-            new AlertDialog.Builder(requireContext())
-                    .setTitle(isCacheTopic
-                            ? "Kiểm chứng Cache AES-GCM & Plaintext Leak"
-                            : "Kiểm chứng Zeroize PIN, AES-128 & MASVS")
-                    .setView(scrollView)
-                    .setPositiveButton("Đóng", null)
-                    .show();
-        });
-    }
-
     private String msText(long ms) {
         return ms <= 0 ? "<1 ms" : ms + " ms";
     }
@@ -2485,12 +3378,14 @@ public class TopicDemoFragment extends Fragment {
         final long[] stepMs;
         final long elapsedMs;
         final int apduCount;
+        final String cacheTier;
 
-        BottleneckRunResult(StudentCardRecord record, long[] stepMs, long elapsedMs, int apduCount) {
+        BottleneckRunResult(StudentCardRecord record, long[] stepMs, long elapsedMs, int apduCount, String cacheTier) {
             this.record = record;
             this.stepMs = stepMs;
             this.elapsedMs = elapsedMs;
             this.apduCount = apduCount;
+            this.cacheTier = cacheTier;
         }
     }
 
@@ -2574,37 +3469,6 @@ public class TopicDemoFragment extends Fragment {
             this.ms = ms;
             this.remaining = remaining;
             this.length = length;
-        }
-    }
-
-    private static final class InspectorData {
-        final String plainUtf8;
-        final String cipherHex;
-        final String leakContent;
-        final String exposedPin;
-        final boolean hasEncryptedProfile;
-        final boolean keystoreOk;
-        final int remainingPinTries;
-        final SecurityEnvironmentChecker.SecurityAuditReport auditReport;
-        final boolean biometricStrongAvailable;
-        final String biometricBacking;
-        final boolean flagSecureActive;
-
-        InspectorData(String plainUtf8, String cipherHex, String leakContent, String exposedPin,
-                      boolean hasEncryptedProfile, boolean keystoreOk, int remainingPinTries,
-                      SecurityEnvironmentChecker.SecurityAuditReport auditReport,
-                      boolean biometricStrongAvailable, String biometricBacking, boolean flagSecureActive) {
-            this.plainUtf8 = plainUtf8;
-            this.cipherHex = cipherHex;
-            this.leakContent = leakContent;
-            this.exposedPin = exposedPin;
-            this.hasEncryptedProfile = hasEncryptedProfile;
-            this.keystoreOk = keystoreOk;
-            this.remainingPinTries = remainingPinTries;
-            this.auditReport = auditReport;
-            this.biometricStrongAvailable = biometricStrongAvailable;
-            this.biometricBacking = biometricBacking;
-            this.flagSecureActive = flagSecureActive;
         }
     }
 }
